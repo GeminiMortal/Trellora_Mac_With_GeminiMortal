@@ -6,6 +6,9 @@
 
 **Windows 本地优先 AI 知识工作台**
 
+> [!NOTE]
+> 本仓库是对原项目 [Trellora](https://gitee.com/eleven-lxs/trellora) 的 **macOS 适配版本**：添加了 Apple Silicon (arm64) 支持，包括 sqlite-vec 原生扩展适配、Python Worker 跨平台路径、electron-builder mac 打包配置与签名修复。原项目面向 Windows x64。
+
 Where ideas grow connected.
 
 把 Markdown 笔记、项目资料、AI 问答和知识关联放进同一个桌面工作区。
