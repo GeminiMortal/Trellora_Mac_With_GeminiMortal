@@ -45,6 +45,7 @@ ipcRenderer.on('notes:close-request', (_event, request: { requestId: string }) =
 });
 
 contextBridge.exposeInMainWorld('electronAPI', {
+    platform: process.platform,
     startupAppearance: readStartupAppearance(process.argv),
     waitForStartup: () => ipcRenderer.invoke('startup:ready'),
     ping: () => ipcRenderer.invoke('ping'),

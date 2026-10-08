@@ -4,6 +4,21 @@
   padding: 16px 0 10px;
 }
 
+/* macOS hiddenInset 无原生标题栏：导航栏空白区域用于拖动窗口。
+   app-region 不继承，需逐个打在填满区域的容器上，按钮及其内容排除。 */
+.app-shell .app-nav-rail,
+.app-shell .app-nav-rail-top,
+.app-shell .app-nav-rail-bottom,
+.app-shell .app-nav-rail-top > *,
+.app-shell .app-nav-rail-bottom > * {
+  -webkit-app-region: drag;
+}
+
+.app-shell .app-nav-rail button,
+.app-shell .app-nav-rail button * {
+  -webkit-app-region: no-drag;
+}
+
 .app-shell .app-nav-item {
   width: 44px;
   min-height: 48px;

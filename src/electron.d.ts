@@ -982,6 +982,7 @@ export interface NoteMeta {
 declare global {
     interface ElectronAPI {
         readonly startupAppearance: StartupAppearance | null;
+        readonly platform: string;
         waitForStartup: () => Promise<void>;
         ping: () => Promise<string>;
         selectDirectory: () => Promise<string | null>;

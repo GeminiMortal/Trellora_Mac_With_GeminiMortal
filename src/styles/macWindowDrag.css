@@ -1,0 +1,8 @@
+/* macOS hiddenInset 下各视图顶栏作为窗口拖拽区；交互元素排除，保持可点击。 */
+html[data-platform="darwin"] :is(.qa-workspace-header, .sidebar-header, .note-connection-tabs, .materials-list-header, .materials-doc-header, .wiki-toolbar, .knowledge-map-toolbar, .library-graph-toolbar, .assistant-main-header) {
+  -webkit-app-region: drag;
+}
+
+html[data-platform="darwin"] :is(.qa-workspace-header, .sidebar-header, .note-connection-tabs, .materials-list-header, .materials-doc-header, .wiki-toolbar, .knowledge-map-toolbar, .library-graph-toolbar, .assistant-main-header) :is(button, a, input, select, textarea, summary, [role], [contenteditable="true"], [draggable="true"], .mantine-Input-wrapper, .mantine-ActionIcon-root, .mantine-Button-root, .mantine-Menu-target, .mantine-Popover-target) {
+  -webkit-app-region: no-drag;
+}
