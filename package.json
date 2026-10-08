@@ -4,13 +4,13 @@
   "version": "1.0.0",
   "description": "AI-native local-first Markdown knowledge management for Windows",
   "author": "Elevenoven",
-  "homepage": "https://github.com/Elevenoven/Trellora-plus",
+  "homepage": "https://gitee.com/eleven-lxs/trellora",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Elevenoven/Trellora-plus.git"
+    "url": "git+https://gitee.com/eleven-lxs/trellora.git"
   },
   "bugs": {
-    "url": "https://github.com/Elevenoven/Trellora-plus/issues"
+    "url": "https://gitee.com/eleven-lxs/trellora/issues"
   },
   "main": "dist-electron/main.js",
   "dependencies": {
@@ -22,6 +22,7 @@
     "mammoth": "1.12.1",
     "pdfjs-dist": "^6.2.108",
     "react-force-graph-2d": "^1.29.1",
+    "sqlite-vec-darwin-arm64": "0.1.9",
     "sqlite-vec-windows-x64": "0.1.9",
     "yauzl": "3.4.0",
     "yazl": "3.3.1"
@@ -39,6 +40,7 @@
     "verify:external-document-installer": "node scripts/verify-external-document-installer.mjs",
     "dev": "concurrently -k \"vite\" \"npm run build:electron && wait-on tcp:5173 && electron dist-electron/main.js\"",
     "build": "pnpm run build:icons && pnpm run build:pipeline-runtime && vite build && pnpm run build:electron && node scripts/build-windows-packages.mjs",
+    "build:mac": "pnpm run build:icons && pnpm run build:pipeline-runtime && vite build && pnpm run build:electron && node scripts/build-mac-packages.mjs",
     "build:pipeline-runtime": "node scripts/build-pipeline-runtime.mjs",
     "release:manifest": "node scripts/write-release-manifest.mjs",
     "verify:desktop-diagnostics": "node scripts/verify-desktop-diagnostics.mjs",
@@ -398,6 +400,7 @@
   "build": {
     "appId": "com.trellora.desktop",
     "productName": "Trellora",
+    "afterPack": "scripts/after-pack.mjs",
     "extraMetadata": {
       "description": "Trellora"
     },
@@ -412,10 +415,12 @@
       "node_modules/better-sqlite3/**/*",
       "node_modules/bindings/**/*",
       "node_modules/file-uri-to-path/**/*",
+      "node_modules/sqlite-vec-darwin-arm64/**/*",
       "node_modules/sqlite-vec-windows-x64/**/*"
     ],
     "asarUnpack": [
       "node_modules/better-sqlite3/**",
+      "node_modules/sqlite-vec-darwin-arm64/**",
       "node_modules/sqlite-vec-windows-x64/**",
       "dist-electron/mammothWorker.js",
       "dist-electron/noteIndexWorker.js"
@@ -450,6 +455,21 @@
         }
       ]
     },
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity",
+      "identity": null,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["arm64"]
+        }
+      ]
+    },
     "portable": {
       "unpackDirName": true,
       "artifactName": "${productName}-${version}-portable-${arch}.${ext}"
@@ -463,15 +483,5 @@
       "include": "build/installer.nsh",
       "artifactName": "${productName}-${version}-setup-${arch}.${ext}"
     }
-  },
-  "pnpm": {
-    "overrides": {
-      "js-yaml@>=3 <4": "3.15.2",
-      "js-yaml@>=4 <5": "4.3.2"
-    },
-    "onlyBuiltDependencies": [
-      "better-sqlite3",
-      "electron"
-    ]
   }
 }

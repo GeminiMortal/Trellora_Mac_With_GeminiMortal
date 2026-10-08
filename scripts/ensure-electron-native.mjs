@@ -1,9 +1,13 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
-/** Do not rebuild a compatible DLL while a running desktop instance holds it open. */
+const electronBinary = process.platform === 'darwin'
+  ? path.resolve('node_modules/electron/dist/Electron.app/Contents/MacOS/Electron')
+  : path.resolve('node_modules/electron/dist/electron.exe');
+
+/** Do not rebuild a compatible native module while a running desktop instance holds it open. */
 function probe() {
-  return spawnSync(path.resolve('node_modules/electron/dist/electron.exe'), ['scripts/verify-electron-sqlite.cjs'], {
+  return spawnSync(electronBinary, ['scripts/verify-electron-sqlite.cjs'], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, encoding: 'utf8', windowsHide: true, timeout: 30_000,
   });
 }

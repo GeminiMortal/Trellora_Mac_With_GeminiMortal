@@ -2,6 +2,7 @@ import { app, BrowserWindow, clipboard, ipcMain, dialog, IpcMainInvokeEvent, nat
 import type { IpcMainEvent } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import url from 'url';
 import { APP_INFO } from '../shared/appInfo';
 import { normalizeMemorySaveClaims } from '../shared/memorySaveClaims';
 import type { MemoryUsedSnapshot } from './knowledge/memory/memoryTypes';
@@ -619,7 +620,7 @@ function assertInternalRenderer(event: IpcMainInvokeEvent): void {
   const isDevelopment = !app.isPackaged && process.env.NODE_ENV !== 'production';
   const expectedUrl = isDevelopment
     ? 'http://localhost:5173/'
-    : new URL(`file:///${path.resolve(__dirname, '../dist/index.html').replace(/\\/g, '/')}`).href;
+    : url.pathToFileURL(path.resolve(__dirname, '../dist/index.html')).href;
   if (!senderUrl.startsWith(expectedUrl)) throw new Error('不允许来自外部页面的 AI 编辑请求。');
 }
 
@@ -740,6 +741,11 @@ function cancelAssistantTurnsForSender(event: IpcMainInvokeEvent, exceptKey?: st
 // Global Error Handler for startup
 process.on('uncaughtException', (error) => {
   appLogger.record('error', 'startup', (error as NodeJS.ErrnoException).code || 'UNCAUGHT_EXCEPTION');
+  try {
+    fs.mkdirSync(app.getPath('logs'), { recursive: true });
+    const detail = { at: new Date().toISOString(), message: String(error?.message ?? error), stack: String(error?.stack ?? '') };
+    fs.appendFileSync(path.join(app.getPath('logs'), 'crash.ndjson'), `${JSON.stringify(detail)}\n`, 'utf8');
+  } catch { /* 诊断文件不可写时仍展示对话框。 */ }
   dialog.showErrorBox('应用程序错误', `应用发生错误，已记录诊断。请重新启动；如仍失败，请检查工作区权限并提供日志。\n日志目录：${app.getPath('logs')}`);
   app.quit();
 });

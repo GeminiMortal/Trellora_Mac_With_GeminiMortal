@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
-import path from 'node:path';
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
 import { estimateTokenCount } from '../knowledge/tokenEstimator';
+import { sqliteVecPackagedExtensionPath } from '../loadSqliteVec';
 import { PipelineStageError } from './stageErrors';
 import { openGraphDatabase } from './graphProjection';
 
@@ -346,10 +346,7 @@ function toVectorBuffer(values: number[]): Buffer {
 }
 
 function loadGraphSqliteVec(database: Database.Database): void {
-  const resourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : '';
-  const packagedExtensionPath = resourcesPath
-    ? path.join(resourcesPath, 'app.asar.unpacked', 'node_modules', 'sqlite-vec-windows-x64', 'vec0.dll')
-    : '';
+  const packagedExtensionPath = sqliteVecPackagedExtensionPath();
   if (packagedExtensionPath && fs.existsSync(packagedExtensionPath)) {
     database.loadExtension(packagedExtensionPath);
     return;

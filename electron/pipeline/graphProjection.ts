@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { getLibraryMetaDirectory } from '../treeOrder';
+import { sqliteVecPackagedExtensionPath } from '../loadSqliteVec';
 import { PipelineStageError } from './stageErrors';
 import { readLibraryGraphReportFromDirectory } from './libraryGraphStore';
 import type { CommunitySummaryRecord } from './communitySummaries';
@@ -661,10 +662,7 @@ function dropGraphVectorTables(database: Database.Database): void {
 }
 
 function loadGraphSqliteVec(database: Database.Database): void {
-  const resourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : '';
-  const packagedExtensionPath = resourcesPath
-    ? path.join(resourcesPath, 'app.asar.unpacked', 'node_modules', 'sqlite-vec-windows-x64', 'vec0.dll')
-    : '';
+  const packagedExtensionPath = sqliteVecPackagedExtensionPath();
   if (packagedExtensionPath && fs.existsSync(packagedExtensionPath)) {
     database.loadExtension(packagedExtensionPath);
     return;

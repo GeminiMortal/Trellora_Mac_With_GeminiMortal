@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { getLibraryMetaDirectory } from '../treeOrder';
+import { sqliteVecPackagedExtensionPath } from '../loadSqliteVec';
 import { LEXICAL_KEYWORD_BOOST, RRF_RANK_CONSTANT, reciprocalRankFusion, type RrfChannelEntry } from '../knowledge/hybridRetrievalFusion';
 import { PipelineStageError } from './stageErrors';
 import { scoreLexicalCandidates, type LexicalCorpusStats, type LexicalScoreBreakdown, type LexicalTermDf } from './lexicalScorer';
@@ -1350,10 +1351,7 @@ function ensureColumn(database: Database.Database, tableName: string, columnName
 }
 
 function loadSqliteVec(database: Database.Database): void {
-  const resourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : '';
-  const packagedExtensionPath = resourcesPath
-    ? path.join(resourcesPath, 'app.asar.unpacked', 'node_modules', 'sqlite-vec-windows-x64', 'vec0.dll')
-    : '';
+  const packagedExtensionPath = sqliteVecPackagedExtensionPath();
   if (packagedExtensionPath && fs.existsSync(packagedExtensionPath)) {
     database.loadExtension(packagedExtensionPath);
     return;

@@ -8,47 +8,72 @@ const sourceDirectory = path.join(rootDir, 'pipeline-python');
 const dependenciesDirectory = path.join(sourceDirectory, '.deps');
 const workerPackageDirectory = path.join(sourceDirectory, 'pipeline_worker');
 const runtimeDirectory = path.join(rootDir, 'build', 'pipeline-runtime');
+const isDarwin = process.platform === 'darwin';
 
 assertDirectory(sourceDirectory, 'Python Worker 源码目录');
 assertDirectory(dependenciesDirectory, 'Python Worker 依赖目录');
 assertDirectory(workerPackageDirectory, 'Python Worker 包目录');
 assertDirectory(path.join(dependenciesDirectory, 'jieba'), 'Jieba 依赖');
 
-const pythonExecutable = resolvePythonExecutable();
-const pythonHome = path.dirname(pythonExecutable);
-assertDirectory(pythonHome, 'Python 运行时目录');
-const probe = probePythonRuntime(pythonExecutable);
-const pythonDllName = `python${probe.version.major}${probe.version.minor}.dll`;
-assertFile(path.join(pythonHome, pythonDllName), 'Python 动态库');
-
 resetRuntimeDirectory(runtimeDirectory);
-copyPythonRuntime(pythonHome, runtimeDirectory, pythonDllName);
-cpSync(workerPackageDirectory, path.join(runtimeDirectory, 'pipeline_worker'), {
-  recursive: true,
-  filter: (source) => !path.relative(workerPackageDirectory, source).split(path.sep).includes('__pycache__') && !source.endsWith('.pyc'),
-});
-copyWorkerDependencies(dependenciesDirectory, path.join(runtimeDirectory, '.deps'));
-writeRuntimePathFile(runtimeDirectory, pythonDllName);
-
-const hello = verifyWorkerHandshake(runtimeDirectory);
-writeJsonAtomically(path.join(runtimeDirectory, 'runtime-manifest.json'), {
-  schemaVersion: 1,
-  createdAt: new Date().toISOString(),
-  python: {
-    implementation: probe.implementation,
-    version: probe.version.text,
-    executableName: 'python-worker.exe',
-    standardLibrary: 'Lib',
-    dependencyDirectory: '.deps',
-  },
-  worker: {
-    protocolVersion: hello.protocolVersion,
-    engineVersion: hello.engineVersion,
-    version: hello.workerVersion,
-    jiebaVersion: probe.jiebaVersion,
-    capabilities: hello.capabilities,
-  },
-});
+const workerPackageFilter = (source) => !path.relative(workerPackageDirectory, source).split(path.sep).includes('__pycache__') && !source.endsWith('.pyc');
+let hello;
+let probe;
+if (isDarwin) {
+  // macOS 包不捆绑 Python 解释器，运行时使用系统 python3；只携带 Worker 模块与依赖。
+  cpSync(workerPackageDirectory, path.join(runtimeDirectory, 'pipeline_worker'), { recursive: true, filter: workerPackageFilter });
+  copyWorkerDependencies(dependenciesDirectory, path.join(runtimeDirectory, '.deps'));
+  probe = probePythonRuntime(resolvePythonExecutable());
+  hello = verifyWorkerHandshake(runtimeDirectory, 'python3', ['-E', '-m', 'pipeline_worker']);
+  writeJsonAtomically(path.join(runtimeDirectory, 'runtime-manifest.json'), {
+    schemaVersion: 1,
+    createdAt: new Date().toISOString(),
+    python: {
+      implementation: probe.implementation,
+      version: probe.version.text,
+      executableName: 'python3',
+      standardLibrary: null,
+      dependencyDirectory: '.deps',
+    },
+    worker: {
+      protocolVersion: hello.protocolVersion,
+      engineVersion: hello.engineVersion,
+      version: hello.workerVersion,
+      jiebaVersion: probe.jiebaVersion,
+      capabilities: hello.capabilities,
+    },
+  });
+} else {
+  const pythonExecutable = resolvePythonExecutable();
+  const pythonHome = path.dirname(pythonExecutable);
+  assertDirectory(pythonHome, 'Python 运行时目录');
+  probe = probePythonRuntime(pythonExecutable);
+  const pythonDllName = `python${probe.version.major}${probe.version.minor}.dll`;
+  assertFile(path.join(pythonHome, pythonDllName), 'Python 动态库');
+  copyPythonRuntime(pythonHome, runtimeDirectory, pythonDllName);
+  cpSync(workerPackageDirectory, path.join(runtimeDirectory, 'pipeline_worker'), { recursive: true, filter: workerPackageFilter });
+  copyWorkerDependencies(dependenciesDirectory, path.join(runtimeDirectory, '.deps'));
+  writeRuntimePathFile(runtimeDirectory, pythonDllName);
+  hello = verifyWorkerHandshake(runtimeDirectory, 'python-worker.exe', ['-E', '-m', 'pipeline_worker']);
+  writeJsonAtomically(path.join(runtimeDirectory, 'runtime-manifest.json'), {
+    schemaVersion: 1,
+    createdAt: new Date().toISOString(),
+    python: {
+      implementation: probe.implementation,
+      version: probe.version.text,
+      executableName: 'python-worker.exe',
+      standardLibrary: 'Lib',
+      dependencyDirectory: '.deps',
+    },
+    worker: {
+      protocolVersion: hello.protocolVersion,
+      engineVersion: hello.engineVersion,
+      version: hello.workerVersion,
+      jiebaVersion: probe.jiebaVersion,
+      capabilities: hello.capabilities,
+    },
+  });
+}
 
 console.log(`pipeline runtime prepared: ${runtimeDirectory}`);
 
@@ -58,6 +83,15 @@ function resolvePythonExecutable() {
     const resolved = path.resolve(configured);
     assertFile(resolved, 'MENGHAN_PIPELINE_PYTHON');
     return resolved;
+  }
+  if (isDarwin) {
+    for (const command of ['python3']) {
+      try {
+        const executable = execFileSync(command, ['-c', 'import sys; print(sys.executable)'], { encoding: 'utf8' }).trim();
+        const resolved = path.resolve(executable); assertFile(resolved, '当前 Python 解释器'); return resolved;
+      } catch { /* Try the next local interpreter. */ }
+    }
+    throw new Error('无法定位用于发布的 python3。请设置 MENGHAN_PIPELINE_PYTHON 指向 Python 3 解释器。');
   }
   // The Windows launcher selects standalone CPython even when Conda comes first in PATH.
   for (const [command, args] of [['py', ['-3', '-c', 'import sys; print(sys.executable)']], ['python', ['-c', 'import sys; print(sys.executable)']]]) {
@@ -147,14 +181,14 @@ function writeRuntimePathFile(target, pythonDllName) {
   writeFileSync(path.join(target, pthName), ['.', 'Lib', 'DLLs', '.deps', 'import site', ''].join('\r\n'), 'utf8');
 }
 
-function verifyWorkerHandshake(target) {
-  const executable = path.join(target, 'python-worker.exe');
+function verifyWorkerHandshake(target, executableName, workerArgs) {
+  const executable = executableName === 'python3' ? 'python3' : path.join(target, executableName);
   const request = [
     JSON.stringify({ id: 'runtime-hello', method: 'hello', params: { protocolVersion: 1 } }),
     JSON.stringify({ id: 'runtime-shutdown', method: 'shutdown', params: {} }),
     '',
   ].join('\n');
-  const result = run(executable, ['-E', '-m', 'pipeline_worker'], { cwd: target, input: request, timeout: 60_000, isolatedRuntime: true });
+  const result = run(executable, workerArgs, { cwd: target, input: request, timeout: 60_000, isolatedRuntime: !isDarwin });
   const messages = result.stdout.split(/\r?\n/u).filter(Boolean).map((line) => JSON.parse(line));
   const hello = messages.find((message) => message.id === 'runtime-hello');
   const shutdown = messages.find((message) => message.id === 'runtime-shutdown');
@@ -167,6 +201,9 @@ function verifyWorkerHandshake(target) {
 }
 
 function run(command, args, options) {
+  const isolatedPath = options.isolatedRuntime
+    ? (isDarwin ? '/usr/bin:/bin:/usr/sbin:/sbin' : `${process.env.SystemRoot}/System32;${process.env.SystemRoot}`)
+    : undefined;
   const result = spawnSync(command, args, {
     cwd: options.cwd,
     input: options.input,
@@ -174,7 +211,7 @@ function run(command, args, options) {
     timeout: options.timeout,
     windowsHide: true,
     maxBuffer: 8 * 1024 * 1024,
-    env: { ...process.env, PYTHONHOME: '', PYTHONPATH: '', ...(options.isolatedRuntime ? { PATH: `${process.env.SystemRoot}/System32;${process.env.SystemRoot}` } : {}) },
+    env: { ...process.env, PYTHONHOME: '', PYTHONPATH: '', ...(isolatedPath ? { PATH: isolatedPath } : {}) },
   });
   if (result.error) throw new Error(`无法启动 ${path.basename(command)}：${result.error.message}`);
   if (result.status !== 0) throw new Error(`${path.basename(command)} 运行失败（${result.status ?? '未知'}）：${result.stderr || result.stdout}`);

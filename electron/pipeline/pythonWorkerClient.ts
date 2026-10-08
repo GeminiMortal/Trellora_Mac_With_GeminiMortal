@@ -130,14 +130,14 @@ export class PythonWorkerClient {
     if (this.child && this.helloPromise) return this.helloPromise;
     const { executable, args, cwd, packaged } = resolveWorkerCommand();
     if (!fs.existsSync(cwd)) throw new WorkerClientError('WORKER_NOT_FOUND', '文档处理 Worker 目录不存在，请重新安装应用或配置开发环境。', false);
-    if (packaged && !fs.existsSync(executable)) {
+    if (packaged && path.isAbsolute(executable) && !fs.existsSync(executable)) {
       throw new WorkerClientError(
         'WORKER_RUNTIME_MISSING',
         packaged ? '文档处理运行时缺失或安装不完整，请重新安装Trellora；笔记编辑和文件浏览仍可正常使用。' : '开发环境缺少 Python Worker，请创建 pipeline-python/.venv 或安装 Python 后重试。',
         false,
       );
     }
-    if (packaged && !fs.existsSync(path.join(cwd, 'runtime-manifest.json'))) {
+    if (packaged && !fs.existsSync(path.join(cwd, 'runtime-manifest.json')) && !(process.platform === 'darwin' && fs.existsSync(path.join(cwd, 'pipeline_worker')))) {
       throw new WorkerClientError('WORKER_RUNTIME_MISSING', '文档处理运行时清单缺失，请重新安装Trellora；笔记编辑和文件浏览仍可正常使用。', false);
     }
 
@@ -265,12 +265,18 @@ function isPipelineStage(value: string): value is PipelineStageId {
 
 function resolveWorkerCommand(): WorkerCommand {
   const developmentDirectory = path.resolve(__dirname, '../pipeline-python');
+  const pythonExecutable = process.platform === 'darwin' ? 'python3' : 'python';
   if (!app.isPackaged) {
-    const venvPython = path.join(developmentDirectory, '.venv', 'Scripts', 'python.exe');
+    const venvPython = path.join(developmentDirectory, '.venv', process.platform === 'darwin' ? 'bin' : 'Scripts', process.platform === 'darwin' ? 'python' : 'python.exe');
     if (fs.existsSync(venvPython)) return { executable: venvPython, args: ['-m', 'pipeline_worker'], cwd: developmentDirectory, packaged: false };
-    return { executable: 'python', args: ['-m', 'pipeline_worker'], cwd: developmentDirectory, packaged: false };
+    return { executable: pythonExecutable, args: ['-m', 'pipeline_worker'], cwd: developmentDirectory, packaged: false };
   }
   const runtimeDirectory = path.join(process.resourcesPath, 'pipeline-runtime');
+  if (process.platform === 'darwin') {
+    const bundledPython = path.join(runtimeDirectory, 'python-worker');
+    if (fs.existsSync(bundledPython)) return { executable: bundledPython, args: ['-E', '-m', 'pipeline_worker'], cwd: runtimeDirectory, packaged: true };
+    return { executable: pythonExecutable, args: ['-m', 'pipeline_worker'], cwd: runtimeDirectory, packaged: true };
+  }
   return { executable: path.join(runtimeDirectory, 'python-worker.exe'), args: ['-E', '-m', 'pipeline_worker'], cwd: runtimeDirectory, packaged: true };
 }
 
