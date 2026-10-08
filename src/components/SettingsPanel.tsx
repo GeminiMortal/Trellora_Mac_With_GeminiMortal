@@ -372,9 +372,26 @@ export default function SettingsPanel({
     }
     setSelectedProfileId(profileId);
     setDraftAi({ ...profile.config, apiKey: (profile.config as AiProviderConfig).apiKey ?? '', availableModels: profile.config.availableModels ?? [] });
-    setAiStatus(null);
+    refreshOllamaModels(profile.config, profileId);
     setFeedback(null);
     setError(null);
+  };
+
+  /** 切换或新建 ollama 档案时自动拉取本地模型列表，避免下拉被清空后无法再选择模型。 */
+  const refreshOllamaModels = (config: AiProviderConfig, profileId: string) => {
+    if (config.kind !== 'ollama') { setAiStatus(null); return; }
+    setAiStatus(null);
+    void window.electronAPI.fetchAiProviderModels({ ...config }, { profileId })
+      .then((status) => {
+        if (!status.available || liveDraft.current.profileId !== profileId) return;
+        setAiStatus(status);
+        setDraftAi((current) => ({
+          ...current,
+          availableModels: status.models,
+          model: current.model && status.models.some((entry) => entry.name === current.model) ? current.model : status.models[0]?.name ?? current.model,
+        }));
+      })
+      .catch(() => undefined);
   };
 
   const addModelProfile = () => {
@@ -401,7 +418,7 @@ export default function SettingsPanel({
     setModelProfilePage(1);
     setModelSettingsTab('config');
     setDraftAi(profile.config);
-    setAiStatus(null);
+    refreshOllamaModels(profile.config, id);
   };
 
   const startAddModelConnection = () => {

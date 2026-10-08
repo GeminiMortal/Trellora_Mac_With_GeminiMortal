@@ -4684,6 +4684,35 @@ function isMemoryExtractionRouteEnabled(route: string, agentId: string): boolean
 
 let modelConfigurationService: ModelConfigurationService | undefined;
 
+/** 模型保存审计：只记录结构、槽位来源与是否有密钥的布尔值，绝不记录密钥内容。 */
+function recordModelSaveAudit(change: ModelConfigurationChange, result: ModelConfigurationSaveResult | undefined, failure: unknown): void {
+  try {
+    const detail = {
+      at: new Date().toISOString(),
+      kind: change.kind,
+      providerId: change.kind === 'hub' && change.provider ? change.provider.id : undefined,
+      providerHasEndpoint: change.kind === 'hub' && change.provider ? typeof change.provider.patch.endpoint === 'string' && change.provider.patch.endpoint.length > 0 : undefined,
+      providerHasApiKey: change.kind === 'hub' && change.provider ? Boolean(change.provider.patch.apiKey) : undefined,
+      providerModelCount: change.kind === 'hub' && Array.isArray(change.provider?.patch.models) ? change.provider.patch.models.length : undefined,
+      hubSlots: change.hubPatch?.slots ? Object.fromEntries(Object.entries(change.hubPatch.slots).map(([slot, value]) => [slot, { source: value?.source, hasModel: Boolean(value?.model) }])) : undefined,
+      ollamaEndpointChanged: typeof change.hubPatch?.ollamaEndpoint === 'string' ? safeServiceEndpoint(change.hubPatch.ollamaEndpoint) : undefined,
+      profileCount: change.kind === 'profiles' && Array.isArray(change.settings?.profiles) ? change.settings.profiles.length : undefined,
+      defaultProfileId: change.kind === 'profiles' ? change.settings?.defaultProfileId : undefined,
+      profiles: change.kind === 'profiles' && Array.isArray(change.settings?.profiles)
+        ? change.settings.profiles.map((profile: { id: string; config: { kind?: string; provider?: string; model?: string; apiKey?: string } }) => ({
+          id: profile.id, kind: profile.config?.kind, provider: profile.config?.provider,
+          model: profile.config?.model, hasKey: Boolean(profile.config?.apiKey?.trim()),
+        }))
+        : undefined,
+      status: result?.status,
+      impacts: result?.status === 'confirmation-required' ? result.impacts.length : undefined,
+      error: failure ? String((failure as Error)?.message ?? failure) : undefined,
+    };
+    fs.mkdirSync(app.getPath('logs'), { recursive: true });
+    fs.appendFileSync(path.join(app.getPath('logs'), 'model-save.ndjson'), `${JSON.stringify(detail)}\n`, 'utf8');
+  } catch { /* 审计失败不影响保存主链路。 */ }
+}
+
 /** 所有模型保存入口复用同一提交门，运行时只在配置整体落盘后更新。 */
 function saveModelConfiguration(change: ModelConfigurationChange, confirmationToken?: string): ModelConfigurationSaveResult {
   modelConfigurationService ??= new ModelConfigurationService({
@@ -4707,7 +4736,16 @@ function saveModelConfiguration(change: ModelConfigurationChange, confirmationTo
     },
     afterSave: change => { configureAiProvider(readAiProviderConfig()); if (change.kind === 'profiles') onboardingService?.profilesSaved(); },
   });
-  return modelConfigurationService.save(change, confirmationToken);
+  let result: ModelConfigurationSaveResult | undefined;
+  let failure: unknown;
+  try {
+    result = modelConfigurationService.save(change, confirmationToken);
+  } catch (error) {
+    failure = error;
+  }
+  recordModelSaveAudit(change, result, failure);
+  if (failure) throw failure;
+  return result!;
 }
 
 /** 兼容 IPC 也不能直接覆盖被引用的地址；交互式确认由统一保存接口完成。 */
