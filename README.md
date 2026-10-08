@@ -4,10 +4,10 @@
 
 # Trellora
 
-**Windows 本地优先 AI 知识工作台**
+**macOS（Apple Silicon）本地优先 AI 知识工作台**
 
 > [!NOTE]
-> 本仓库是对原项目 [Trellora](https://gitee.com/eleven-lxs/trellora) 的 **macOS 适配版本**：添加了 Apple Silicon (arm64) 支持，包括 sqlite-vec 原生扩展适配、Python Worker 跨平台路径、electron-builder mac 打包配置与签名修复。原项目面向 Windows x64。
+> 本仓库是对原项目 [Trellora](https://gitee.com/eleven-lxs/trellora) 的 **macOS 适配版本**，原项目面向 Windows x64。适配内容包括：sqlite-vec 原生扩展按平台加载（darwin-arm64 / win32-x64）、Python Worker 跨平台路径（打包版回退系统 python3）、electron-builder mac 打包配置（dmg/zip）与 afterPack ad-hoc 签名修复、跨平台的内部渲染器 IPC 校验。
 
 Where ideas grow connected.
 
@@ -15,7 +15,8 @@ Where ideas grow connected.
 
 **简体中文** · [English](README.en.md)
 
-[![Platform](https://img.shields.io/badge/platform-Windows_x64-0078D4)](#快速开始)
+[![Platform](https://img.shields.io/badge/platform-macOS_arm64-black)](#快速开始)
+[![Upstream](https://img.shields.io/badge/upstream-Windows_x64-0078D4)](https://gitee.com/eleven-lxs/trellora)
 [![Local First](https://img.shields.io/badge/data-local_first-26745C)](#数据与隐私)
 [![Stack](https://img.shields.io/badge/stack-Electron_·_React_·_TypeScript-3178C6)](#技术架构)
 
@@ -29,7 +30,7 @@ Trellora 面向需要持续阅读、写作和整理资料的开发者、学生�
 
 产品围绕一条完整的知识工作流程展开：**收集资料 → 解析和索引 → 阅读与提问 → 整理为笔记 → 建立关联 → 持续复用**。笔记库用于主动写作，资料库用于保留和检索来源，Wiki 用于按章节学习，地图用于发现跨文档关系，助手把这些能力连接起来。
 
-当前目标平台是 **Windows x64**，项目仍在持续开发。本文描述当前工作树的界面和实现；需要模型、Embedding、联网搜索或 PDF 云解析的功能，会在对应位置注明条件。正式分发状态以 [桌面分发验收记录](docs/verification/desktop-distribution-acceptance.md) 为准。
+本仓库当前目标平台是 **macOS（Apple Silicon arm64）**；上游原项目面向 Windows x64。项目仍在持续开发。本文描述当前工作树的界面和实现；需要模型、Embedding、联网搜索或 PDF 云解析的功能，会在对应位置注明条件。
 
 ![Trellora Markdown 笔记工作台](docs/assets/screenshots/notes-zh-light.png)
 
@@ -131,7 +132,7 @@ Wiki 提供节点分析与完整 Wiki 生成，支持引导式和自动模式。
 
 独立文件工作区显示文件路径、编码、换行格式、保存状态和字数，提供编辑 / 预览 / 源码、保存、另存为和加入笔记库。独立 Markdown 支持受控的本地图片访问、图片粘贴与文档 AI。**独立文件编辑先保存恢复草稿，原文件通过手动保存写回**，与库内笔记自动保存区分。
 
-Windows 启动参数和拖放共用打开队列；安装包提供 `.md`、`.markdown`、`.txt` 的可选打开方式注册。
+Windows 由安装包注册 `.md`、`.markdown`、`.txt` 的可选打开方式；macOS 版通过右键 → 打开方式选择 Trellora。启动参数和拖放共用打开队列。
 
 ![无需建库即可编辑独立 Markdown 文件](docs/assets/screenshots/external-document-zh-light.png)
 
@@ -181,46 +182,46 @@ Windows 启动参数和拖放共用打开队列；安装包提供 `.md`、`.mark
 
 ## 下载软件
 
-**Windows x64 · Trellora 1.0.0**
+**macOS（Apple Silicon）· Trellora 1.0.0**
 
 | 版本 | 下载 | 使用方式 |
 | --- | --- | --- |
-| 安装版 | [下载安装包](downloads/Trellora-1.0.0-setup-x64.exe?raw=true) | 运行安装向导，可选择安装目录 |
-| 免安装版 | [下载 portable](downloads/Trellora-1.0.0-portable-x64.exe?raw=true) | 下载后直接运行 |
+| DMG 安装镜像 | [Gitee Releases](https://gitee.com/GeminiMortal/trellora/releases) | 打开 DMG，将 Trellora 拖入"应用程序" |
+| 免安装 ZIP | [Gitee Releases](https://gitee.com/GeminiMortal/trellora/releases) | 解压后运行 Trellora.app |
 
-发行文件统一存放在 [`downloads/`](downloads/README.md)，将该目录随源码上传到 GitHub 后即可点击下载。[SHA-256 校验值](downloads/SHA256SUMS.txt) · [发行文件清单](downloads/release-manifest.json) · [GitHub Releases](https://github.com/Elevenoven/Trellora-plus/releases)。
+应用使用 ad-hoc 签名分发。首次打开如被 macOS Gatekeeper 拦截，请右键点击 Trellora.app → "打开"，或到"系统设置 → 隐私与安全性"允许运行。
+
+原项目的 Windows x64 安装版与免安装版见[上游仓库](https://gitee.com/eleven-lxs/trellora)。
 
 ## 快速开始
 
 ### 使用桌面包
 
-请从[下载软件](#下载软件)选择 Windows x64 安装版或免安装版。
+请从[下载软件](#下载软件)下载 macOS DMG 或 ZIP。
 
-首次启动、备份、换电脑恢复和更新操作见 [桌面分发与备份恢复使用说明](docs/桌面分发与备份恢复使用说明.md)。发行包设计为携带所需 Python runtime，最终用户无需自行搭建 Python Web 服务。Ollama 和各类远程服务按需要配置。
+首次启动、备份、换电脑恢复和更新操作见 [桌面分发与备份恢复使用说明](docs/桌面分发与备份恢复使用说明.md)。macOS 包使用系统 Python 3 运行文档处理 Worker（无需自行搭建 Python 服务，离线 PDF 云解析按需要配置密钥）。Ollama 和各类远程服务按需要配置。
 
 ### 从源码启动
 
-准备 Windows x64、Git、Node.js 和 pnpm（lockfile 为 v9，使用 pnpm 9 或更高版本）。Node.js 建议使用 22 或 24；原生模块没有可用预编译产物时，需要 Visual Studio C++ Build Tools。
+准备 macOS（Apple Silicon）、Git、Node.js 和 pnpm（使用 pnpm 9 或更高版本）。
 
-```powershell
-git clone https://github.com/Elevenoven/Trellora-plus.git
-cd Trellora-plus
+```bash
+git clone https://gitee.com/GeminiMortal/trellora.git
+cd trellora
 pnpm install
-pnpm run rebuild:native
 pnpm dev
 ```
 
 `pnpm dev` 同时启动 Vite 和 Electron。仅启动浏览器页面不会提供本地文件、SQLite、Worker 和桌面 IPC 能力。
 
-开发和测试文档流水线时，再准备 Python 环境：
+开发和测试文档流水线时，再准备 Python 环境（jieba 安装到 `pipeline-python/.deps`，Worker 会自动加入检索路径）：
 
-```powershell
-python -m venv pipeline-python\.venv
-.\pipeline-python\.venv\Scripts\python.exe -m pip install -r pipeline-python\requirements.txt
-.\pipeline-python\.venv\Scripts\python.exe -m unittest discover -s pipeline-python\tests -v
+```bash
+python3 -m pip install --target pipeline-python/.deps jieba==0.42.1
+python3 -m unittest discover -s pipeline-python/tests -v
 ```
 
-Worker 优先使用上述虚拟环境，经 NDJSON 标准输入输出通信，不启动 FastAPI 或监听本地 HTTP 端口。
+Worker 优先使用 `pipeline-python/.venv/bin/python`（如已创建），否则回退系统 `python3`，经 NDJSON 标准输入输出通信，不启动 FastAPI 或监听本地 HTTP 端口。
 
 ## 模型与外部服务
 
@@ -298,7 +299,7 @@ docs/             产品、架构、展示资源和实施验收记录
 
 ## 开发与验证
 
-```powershell
+```bash
 # 类型和代码检查
 pnpm exec tsc -b
 pnpm lint
@@ -311,17 +312,15 @@ pnpm run verify:pipeline-worker
 pnpm run verify:wiki-workspace
 ```
 
-Windows 打包需要为发布 Worker 准备 `.deps`（与开发 `.venv` 分开）：
+macOS 打包需要为发布 Worker 准备 `.deps`（与开发 `.venv` 分开）：
 
-```powershell
-python -m pip install -r pipeline-python\requirements.txt --target pipeline-python\.deps
-pnpm build
+```bash
+python3 -m pip install -r pipeline-python/requirements.txt --target pipeline-python/.deps
+pnpm run build:mac
 pnpm run release:manifest
 ```
 
-构建脚本优先通过 Windows `py -3` 定位 CPython；必要时将 `MENGHAN_PIPELINE_PYTHON` 指向独立 CPython x64 的 `python.exe`。常见构建排查、原生依赖与验收分层见 [代码架构：开发与打包](docs/architecture.md#开发构建与验证)。
-
-产物版本取自 `package.json.version`，输出格式为 `trellora/Trellora-<version>-portable-x64.exe` 和 `trellora/Trellora-<version>-setup-x64.exe`。发行清单记录实际包的哈希、大小、运行时和签名状态。类型检查与构建不替代真实模型、文档解析、Windows 文件关联及干净机器验证。
+构建脚本通过 `python3` 定位解释器；必要时将 `MENGHAN_PIPELINE_PYTHON` 指向特定 Python 3。产物版本取自 `package.json.version`，输出格式为 `trellora/Trellora-<version>-arm64.dmg` 和 `trellora/Trellora-<version>-arm64-mac.zip`。打包经 `afterPack` 钩子自动做 ad-hoc 重签名（未配置开发者证书时，避免 Gatekeeper 报"已损坏"）。GitHub 直连不稳定时默认走 npmmirror 镜像下载 Electron，可用 `ELECTRON_MIRROR` 覆盖。原 Windows 打包流程保留在 `pnpm run build`（需在 Windows 环境执行）。
 
 ## 文档与参与
 
@@ -334,6 +333,6 @@ pnpm run release:manifest
 | [桌面分发验收](docs/verification/desktop-distribution-acceptance.md) | 已验证项目与仍待完成的发行门 |
 | [展示资源说明](docs/assets/README.md) | 截图来源、演示数据及 README 编排参考 |
 
-反馈问题时，请在 [GitHub Issues](https://github.com/Elevenoven/Trellora-plus/issues) 附上应用版本、界面语言、复现步骤和相关诊断；避免包含密钥或私人资料。提交代码前阅读 [AGENTS.md](AGENTS.md)，遵守进程职责、用户原文保护及分阶段合同。
+反馈问题时，请附上应用版本、界面语言、复现步骤和相关诊断（日志位于 `~/Library/Application Support/trellora/logs`）；避免包含密钥或私人资料。提交代码前阅读 [AGENTS.md](AGENTS.md)，遵守进程职责、用户原文保护及分阶段合同。
 
 当前仓库没有 `LICENSE` 文件，暂未声明开源许可证。许可证和正式发布状态以后续仓库文件及 Releases 为准。
