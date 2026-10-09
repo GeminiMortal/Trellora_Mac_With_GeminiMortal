@@ -1009,10 +1009,15 @@ declare global {
         removeMaterialsLibrary: (path: string) => Promise<MaterialsLibrarySummary[]>;
         deleteMaterialsLibrary: (path: string) => Promise<MaterialsLibrarySummary[]>;
         upgradeLibraryToMaterials: (path: string, icon?: string | null, chunkingConfigDraft?: Partial<LibraryChunkingConfig>) => Promise<MaterialsLibrarySummary[]>;
+        previewLibraryUpgrade: (path: string) => Promise<{ included: number; bytes: number; byExtension: Record<string, number>; skipped: Record<string, number> }>;
+        getMaterialsSourceInfo: (path: string) => Promise<{ libraryPath: string; alias: string } | null>;
+        syncMaterialsFromNotes: (path: string) => Promise<{ updated: number; added: number; unchanged: number; missingSources: number }>;
         listMaterialsDocuments: (path: string) => Promise<MaterialsDocument[]>;
         getMaterialsPipelineStatus: (path: string) => Promise<PipelineDocumentStatus[]>;
         getWikiDocumentOutline: (path: string, documentId: string) => Promise<WikiDocumentOutline>;
         importWikiDocumentToNoteLibrary: (sourceLibraryPath: string, documentId: string, contentHash: string, targetLibraryPath: string) => Promise<string>;
+        importWikiNodeToNoteLibrary: (sourceLibraryPath: string, documentId: string, contentHash: string, nodeId: string, targetLibraryPath: string) => Promise<string>;
+        sendNoteToMaterials: (notePath: string, targetLibraryPath: string) => Promise<MaterialsDocument[]>;
         reorderWikiSiblingNodes: (path: string, request: WikiSiblingOrderRequest) => Promise<WikiSiblingOrderResult>;
         addWikiDerivedNode: (path: string, request: WikiDerivedNodeRequest) => Promise<WikiDerivedNodeResult>;
         renameWikiDerivedNode: (path: string, request: WikiDerivedRenameRequest) => Promise<WikiDerivedNodeResult>;

@@ -893,6 +893,14 @@ export default function WikiView({ active, resolvedTheme, assistantAiOptions, on
                 contentHash: sourceDocument.contentHash,
                 name: sourceDocument.name,
               }) : undefined}
+              onOpenSectionInNotes={libraryPath && sourceDocument && selectedNode ? () => setNoteSource({
+                libraryPath,
+                documentId: sourceDocument.id,
+                contentHash: sourceDocument.contentHash,
+                name: sourceDocument.name,
+                nodeId: selectedNode.id,
+                nodeTitle: selectedNode.title,
+              }) : undefined}
               onAnalyze={(prompt, actionKind, attachments, options) => handleAnalyze(selectedNode.id, prompt, actionKind, attachments, options)}
               onCancelAnalysis={() => void handleCancel()}
               onRetryTask={handleRetryTask}
@@ -938,6 +946,17 @@ export default function WikiView({ active, resolvedTheme, assistantAiOptions, on
           void copyPlainText(path);
           setContextMenu(null);
           setFeedback(t("节点路径已复制"));
+        }}
+        onSaveToNotes={() => {
+          if (!contextNode || !libraryPath || !sourceDocument) return;
+          setNoteSource({
+            libraryPath,
+            documentId: sourceDocument.id,
+            contentHash: sourceDocument.contentHash,
+            name: sourceDocument.name,
+            nodeId: contextNode.id,
+            nodeTitle: contextNode.title,
+          });
         }}
         onDelete={() => contextNode && openNodeAction('delete', contextNode.id)}
       /> : null}

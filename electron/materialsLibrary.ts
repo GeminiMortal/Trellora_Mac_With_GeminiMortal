@@ -51,12 +51,16 @@ interface MaterialsManifestDocument {
   contentHash: string;
   vectorState: MaterialsDocumentVectorState;
   vectorIndexedAt?: string;
+  /** 由笔记库升级/入库时记录的源笔记（绝对源库路径 + 源库内相对路径），供“从笔记库同步”使用。 */
+  sourceNote?: { libraryPath: string; relativePath: string };
 }
 
 interface MaterialsManifest {
   schemaVersion: 1;
   libraryId: string;
   documents: MaterialsManifestDocument[];
+  /** 升级来源笔记库；仅由库级升级写入。 */
+  source?: { libraryPath: string; alias: string };
 }
 
 interface MaterialsRegistryStore {
@@ -202,9 +206,18 @@ export function upgradeRegisteredLibraryToMaterials(
   const root = ensureMaterialsRoot(workspacePath);
   const created = createMaterialsLibraryDirectory(root, noteRegistration.alias, now, chunkingConfigDraft);
   try {
-    copyLibraryDocuments(normalizedPath, materialsDocumentsDirectory(created.path));
+    const copied = copyLibraryDocuments(normalizedPath, materialsDocumentsDirectory(created.path));
     syncMaterialsManifest(created.path, now);
-    return registerMaterialsLibrary(store, created.path, noteRegistration.alias, 'upgraded', icon, now);
+    // 记录来源笔记库与逐文档源映射：支撑“从笔记库同步”与升级语义提示。
+    const manifest = readMaterialsManifest(created.path);
+    if (manifest) {
+      manifest.source = { libraryPath: normalizedPath, alias: noteRegistration.alias };
+      for (const { relativeTargetPath, sourceAbsolutePath } of copied) {
+        attachSourceNote(manifest, relativeTargetPath, normalizedPath, path.relative(normalizedPath, sourceAbsolutePath));
+      }
+      writeMaterialsManifest(created.path, manifest);
+    }
+    return registerMaterialsLibrary(store, created.path, `${noteRegistration.alias}（资料快照）`, 'upgraded', icon, now);
   } catch (error) {
     // The directory was created by this operation and is not registered yet;
     // remove only this bounded, recoverable half-finished upgrade.
@@ -284,10 +297,15 @@ export function readMaterialsManifest(libraryPath: string): MaterialsManifest | 
   try {
     const parsed = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Partial<MaterialsManifest>;
     if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.documents)) return null;
+    const source = parsed.source && typeof parsed.source === 'object'
+      && typeof parsed.source.libraryPath === 'string' && typeof parsed.source.alias === 'string'
+      ? { libraryPath: parsed.source.libraryPath, alias: parsed.source.alias }
+      : undefined;
     return {
       schemaVersion: 1,
       libraryId: typeof parsed.libraryId === 'string' && parsed.libraryId ? parsed.libraryId : crypto.randomUUID(),
       documents: parsed.documents.filter(isValidManifestDocument),
+      ...(source ? { source } : {}),
     };
   } catch {
     return null;
@@ -336,6 +354,7 @@ export function syncMaterialsManifest(libraryPath: string, now = new Date()): Ma
       addedAt: existing?.addedAt ?? timestamp,
       contentHash: hashFileContents(absolutePath),
       vectorState: 'pending',
+      ...(existing?.sourceNote ? { sourceNote: existing.sourceNote } : {}),
     });
   }
 
@@ -382,6 +401,50 @@ export function importMaterialsDocuments(libraryPath: string, sourcePaths: strin
   if (skipped.length > 0) {
     throw new Error(`不支持的文件类型：${skipped.join('、')}`);
   }
+  return syncMaterialsManifest(library, now);
+}
+
+/** 展开上传来源：文件夹递归收集支持的文档（跳过隐藏目录与不支持类型），文件保持原样。 */
+export function expandMaterialSources(sourcePaths: string[]): { files: string[]; skipped: string[] } {
+  const files: string[] = [];
+  const skipped: string[] = [];
+  const walk = (directoryPath: string) => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(directoryPath, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) {
+        if (!ignoredDirectories.has(entry.name) && !entry.name.startsWith('.')) walk(path.join(directoryPath, entry.name));
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      if (materialsDocumentExtensions.has(path.extname(entry.name).toLowerCase())) files.push(path.join(directoryPath, entry.name));
+    }
+  };
+  for (const sourcePath of sourcePaths) {
+    const resolved = path.resolve(sourcePath);
+    if (!fs.existsSync(resolved)) { skipped.push(path.basename(resolved)); continue; }
+    if (fs.statSync(resolved).isDirectory()) walk(resolved);
+    else if (materialsDocumentExtensions.has(path.extname(resolved).toLowerCase())) files.push(resolved);
+    else skipped.push(path.basename(resolved));
+  }
+  return { files, skipped };
+}
+
+/** 把单篇笔记复制进资料库 documents 目录（字节级复制，保留 frontmatter 与 [[wiki链接]]；同名自动加序号）。 */
+export function importNoteIntoMaterialsLibrary(libraryPath: string, notePath: string, now = new Date()): MaterialsDocument[] {
+  const library = assertExistingDirectory(libraryPath);
+  const resolvedNote = path.resolve(notePath);
+  if (!fs.existsSync(resolvedNote) || !fs.statSync(resolvedNote).isFile()) throw new Error('找不到要入库的笔记。');
+  if (!materialsDocumentExtensions.has(path.extname(resolvedNote).toLowerCase())) throw new Error('只能导入 Markdown 或文本笔记。');
+  const documentsDirectory = materialsDocumentsDirectory(library);
+  fs.mkdirSync(documentsDirectory, { recursive: true });
+  const targetPath = getUniquePath(documentsDirectory, path.basename(resolvedNote));
+  fs.copyFileSync(resolvedNote, targetPath);
   return syncMaterialsManifest(library, now);
 }
 
@@ -517,7 +580,8 @@ function hashFileContents(absolutePath: string): string {
 }
 
 /** 递归复制源库中受支持的文档到目标 documents 目录，保留相对目录结构。 */
-function copyLibraryDocuments(sourceLibraryPath: string, targetDocumentsDirectory: string): void {
+function copyLibraryDocuments(sourceLibraryPath: string, targetDocumentsDirectory: string): Array<{ relativeTargetPath: string; sourceAbsolutePath: string }> {
+  const copied: Array<{ relativeTargetPath: string; sourceAbsolutePath: string }> = [];
   const walk = (directoryPath: string) => {
     let entries: fs.Dirent[];
     try {
@@ -536,10 +600,143 @@ function copyLibraryDocuments(sourceLibraryPath: string, targetDocumentsDirector
       const relativeDirectory = path.relative(sourceLibraryPath, directoryPath);
       const targetDirectory = relativeDirectory ? path.join(targetDocumentsDirectory, relativeDirectory) : targetDocumentsDirectory;
       fs.mkdirSync(targetDirectory, { recursive: true });
-      fs.copyFileSync(entryPath, getUniquePath(targetDirectory, entry.name));
+      const targetPath = getUniquePath(targetDirectory, entry.name);
+      fs.copyFileSync(entryPath, targetPath);
+      copied.push({ relativeTargetPath: toRelativePath(path.dirname(targetDocumentsDirectory), targetPath), sourceAbsolutePath: entryPath });
     }
   };
   walk(sourceLibraryPath);
+  return copied;
+}
+
+/** 升级前预览：统计笔记库会被收录的文档数、总字节与跳过的类型。 */
+export function previewLibraryUpgrade(libraryPath: string): { included: number; bytes: number; byExtension: Record<string, number>; skipped: Record<string, number> } {
+  const library = assertExistingDirectory(libraryPath);
+  const result = { included: 0, bytes: 0, byExtension: {} as Record<string, number>, skipped: {} as Record<string, number> };
+  const walk = (directoryPath: string) => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(directoryPath, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) continue;
+      const entryPath = path.join(directoryPath, entry.name);
+      if (entry.isDirectory()) {
+        if (!ignoredDirectories.has(entry.name) && !entry.name.startsWith('.')) walk(entryPath);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const extension = path.extname(entry.name).toLowerCase() || '(无扩展名)';
+      if (materialsDocumentExtensions.has(extension)) {
+        result.included += 1;
+        try { result.bytes += fs.statSync(entryPath).size; } catch { /* 统计失败不影响预览。 */ }
+        result.byExtension[extension] = (result.byExtension[extension] ?? 0) + 1;
+      } else {
+        result.skipped[extension] = (result.skipped[extension] ?? 0) + 1;
+      }
+    }
+  };
+  walk(library);
+  return result;
+}
+
+export interface MaterialsNoteSyncResult {
+  updated: number;
+  added: number;
+  unchanged: number;
+  missingSources: number;
+}
+
+/** 查询资料库的升级来源（笔记库路径与别名）；非升级来源返回 null。 */
+export function readMaterialsSourceInfo(libraryPath: string): { libraryPath: string; alias: string } | null {
+  try {
+    return readMaterialsManifest(assertExistingDirectory(libraryPath))?.source ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** 从来源笔记库重新同步：覆盖变化文件、补收新笔记；缺失源文件的资料保持原样（只读存档语义）。 */
+export function syncMaterialsFromNoteLibrary(libraryPath: string, now = new Date()): MaterialsNoteSyncResult {
+  const library = assertExistingDirectory(libraryPath);
+  const manifest = readMaterialsManifest(library);
+  if (!manifest?.source) throw new Error('该资料库不是由笔记库升级而来，无法同步。');
+  const noteLibrary = assertExistingDirectory(manifest.source.libraryPath);
+  const documentsDirectory = materialsDocumentsDirectory(library);
+  fs.mkdirSync(documentsDirectory, { recursive: true });
+
+  const summary: MaterialsNoteSyncResult = { updated: 0, added: 0, unchanged: 0, missingSources: 0 };
+  const claimedTargets = new Set<string>();
+
+  // 1) 已映射的文档：源变化则覆盖，源缺失则保留计数。
+  for (const document of manifest.documents) {
+    const sourceNote = document.sourceNote;
+    if (!sourceNote || sourceNote.libraryPath !== noteLibrary) continue;
+    const sourcePath = path.resolve(noteLibrary, sourceNote.relativePath);
+    const inside = path.relative(noteLibrary, sourcePath);
+    if (!inside || inside.startsWith('..') || path.isAbsolute(inside) || !fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) {
+      summary.missingSources += 1;
+      continue;
+    }
+    claimedTargets.add(document.relativePath);
+    const targetPath = path.resolve(library, document.relativePath);
+    if (fs.existsSync(targetPath) && hashFileContents(targetPath) === hashFileContents(sourcePath)) {
+      summary.unchanged += 1;
+      continue;
+    }
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    fs.copyFileSync(sourcePath, targetPath);
+    summary.updated += 1;
+  }
+
+  // 2) 源库新增且尚未收录的笔记：按目录结构补复制，已存在的目标一律跳过。
+  const collect = (directoryPath: string): Array<{ relativeTargetPath: string; sourceAbsolutePath: string }> => {
+    const found: Array<{ relativeTargetPath: string; sourceAbsolutePath: string }> = [];
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(directoryPath, { withFileTypes: true });
+    } catch {
+      return found;
+    }
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) continue;
+      const entryPath = path.join(directoryPath, entry.name);
+      if (entry.isDirectory()) {
+        if (!ignoredDirectories.has(entry.name) && !entry.name.startsWith('.')) found.push(...collect(entryPath));
+        continue;
+      }
+      if (!entry.isFile() || !materialsDocumentExtensions.has(path.extname(entry.name).toLowerCase())) continue;
+      const relativeDirectory = path.relative(noteLibrary, directoryPath);
+      const targetPath = relativeDirectory ? path.join(documentsDirectory, relativeDirectory, entry.name) : path.join(documentsDirectory, entry.name);
+      found.push({ relativeTargetPath: toRelativePath(library, targetPath), sourceAbsolutePath: entryPath });
+    }
+    return found;
+  };
+  const newMappings: Array<{ relativeTargetPath: string; sourceAbsolutePath: string }> = [];
+  for (const candidate of collect(noteLibrary)) {
+    const targetPath = path.resolve(library, candidate.relativeTargetPath);
+    if (fs.existsSync(targetPath)) continue;
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    fs.copyFileSync(candidate.sourceAbsolutePath, targetPath);
+    newMappings.push(candidate);
+    summary.added += 1;
+  }
+
+  // 新收文件先由清单扫描登记，再补写源映射，保证下次同步可追踪。
+  syncMaterialsManifest(library, now);
+  const refreshed = readMaterialsManifest(library);
+  if (refreshed) {
+    for (const mapping of newMappings) attachSourceNote(refreshed, mapping.relativeTargetPath, noteLibrary, path.relative(noteLibrary, mapping.sourceAbsolutePath));
+    writeMaterialsManifest(library, refreshed);
+  }
+  return summary;
+}
+
+function attachSourceNote(manifest: MaterialsManifest, relativeTargetPath: string, noteLibrary: string, sourceRelativePath: string): void {
+  const entry = manifest.documents.find((document) => document.relativePath === relativeTargetPath);
+  if (entry) entry.sourceNote = { libraryPath: noteLibrary, relativePath: sourceRelativePath };
 }
 
 function isReadableDirectory(libraryPath: string): boolean {

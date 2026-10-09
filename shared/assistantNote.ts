@@ -1,7 +1,17 @@
+export interface AssistantNoteSource {
+  kind: 'assistant';
+  sessionId?: string;
+  messageId?: string;
+  scope?: string;
+  scopeLabel?: string;
+  createdAt?: string;
+}
+
 export interface CreateAssistantNoteRequest {
   libraryPath: string;
   title?: string;
   content: string;
+  source?: AssistantNoteSource;
 }
 
 export interface CreateAssistantNoteResult {

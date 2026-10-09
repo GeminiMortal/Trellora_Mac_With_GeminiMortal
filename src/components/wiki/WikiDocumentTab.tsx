@@ -1,6 +1,6 @@
 import { t, useI18n } from '../../i18n';
 import { Badge, Button, Group, ScrollArea, Text, Tooltip } from '@mantine/core';
-import { ExternalLink, FileText } from 'lucide-react';
+import { BookmarkPlus, ExternalLink, FileText } from 'lucide-react';
 import MarkdownContent from '../MarkdownContent';
 import type { WikiMapNode } from '../../wiki/wikiTypes';
 import type { ResolvedTheme } from '../../utils/theme';
@@ -10,9 +10,10 @@ interface WikiDocumentTabProps {
   pathLabel: string;
   resolvedTheme: ResolvedTheme;
   onOpenInNotes?: () => void;
+  onOpenSectionInNotes?: () => void;
 }
 
-export default function WikiDocumentTab({ node, pathLabel, resolvedTheme, onOpenInNotes }: WikiDocumentTabProps) {
+export default function WikiDocumentTab({ node, pathLabel, resolvedTheme, onOpenInNotes, onOpenSectionInNotes }: WikiDocumentTabProps) {
   useI18n();
   return (
     <div className="wiki-document-tab">
@@ -31,6 +32,13 @@ export default function WikiDocumentTab({ node, pathLabel, resolvedTheme, onOpen
           <span>
             <Button size="xs" variant="default" leftSection={<ExternalLink size={14} />} disabled={!onOpenInNotes} onClick={onOpenInNotes}>
               {t("在笔记中打开")}
+            </Button>
+          </span>
+        </Tooltip>
+        <Tooltip label={onOpenSectionInNotes ? t("把此章节（含子章节）保存为可编辑笔记") : t("当前文档未连接可用的资料库来源")} withArrow>
+          <span>
+            <Button size="xs" variant="default" leftSection={<BookmarkPlus size={14} />} disabled={!onOpenSectionInNotes} onClick={onOpenSectionInNotes}>
+              {t("存为章节笔记")}
             </Button>
           </span>
         </Tooltip>

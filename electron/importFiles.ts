@@ -24,24 +24,40 @@ export function importTextFilesToLibrary(options: ImportTextFilesOptions): Impor
   const libraryPath = assertExistingDirectory(options.libraryPath);
   const targetDirectory = resolveTargetDirectory(libraryPath, options.targetDirectoryPath);
 
-  const prepared = options.sourcePaths.map((sourcePath) => {
+  const sourceFiles = options.sourcePaths.flatMap((sourcePath) => {
     const resolvedSourcePath = path.resolve(sourcePath);
-    if (!fs.existsSync(resolvedSourcePath) || !fs.statSync(resolvedSourcePath).isFile()) {
-      throw new Error(`找不到要导入的文件：${sourcePath}`);
+    if (!fs.existsSync(resolvedSourcePath)) throw new Error(`找不到要导入的文件：${sourcePath}`);
+    // 文件夹按目录结构平铺导入：递归收集可识别的文本文件，隐藏目录跳过。
+    if (fs.statSync(resolvedSourcePath).isDirectory()) {
+      const collected: string[] = [];
+      const walk = (directoryPath: string) => {
+        let entries: fs.Dirent[];
+        try { entries = fs.readdirSync(directoryPath, { withFileTypes: true }); } catch { return; }
+        for (const entry of entries) {
+          if (entry.isSymbolicLink()) continue;
+          if (entry.isDirectory()) { if (!entry.name.startsWith('.') && entry.name !== '.menghan-meta' && entry.name !== '.git') walk(path.join(directoryPath, entry.name)); continue; }
+          if (entry.isFile()) collected.push(path.join(directoryPath, entry.name));
+        }
+      };
+      walk(resolvedSourcePath);
+      return collected;
     }
+    return [resolvedSourcePath];
+  });
 
-    const typeInfo = getFileTypeInfo(resolvedSourcePath);
+  const prepared = sourceFiles.map((sourcePath) => {
+    const typeInfo = getFileTypeInfo(sourcePath);
     if (!typeInfo) {
       throw new Error(`不支持的文本文件：${path.basename(sourcePath)}`);
     }
 
-    const buffer = fs.readFileSync(resolvedSourcePath);
+    const buffer = fs.readFileSync(sourcePath);
     if (!isLikelyTextBuffer(buffer)) {
       throw new Error(`文件不是可识别的纯文本：${path.basename(sourcePath)}`);
     }
 
     const content = decodeTextBuffer(buffer);
-    return { sourcePath: resolvedSourcePath, content, typeInfo };
+    return { sourcePath, content, typeInfo };
   });
   const created: Array<{ path: string; dev: number; ino: number }> = [];
   const temporary: string[] = [];

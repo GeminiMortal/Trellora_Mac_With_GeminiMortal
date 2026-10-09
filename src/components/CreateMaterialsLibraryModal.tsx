@@ -7,6 +7,8 @@ import type { LibraryChunkingConfig, LibrarySummary } from '../electron';
 import ChunkingStrategyConfigModal from './ChunkingStrategyConfigModal';
 import { RECOMMENDED_CHUNKING_DRAFT, cloneChunkingDraft } from '../utils/chunkingStrategyDraft';
 
+const formatBytes = (bytes: number) => bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(2)} GB` : bytes >= 1024 ** 2 ? `${(bytes / 1024 ** 2).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+
 export type MaterialsLibraryModalMode = 'create' | 'upgrade';
 
 interface CreateMaterialsLibraryModalProps {
@@ -40,6 +42,8 @@ export default function CreateMaterialsLibraryModal({
   const [error, setError] = useState<string | null>(null);
   const [chunkingDraft, setChunkingDraft] = useState<LibraryChunkingConfig>(() => cloneChunkingDraft());
   const [chunkingConfigOpened, setChunkingConfigOpened] = useState(false);
+  const [preview, setPreview] = useState<{ included: number; bytes: number; skipped: Record<string, number> } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   useEffect(() => {
     if (!opened) return;
@@ -50,6 +54,18 @@ export default function CreateMaterialsLibraryModal({
     setChunkingDraft(cloneChunkingDraft(RECOMMENDED_CHUNKING_DRAFT));
     setChunkingConfigOpened(false);
   }, [opened, initialUpgradePath]);
+
+  useEffect(() => {
+    setPreview(null);
+    if (mode !== 'upgrade' || !upgradePath || !window.electronAPI?.previewLibraryUpgrade) return;
+    let cancelled = false;
+    setPreviewLoading(true);
+    window.electronAPI.previewLibraryUpgrade(upgradePath)
+      .then((result) => { if (!cancelled) setPreview({ included: result.included, bytes: result.bytes, skipped: result.skipped }); })
+      .catch(() => { if (!cancelled) setPreview(null); })
+      .finally(() => { if (!cancelled) setPreviewLoading(false); });
+    return () => { cancelled = true; };
+  }, [mode, upgradePath]);
 
   const submit = async () => {
     setError(null);
@@ -122,8 +138,16 @@ export default function CreateMaterialsLibraryModal({
               nothingFoundMessage={t("没有可升级的笔记库")}
             />
             <Alert variant="light" color="orange" icon={<ArrowUpRight size={16} />}>
-              {t("升级会在工作区新建知识库文件夹并复制笔记文档，笔记库保留；资料库只读，更新需删除后重新上传。")}
+              {t("升级会新建「资料快照」资料库并收录笔记文档。原笔记库保留，仍可在笔记空间继续编辑；改完笔记后可在资料库一键同步更新快照。")}
             </Alert>
+            {upgradePath ? (
+              previewLoading ? <Text size="xs" c="dimmed">{t("正在统计收录内容…")}</Text> : preview ? (
+                <Text size="xs" c="dimmed">
+                  {t("将收录 {0} 篇文档（约 {1}）", { '0': String(preview.included), '1': formatBytes(preview.bytes) })}
+                  {Object.keys(preview.skipped).length ? `；${t("跳过 {0} 个其他类型文件", { '0': String(Object.values(preview.skipped).reduce((sum, count) => sum + count, 0)) })}` : ''}
+                </Text>
+              ) : null
+            ) : null}
           </>
         )}
 

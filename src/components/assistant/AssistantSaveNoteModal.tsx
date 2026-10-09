@@ -5,7 +5,7 @@ import { markdown } from '@codemirror/lang-markdown';
 import { EditorView } from '@codemirror/view';
 import { t, useI18n } from '../../i18n';
 import type { LibrarySummary } from '../../electron';
-import { normalizeAssistantNoteTitle, type CreateAssistantNoteResult } from '../../../shared/assistantNote';
+import { normalizeAssistantNoteTitle, type AssistantNoteSource, type CreateAssistantNoteResult } from '../../../shared/assistantNote';
 import MarkdownContent from '../MarkdownContent';
 import './AssistantSaveNoteModal.css';
 
@@ -13,6 +13,7 @@ interface AssistantSaveNoteModalProps {
   content: string;
   currentPath: string | null;
   libraryPath: string | null;
+  source?: AssistantNoteSource;
   onClose: () => void;
   onSaved: (note: CreateAssistantNoteResult) => void;
 }
@@ -20,7 +21,7 @@ interface AssistantSaveNoteModalProps {
 const markdownExtensions = [markdown(), EditorView.lineWrapping];
 
 /** Keep a separate Markdown draft; choosing a library is required before any file is created. */
-export default function AssistantSaveNoteModal({ content, currentPath, libraryPath, onClose, onSaved }: AssistantSaveNoteModalProps) {
+export default function AssistantSaveNoteModal({ content, currentPath, libraryPath, source, onClose, onSaved }: AssistantSaveNoteModalProps) {
   useI18n();
   const [draft, setDraft] = useState(content);
   const [title, setTitle] = useState('');
@@ -63,7 +64,7 @@ export default function AssistantSaveNoteModal({ content, currentPath, libraryPa
     setSaving(true);
     setError(null);
     try {
-      const note = await window.electronAPI.createNoteFromAssistant({ libraryPath: targetPath, title, content: draft });
+      const note = await window.electronAPI.createNoteFromAssistant({ libraryPath: targetPath, title, content: draft, ...(source ? { source } : {}) });
       if (aliveRef.current) onSaved(note);
     } catch (failure) {
       if (aliveRef.current) setError(failure instanceof Error ? t(failure.message) : String(failure));

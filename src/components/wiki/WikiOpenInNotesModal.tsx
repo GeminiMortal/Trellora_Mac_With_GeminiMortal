@@ -8,6 +8,9 @@ export interface WikiNoteSource {
   documentId: string;
   contentHash: string;
   name: string;
+  /** 存在时按章节子树导入（不含这些字段的导入复用整篇文档）。 */
+  nodeId?: string;
+  nodeTitle?: string;
 }
 
 interface WikiOpenInNotesModalProps {
@@ -58,8 +61,10 @@ export default function WikiOpenInNotesModal({ source, onClose, onOpen }: WikiOp
   return (
     <Modal opened={Boolean(source)} onClose={() => { if (!opening) onClose(); }} title={t("选择笔记库")} centered size="sm" closeOnClickOutside={!opening} closeOnEscape={!opening} withCloseButton={!opening}>
       <Stack gap="md">
-        <Text size="sm" fw={600}>{source?.name}</Text>
-        <Text size="xs" c="dimmed">{t("将完整解析正文保存为 Markdown 笔记并打开。已生成的笔记会直接打开，保留你的编辑。")}</Text>
+        <Text size="sm" fw={600}>{source?.nodeTitle?.trim() ? `${source.nodeTitle}` : source?.name}</Text>
+        <Text size="xs" c="dimmed">{source?.nodeId
+          ? t("将此章节（含子章节）保存为 Markdown 笔记。同章节的笔记会直接打开，保留你的编辑。")
+          : t("将完整解析正文保存为 Markdown 笔记并打开。已生成的笔记会直接打开，保留你的编辑。")}</Text>
         {loading ? <Group justify="center"><Loader size="sm" /></Group> : (
           <Select label={t("目标笔记库")} placeholder={t("选择笔记库")} data={libraries.map((library) => ({ value: library.path, label: library.alias }))} value={targetPath} onChange={setTargetPath} searchable allowDeselect={false} disabled={opening || libraries.length === 0} comboboxProps={{ withinPortal: false }} />
         )}
@@ -67,7 +72,7 @@ export default function WikiOpenInNotesModal({ source, onClose, onOpen }: WikiOp
         {error ? <Alert color="red" title={t("无法打开笔记")}>{error}</Alert> : null}
         <Group justify="flex-end" gap="sm">
           <Button variant="default" onClick={onClose} disabled={opening}>{t("取消")}</Button>
-          <Button onClick={() => void handleOpen()} loading={opening} disabled={loading || !targetPath}>{t("打开笔记")}</Button>
+          <Button onClick={() => void handleOpen()} loading={opening} disabled={loading || !targetPath}>{source?.nodeId ? t("保存章节笔记") : t("打开笔记")}</Button>
         </Group>
       </Stack>
     </Modal>

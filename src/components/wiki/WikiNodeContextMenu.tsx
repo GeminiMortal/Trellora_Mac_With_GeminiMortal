@@ -1,6 +1,6 @@
 import { t, useI18n } from '../../i18n';
 import { Menu, Text } from '@mantine/core';
-import { ChevronDown, Crosshair, FileSearch, FolderPlus, MessageSquareText, Pencil, Sparkles, Trash2, UnfoldVertical, Copy } from 'lucide-react';
+import { BookmarkPlus, ChevronDown, Crosshair, FileSearch, FolderPlus, MessageSquareText, Pencil, Sparkles, Trash2, UnfoldVertical, Copy } from 'lucide-react';
 import type { WikiMapNode } from '../../wiki/wikiTypes';
 
 interface WikiNodeContextMenuProps {
@@ -17,6 +17,7 @@ interface WikiNodeContextMenuProps {
   onAddChild: () => void;
   onRename: () => void;
   onCopyPath: () => void;
+  onSaveToNotes: () => void;
   onDelete: () => void;
 }
 
@@ -34,6 +35,7 @@ export default function WikiNodeContextMenu({
   onAddChild,
   onRename,
   onCopyPath,
+  onSaveToNotes,
   onDelete,
 }: WikiNodeContextMenuProps) {
   useI18n();
@@ -55,6 +57,7 @@ export default function WikiNodeContextMenu({
         </Menu.Item>
         <Menu.Item leftSection={<Crosshair size={14} />} onClick={onFitBranch}>{t("适配此分支到视图")}</Menu.Item>
         <Menu.Item leftSection={<FileSearch size={14} />} onClick={onLocateSource}>{t("在原文中定位")}</Menu.Item>
+        <Menu.Item leftSection={<BookmarkPlus size={14} />} onClick={onSaveToNotes}>{t("存为章节笔记")}</Menu.Item>
         <Menu.Item leftSection={<MessageSquareText size={14} />} onClick={onAnalyze}>{t("分析此节点")}</Menu.Item>
         <Menu.Item leftSection={<Sparkles size={14} />} onClick={onRefreshQuestions}>{t("重新生成建议问题")}</Menu.Item>
         <Menu.Divider />

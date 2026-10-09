@@ -1,11 +1,13 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { normalizeAssistantNoteTitle, type CreateAssistantNoteResult } from '../shared/assistantNote';
+import { normalizeAssistantNoteTitle, type AssistantNoteSource, type CreateAssistantNoteResult } from '../shared/assistantNote';
 import { atomicTextWrite } from './atomicTextWrite';
 import { assertInsideDirectory } from './pathGuards';
+import { parseNoteFrontmatter, stringifyNoteFrontmatter } from '../shared/frontmatter';
 
 /** Caller holds the library structure queue. Preserve Markdown bytes and never replace an existing note. */
-export async function createAssistantNote(libraryPath: string, rawTitle: string, content: string): Promise<CreateAssistantNoteResult> {
+export async function createAssistantNote(libraryPath: string, rawTitle: string, rawContent: string, source?: AssistantNoteSource): Promise<CreateAssistantNoteResult> {
+  const content = source ? withAssistantSourceFrontmatter(rawContent, source) : rawContent;
   const title = normalizeAssistantNoteTitle(rawTitle);
   const names = await collectNoteNames(libraryPath);
   const metaDirectory = assertInsideDirectory(path.join(libraryPath, '.menghan-meta'), libraryPath);
@@ -82,4 +84,30 @@ async function collectNoteNames(directory: string, names = new Set<string>()): P
     else if (entry.isFile() && /\.md$/iu.test(entry.name)) names.add(entry.name.toLocaleLowerCase());
   }
   return names;
+}
+
+const SOURCE_FIELD_LIMIT = 256;
+
+/** 把 AI 回答的来源（会话/消息/范围）写入 frontmatter，保留正文原有 frontmatter 字段。 */
+function withAssistantSourceFrontmatter(content: string, source: AssistantNoteSource): string {
+  const sanitized: Record<string, string> = {};
+  const bounded = (value: unknown): string | undefined => {
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    return trimmed ? trimmed.slice(0, SOURCE_FIELD_LIMIT) : undefined;
+  };
+  const fields: Array<[string, unknown]> = [
+    ['sessionId', source.sessionId],
+    ['messageId', source.messageId],
+    ['scope', source.scope],
+    ['scopeLabel', source.scopeLabel],
+    ['createdAt', source.createdAt],
+  ];
+  for (const [key, value] of fields) {
+    const text = bounded(value);
+    if (text) sanitized[key] = text;
+  }
+  if (!Object.keys(sanitized).length) return content;
+  const parsed = parseNoteFrontmatter(content);
+  return stringifyNoteFrontmatter(parsed.content, { ...parsed.data, assistant_source: { kind: 'assistant', ...sanitized } });
 }

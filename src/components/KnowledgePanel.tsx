@@ -1,9 +1,9 @@
 import { getAppLanguage, t, useI18n } from '../i18n';
 import { normalizeMemorySaveClaims } from '../../shared/memorySaveClaims';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { ActionIcon, Badge, Button, Checkbox, Collapse, Group, HoverCard, Menu, Modal, Pagination, Paper, Tabs, Text, Textarea, TextInput, UnstyledButton } from '@mantine/core';
-import { Bot, BrainCircuit, Check, ChevronDown, ChevronRight, CircleCheck, CircleX, Copy, Database, ExternalLink, FileText, FileUp, Globe, Hash, ImagePlus, Link2, LoaderCircle, PanelRightClose, PanelRightOpen, Plus, RotateCcw, Search, Send, Sparkles, Square, SquareTerminal, Tags, X } from 'lucide-react';
-import type { AiProviderStatus, AssistantAiOptions, AssistantAttachment, AssistantCitationValidation, AssistantContextSource, AssistantDetailedTraceRecordView, AssistantEvidenceCitation, AssistantIntent, AssistantKnowledgeBaseCitation, AssistantMemoryMode, AssistantPublicModelEvent, AssistantScope, AssistantSessionDetail, AssistantSessionSummary, AssistantTurnResult, AssistantTurnRequest, AssistantWebCitation, ContextProjectionDiagnostics, CurrentNoteAgentStats, CurrentNotePublicPlanEvent, CurrentNotePublicSearchCoverage, CurrentNotePublicSearchScope, CurrentNotePublicToolContentPreview, CurrentNotePublicToolEvent, NoteAnalysis, NoteMeta, QaSessionSummary, QaStoredTurn, TagSummary } from '../electron';
+import { ActionIcon, Alert, Badge, Button, Checkbox, Collapse, Group, HoverCard, Loader, Menu, Modal, Pagination, Paper, Select, Stack, Tabs, Text, Textarea, TextInput, UnstyledButton } from '@mantine/core';
+import { Bot, BrainCircuit, Check, ChevronDown, ChevronRight, CircleCheck, CircleX, Copy, Database, ExternalLink, FileText, FileUp, Globe, Hash, ImagePlus, Link2, LoaderCircle, PanelRightClose, PanelRightOpen, Plus, RotateCcw, Search, Send, Sparkles, Square, SquareTerminal, Tags, Upload, X } from 'lucide-react';
+import type { AiProviderStatus, AssistantAiOptions, AssistantAttachment, AssistantCitationValidation, AssistantContextSource, AssistantDetailedTraceRecordView, AssistantEvidenceCitation, AssistantIntent, AssistantKnowledgeBaseCitation, AssistantMemoryMode, AssistantPublicModelEvent, AssistantScope, AssistantSessionDetail, AssistantSessionSummary, AssistantTurnResult, AssistantTurnRequest, AssistantWebCitation, ContextProjectionDiagnostics, CurrentNoteAgentStats, CurrentNotePublicPlanEvent, CurrentNotePublicSearchCoverage, CurrentNotePublicSearchScope, CurrentNotePublicToolContentPreview, CurrentNotePublicToolEvent, MaterialsLibrarySummary, NoteAnalysis, NoteMeta, QaSessionSummary, QaStoredTurn, TagSummary } from '../electron';
 import CollapsibleAiContent from './CollapsibleAiContent';
 import NoteAnalysisBatches from './NoteAnalysisBatches';
 import type { NoteAnalysisRunDetail } from '../electron';
@@ -1201,7 +1201,7 @@ const lastAssistantMessage = assistantMessages.at(-1);
                       const suggestionQuestions = message.id === lastAssistantMessage?.id && !activeRequestId && message.state === 'complete'
                         ? message.suggestions
                         : undefined;
-                      return <AssistantMessageView key={message.id} message={message} showCompactTrace={!isDebugRailOpen} onNavigateCitation={props.onNavigateAssistantCitation} onResumeSummary={resumeSummary} currentPath={notePath} libraryPath={props.libraryPath} suggestionQuestions={suggestionQuestions} onSelectSuggestion={(question) => { void startTurn(undefined, question); }} />;
+                      return <AssistantMessageView key={message.id} message={message} showCompactTrace={!isDebugRailOpen} onNavigateCitation={props.onNavigateAssistantCitation} onResumeSummary={resumeSummary} currentPath={notePath} libraryPath={props.libraryPath} suggestionQuestions={suggestionQuestions} onSelectSuggestion={(question) => { void startTurn(undefined, question); }} sessionId={assistantSessionId} />;
                     })}
             </div>
           </div>
@@ -1453,7 +1453,7 @@ function AssistantEmptyState({ onSelectPreset, presets, mode }: { onSelectPreset
   return <div className="assistant-empty-state"><Bot size={20} /><strong>{title}</strong><p>{t("输入问题，或选择一个预置任务。")}</p><div>{presets.map((preset) => <button key={preset.id} type="button" onClick={() => onSelectPreset(preset.id)}>{preset.id === 'ask' ? askLabel : t(preset.label)}</button>)}</div></div>;
 }
 
-function AssistantMessageView({ message, showCompactTrace, onNavigateCitation, onResumeSummary, currentPath, libraryPath, suggestionQuestions, onSelectSuggestion }: { message: AssistantMessage; showCompactTrace: boolean; onNavigateCitation?: (citation: AssistantEvidenceCitation) => Promise<AssistantCitationValidation>; onResumeSummary?: (message: AssistantMessage) => void; currentPath: string | null; libraryPath: string | null; suggestionQuestions?: string[]; onSelectSuggestion?: (question: string) => void }) {
+function AssistantMessageView({ message, showCompactTrace, onNavigateCitation, onResumeSummary, currentPath, libraryPath, suggestionQuestions, onSelectSuggestion, sessionId }: { message: AssistantMessage; showCompactTrace: boolean; onNavigateCitation?: (citation: AssistantEvidenceCitation) => Promise<AssistantCitationValidation>; onResumeSummary?: (message: AssistantMessage) => void; currentPath: string | null; libraryPath: string | null; suggestionQuestions?: string[]; onSelectSuggestion?: (question: string) => void; sessionId?: string | null }) {
   useI18n();
   const [copyState, setCopyState] = useState<'idle' | 'success' | 'error'>('idle');
   const [saveNoteOpen, setSaveNoteOpen] = useState(false);
@@ -1504,7 +1504,7 @@ function AssistantMessageView({ message, showCompactTrace, onNavigateCitation, o
       <time>{formatDate(message.createdAt)}</time>
     </div>
     {message.statusMessage ? <div className="assistant-message-status"><Sparkles size={13} />{message.statusMessage}</div> : null}
-    {saveNoteOpen ? <AssistantSaveNoteModal content={normalizeMemorySaveClaims(message.content)} currentPath={currentPath} libraryPath={libraryPath} onClose={() => setSaveNoteOpen(false)} onSaved={note => { setSavedNote(note); setSaveNoteOpen(false); }} /> : null}
+    {saveNoteOpen ? <AssistantSaveNoteModal content={normalizeMemorySaveClaims(message.content)} currentPath={currentPath} libraryPath={libraryPath} source={{ kind: 'assistant', sessionId: sessionId ?? undefined, messageId: message.id, scope: message.scope, scopeLabel: message.scopeLabel, createdAt: message.createdAt }} onClose={() => setSaveNoteOpen(false)} onSaved={note => { setSavedNote(note); setSaveNoteOpen(false); }} /> : null}
     {compressionNotice ? <AssistantContextCompressionNotice notice={compressionNotice} /> : null}
     {showCompactTrace && planEvents.length ? <AssistantPlanTrace event={planEvents[planEvents.length - 1]} searchScope={searchScope} searchCoverage={searchCoverage} completeness={result?.type === 'answer' ? result.completeness : undefined} agentStats={result?.type === 'answer' ? result.agentStats : undefined} /> : null}
     {showCompactTrace && toolEvents.length ? <AssistantToolTrace events={toolEvents} modelEvents={modelEvents} isRunning={message.state === 'pending' || message.state === 'streaming'} executionElapsedMs={executionElapsedMs} /> : null}
@@ -2897,6 +2897,60 @@ function translateIntent(intent: AssistantIntent, scope: AssistantScope, interac
   return scope === 'current-note' ? t("当前笔记问答") : t("知识库问答");
 }
 
+/** 把当前笔记单篇复制进资料库；选择目标库确认后才创建，重复导入自动加序号。 */
+function SendNoteToMaterials({ notePath }: { notePath: string }) {
+  useI18n();
+  const [opened, setOpened] = useState(false);
+  const [libraries, setLibraries] = useState<MaterialsLibrarySummary[]>([]);
+  const [targetPath, setTargetPath] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const open = () => {
+    setError(null);
+    setOpened(true);
+    setLoading(true);
+    void window.electronAPI.listMaterialsLibraries().then((items) => {
+      const available = items.filter((library) => library.exists);
+      setLibraries(available);
+      setTargetPath(available.find((library) => library.isActive)?.path ?? available[0]?.path ?? null);
+    }).catch((loadError: unknown) => setError(loadError instanceof Error ? loadError.message : String(loadError))).finally(() => setLoading(false));
+  };
+
+  const send = async () => {
+    if (!targetPath || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      const documents = await window.electronAPI.sendNoteToMaterials(notePath, targetPath);
+      const imported = documents.find((document) => document.name.endsWith(notePath.split('/').pop() ?? '.md'));
+      window.alert(imported ? t("已入库：{0}", { '0': imported.name }) : t("已入库，可在资料库中查看。"));
+      setOpened(false);
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : String(sendError));
+    } finally { setSending(false); }
+  };
+
+  return <>
+    <Button className="note-send-materials-button" variant="subtle" color="gray" size="compact-xs" leftSection={<Upload size={12} />} onClick={open}>{t("发送到资料库")}</Button>
+    <Modal opened={opened} onClose={() => { if (!sending) setOpened(false); }} title={t("发送到资料库")} centered size="sm">
+      <Stack gap="md">
+        <Text size="xs" c="dimmed">{t("将笔记复制进资料库并等待解析；解析完成后即可被语义检索与 AI 回答引用。图片暂不随笔记携带。")}</Text>
+        {loading ? <Group justify="center"><Loader size="sm" /></Group> : (
+          <Select label={t("目标资料库")} placeholder={t("选择资料库")} data={libraries.map((library) => ({ value: library.path, label: library.alias }))} value={targetPath} onChange={setTargetPath} searchable allowDeselect={false} disabled={sending || libraries.length === 0} comboboxProps={{ withinPortal: false }} />
+        )}
+        {!loading && libraries.length === 0 ? <Text size="sm" c="dimmed">{t("还没有可用的资料库，请先在资料页创建或导入。")}</Text> : null}
+        {error ? <Alert color="red" title={t("无法入库")}>{error}</Alert> : null}
+        <Group justify="flex-end" gap="sm">
+          <Button variant="default" onClick={() => setOpened(false)} disabled={sending}>{t("取消")}</Button>
+          <Button onClick={() => void send()} loading={sending} disabled={!targetPath}>{t("入库")}</Button>
+        </Group>
+      </Stack>
+    </Modal>
+  </>;
+}
+
 function InfoTab(props: KnowledgePanelProps) {
   useI18n();
   const notePath = props.noteMeta?.path;
@@ -2954,6 +3008,7 @@ function InfoTab(props: KnowledgePanelProps) {
         {note.tags.map((tag) => <Button key={tag} className="note-tag-button" variant="light" color="brand" size="compact-xs" onClick={() => props.onSelectTag(tag)}>#{tag}</Button>)}
         <Button className="note-add-tag-toggle" variant="subtle" color="gray" size="compact-xs" leftSection={<Plus size={12} />} onClick={() => { setTagEditorOpen((value) => !value); setTagError(null); }}>{t("标签")}</Button>
       </Group>
+      <SendNoteToMaterials notePath={note.path} />
       <Collapse in={tagEditorOpen}>
         <form className="note-tag-editor" onSubmit={(event) => void submitTag(event)}>
           <TextInput value={tagDraft} onChange={(event) => setTagDraft(event.currentTarget.value)} placeholder={t("输入标签名称")} aria-label={t("输入标签名称")} error={tagError} size="xs" leftSection={<Hash size={13} />} />

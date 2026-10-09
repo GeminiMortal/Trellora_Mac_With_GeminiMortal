@@ -41,7 +41,8 @@ import { requestExportImage } from './exportImageRequest';
 import type { NoteExportRequest } from '../shared/noteExport';
 import { NoteCloseCoordinator } from './noteCloseCoordinator';
 import type { NoteMutationRequest, SaveNoteRequest, NoteCloseResponse } from '../shared/noteSave';
-import type { CreateAssistantNoteRequest } from '../shared/assistantNote';
+import type { CreateAssistantNoteRequest, AssistantNoteSource } from '../shared/assistantNote';
+import type { MaterialsDocument } from './materialsLibrary';
 import { createAssistantNote } from './assistantNote';
 import { decodeTextBuffer } from './textFile';
 import { createHash, randomUUID } from 'node:crypto';
@@ -261,9 +262,13 @@ import {
   findMaterialsDocument,
   getActiveMaterialsLibraryPath,
   importMaterialsDocuments,
+  expandMaterialSources,
+  importNoteIntoMaterialsLibrary,
   listMaterialsDocuments,
   listMaterialsLibraries,
   materialsDocumentExtensions,
+  previewLibraryUpgrade,
+  readMaterialsSourceInfo,
   registerMaterialsLibrary,
   removeMaterialsLibrary,
   readMaterialsDocumentBytes,
@@ -271,6 +276,7 @@ import {
   readMaterialsDocumentText,
   renameMaterialsDocument,
   summarizeMaterialsLibraries,
+  syncMaterialsFromNoteLibrary,
   upgradeRegisteredLibraryToMaterials,
 } from './materialsLibrary';
 import { readMineruApiKey, readParsingConfig, saveParsingConfig } from './parsingConfig';
@@ -296,7 +302,7 @@ import type { UnifiedSearchOutcome } from './knowledge/searchTypes';
 import { PipelineOrchestrator } from './pipeline/pipelineOrchestrator';
 import { assertArtifactPreviewIntegrity, normalizeArtifactPreviewParentChunkId, readArtifactPreview } from './pipeline/artifactPreview';
 import { readKeywordPreview } from './pipeline/keywordPreview';
-import { importWikiDocumentAsNote } from './wiki/wikiNoteImport';
+import { importWikiDocumentAsNote, importWikiSectionAsNote } from './wiki/wikiNoteImport';
 import { removeKeywordIndexEntries } from './pipeline/keywordIndex';
 import { searchMaterialChunks, type MaterialChunkSearchMode } from './pipeline/materialChunkSearch';
 import {
@@ -5390,6 +5396,24 @@ registerAppHandler('upgrade-library-to-materials', (_event, libraryPath: string,
   return summarizeMaterialsLibraries(store);
 });
 
+// 升级前预览：统计将收录的文档数与跳过类型，供确认弹窗展示。
+registerAppHandler('preview-library-upgrade', (_event, libraryPath: string) => {
+  if (typeof libraryPath !== 'string' || !libraryPath.trim()) throw new Error('笔记库路径无效。');
+  return previewLibraryUpgrade(requireRegisteredNoteLibrary(libraryPath));
+});
+
+registerAppHandler('materials:get-source-info', (_event, libraryPath: string) => {
+  return readMaterialsSourceInfo(requireRegisteredMaterialsLibrary(libraryPath));
+});
+
+// 从来源笔记库同步升级快照：变化覆盖、新增补收；变化文档自动回到待解析（重新索引）。
+registerAppHandler('materials:sync-from-notes', (_event, libraryPath: string) => {
+  const targetPath = requireRegisteredMaterialsLibrary(libraryPath);
+  const summary = syncMaterialsFromNoteLibrary(targetPath);
+  void pipelineOrchestrator?.enqueuePending(targetPath).catch((error) => logToWindow(`[PIPELINE] 自动入队失败：${error instanceof Error ? error.message : String(error)}`));
+  return summary;
+});
+
 registerAppHandler('list-materials-documents', (_event, libraryPath: string) => {
   return listMaterialsDocuments(requireRegisteredMaterialsLibrary(libraryPath));
 });
@@ -5465,6 +5489,36 @@ registerAppHandler('wiki:import-to-note-library', async (event, sourceLibraryPat
   return noteSaveService.structure(targetPath, async () => {
     const create = async () => importWikiDocumentAsNote({ sourceLibraryPath: sourcePath, targetLibraryPath: targetPath,
       documentId, contentHash, documentName: document.name, parseDirectory });
+    if (getCurrentLibraryPath() !== targetPath) return (await create()).path;
+    return indexCoordinator.mutate(async () => {
+      const note = await create();
+      return { value: note.path, changes: note.created ? [{ kind: 'add' as const, path: note.path }] : [] };
+    });
+  });
+});
+
+// 章节导入：结构树产物校验由 outline 读取完成；节点 markdown 是子树原文，图片按整篇同一套 manifest 重写。
+registerAppHandler('wiki:import-node-to-note-library', async (event, sourceLibraryPath: string, documentId: string, contentHash: string, nodeId: string, targetLibraryPath: string): Promise<string> => {
+  assertNoteWindow(event);
+  const sourcePath = requireRegisteredMaterialsLibrary(sourceLibraryPath);
+  const targetPath = requireRegisteredNoteLibrary(targetLibraryPath);
+  if (typeof nodeId !== 'string' || !nodeId.trim() || nodeId.length > 2_048) throw new Error('Wiki 章节标识无效。');
+  const document = findMaterialsDocument(sourcePath, documentId);
+  if (!document) throw new Error('找不到要导入的 Wiki 来源文档。');
+  if (typeof contentHash !== 'string' || document.contentHash !== contentHash) throw new Error('来源文档已变化，请重新打开 Wiki 文档后再试。');
+  const outline = await readCurrentWikiDocumentOutline(sourcePath, documentId);
+  const node = outline.nodes.find((entry) => entry.id === nodeId);
+  if (!node) throw new Error('找不到要导入的章节，请重新加载文档目录后再试。');
+  if (!pipelineOrchestrator) throw new Error('解析流水线尚未初始化。');
+  const layout = pipelineOrchestrator.getCurrentLayout(sourcePath, document);
+  const parseStage = readPipelineManifest(layout)?.stages.parse;
+  if (parseStage?.status !== 'SUCCEEDED' || !isStageManifestCurrent(layout, 'parse')) {
+    throw new Error('文档解析产物尚未完成或已经过期，请先在资料库完成处理。');
+  }
+  const parseDirectory = assertInsideDirectory(stageDirectory(layout, 'parse'), sourcePath);
+  return noteSaveService.structure(targetPath, async () => {
+    const create = async () => importWikiSectionAsNote({ sourceLibraryPath: sourcePath, targetLibraryPath: targetPath,
+      documentId, contentHash, documentName: document.name, parseDirectory, nodeId, nodeTitle: node.title, markdown: node.markdown });
     if (getCurrentLibraryPath() !== targetPath) return (await create()).path;
     return indexCoordinator.mutate(async () => {
       const note = await create();
@@ -5989,15 +6043,17 @@ registerAppHandler('import-materials-documents', async (_event, libraryPath: str
   if (!mainWindow) return [];
   const targetPath = requireRegisteredMaterialsLibrary(libraryPath);
   const result = await dialog.showOpenDialog(mainWindow, {
-    title: desktopText('导入资料文档：文本本地读取，DOCX 本地解析，PDF 可选云解析'),
-    properties: ['openFile', 'multiSelections'],
+    title: desktopText('导入资料文档：可选择文件或文件夹；文本本地读取，DOCX 本地解析，PDF 可选云解析'),
+    properties: ['openFile', 'openDirectory', 'multiSelections'],
     filters: [
       { name: '资料文档', extensions: [...materialsDocumentExtensions].map((extension) => extension.slice(1)) },
       { name: '所有文件', extensions: ['*'] },
     ],
   });
   if (result.canceled || result.filePaths.length === 0) return listMaterialsDocuments(targetPath);
-  const pdfFiles = result.filePaths.filter(file => path.extname(file).toLowerCase() === '.pdf');
+  const { files, skipped } = expandMaterialSources(result.filePaths);
+  if (files.length === 0) throw new Error(`没有找到可导入的文档${skipped.length ? `（已跳过 ${skipped.slice(0, 5).join('、')}${skipped.length > 5 ? ' 等' : ''}）` : ''}。`);
+  const pdfFiles = files.filter(file => path.extname(file).toLowerCase() === '.pdf');
   let authorizePdf = false;
   if (pdfFiles.length) {
     const choice = await dialog.showMessageBox(mainWindow, { type: 'question', title: desktopText('选择 PDF 处理方式'), message: desktopText('本批次包含 {count} 个 PDF', { count: pdfFiles.length }), detail: `${pdfFiles.slice(0, 10).map(file => path.basename(file)).join('\n')}\n\n${desktopText('仅导入会保留本地文件，稍后可解析。云解析会将这批 PDF 的完整文字与图片上传至 MinerU，需要网络和密钥。文本和 DOCX 在本地处理。')}`, buttons: ['仅导入，稍后解析', '导入并上传至 MinerU 解析', '取消导入'].map(value => desktopText(value)), defaultId: 0, cancelId: 2, noLink: true });
@@ -6005,9 +6061,29 @@ registerAppHandler('import-materials-documents', async (_event, libraryPath: str
     authorizePdf = choice.response === 1;
   }
   const previousIds = new Set(listMaterialsDocuments(targetPath).map((document) => document.id));
-  const documents = importMaterialsDocuments(targetPath, result.filePaths);
+  const documents = importMaterialsDocuments(targetPath, files);
   const importedIds = documents.filter((document) => !previousIds.has(document.id)).map((document) => document.id);
   if (authorizePdf) cloudAuthorization.authorize(targetPath, documents.filter(document => importedIds.includes(document.id) && document.extension === '.pdf'));
+  void pipelineOrchestrator?.enqueuePending(targetPath).catch((error) => logToWindow(`[PIPELINE] 自动入队失败：${error instanceof Error ? error.message : String(error)}`));
+  return documents;
+});
+
+// 单篇笔记入库：字节级复制进资料库，frontmatter 与 [[wiki链接]] 原样保留；入队待解析后即可被检索引用。
+registerAppHandler('notes:send-to-materials', async (_event, notePath: string, targetLibraryPath: string): Promise<MaterialsDocument[]> => {
+  assertNoteWindow(_event);
+  if (typeof notePath !== 'string' || !notePath.trim()) throw new Error('笔记路径无效。');
+  const targetPath = requireRegisteredMaterialsLibrary(targetLibraryPath);
+  const noteLibraryPaths = listRegisteredLibraries().map((library) => library.path).filter((libraryPath) => fs.existsSync(libraryPath));
+  const resolvedNote = path.resolve(notePath);
+  const ownerLibrary = noteLibraryPaths.find((libraryPath) => {
+    try {
+      const realLibrary = fs.realpathSync(libraryPath);
+      const realNote = path.dirname(fs.realpathSync(resolvedNote));
+      return realNote === realLibrary || realNote.startsWith(realLibrary + path.sep);
+    } catch { return false; }
+  });
+  if (!ownerLibrary) throw new Error('只能导入已注册笔记库内的笔记。');
+  const documents = importNoteIntoMaterialsLibrary(targetPath, resolvedNote);
   void pipelineOrchestrator?.enqueuePending(targetPath).catch((error) => logToWindow(`[PIPELINE] 自动入队失败：${error instanceof Error ? error.message : String(error)}`));
   return documents;
 });
@@ -6143,8 +6219,21 @@ registerAppHandler('notes:create-from-ai', async (event, request: CreateAssistan
   if (!request || typeof request.content !== 'string' || !request.content.trim()
     || (request.title !== undefined && typeof request.title !== 'string')) throw new Error('笔记标题或正文无效。');
   const libraryPath = requireRegisteredNoteLibrary(request.libraryPath);
+  let source: AssistantNoteSource | undefined;
+  if (request.source && typeof request.source === 'object' && request.source.kind === 'assistant') {
+    const raw = request.source as Record<string, unknown>;
+    const bounded = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() ? value.trim().slice(0, 256) : undefined);
+    source = {
+      kind: 'assistant',
+      sessionId: bounded(raw.sessionId),
+      messageId: bounded(raw.messageId),
+      scope: bounded(raw.scope),
+      scopeLabel: bounded(raw.scopeLabel),
+      createdAt: bounded(raw.createdAt),
+    };
+  }
   return noteSaveService.structure(libraryPath, async () => {
-    const create = () => createAssistantNote(libraryPath, request.title ?? '', request.content);
+    const create = () => createAssistantNote(libraryPath, request.title ?? '', request.content, source);
     if (getCurrentLibraryPath() !== libraryPath) return create();
     return indexCoordinator.mutate(async () => {
       const note = await create();
@@ -7720,7 +7809,7 @@ registerAppHandler('import-files', async (_event: IpcMainInvokeEvent, targetDire
   const libraryPath = requireCurrentLibraryPath();
 
   const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openFile', 'multiSelections'],
+    properties: ['openFile', 'openDirectory', 'multiSelections'],
     filters: [
       {
         name: 'Text and Markdown Files',

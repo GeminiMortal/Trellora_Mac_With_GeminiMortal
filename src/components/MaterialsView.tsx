@@ -102,6 +102,8 @@ export default function MaterialsView({
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
   const [isLoadingDocument, setIsLoadingDocument] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [syncSource, setSyncSource] = useState<{ libraryPath: string; alias: string } | null>(null);
+  const [isSyncingNotes, setIsSyncingNotes] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('time');
@@ -224,6 +226,33 @@ export default function MaterialsView({
       unsubscribe();
     };
   }, [selectedPath, refreshDocuments, refreshLibraries]);
+
+  // 升级而来的资料库支持“从笔记库同步”；普通上传的库无来源，不显示入口。
+  useEffect(() => {
+    setSyncSource(null);
+    if (!selectedPath || !window.electronAPI?.getMaterialsSourceInfo) return;
+    let cancelled = false;
+    window.electronAPI.getMaterialsSourceInfo(selectedPath)
+      .then((info) => { if (!cancelled) setSyncSource(info); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [selectedPath]);
+
+  const handleSyncFromNotes = useCallback(async () => {
+    if (!selectedPath || isSyncingNotes) return;
+    setIsSyncingNotes(true);
+    setError(null);
+    try {
+      const summary = await window.electronAPI.syncMaterialsFromNotes(selectedPath);
+      await refreshDocuments(selectedPath);
+      window.alert(t("同步完成：更新 {0} 篇，新增 {1} 篇，{2} 篇无变化。", { '0': String(summary.updated), '1': String(summary.added), '2': String(summary.unchanged) })
+        + (summary.missingSources > 0 ? t("另有 {0} 篇源笔记已删除，资料快照保持原样。", { '0': String(summary.missingSources) }) : ''));
+    } catch (syncError) {
+      setError(toMessage(syncError, t("从笔记库同步失败。")));
+    } finally {
+      setIsSyncingNotes(false);
+    }
+  }, [selectedPath, isSyncingNotes, refreshDocuments]);
 
   useEffect(() => {
     if (!docContextMenu) return;
@@ -570,6 +599,11 @@ export default function MaterialsView({
                     <Menu.Item leftSection={<Upload size={15} />} onClick={() => void handleImport()} disabled={isImporting || !selectedLibrary.exists}>{t("上传文档")}</Menu.Item>
                     <Menu.Item leftSection={<Pencil size={15} />} onClick={() => { setRenameValue(selectedLibrary.alias); setRenamingLibrary(selectedLibrary); }}>{t("重命名")}</Menu.Item>
                     <Menu.Item leftSection={<RefreshCw size={15} />} onClick={() => void refreshDocuments(selectedLibrary.path)}>{t("同步文档")}</Menu.Item>
+                    {syncSource ? (
+                      <Menu.Item leftSection={<BookOpen size={15} />} disabled={isSyncingNotes || !selectedLibrary.exists} onClick={() => void handleSyncFromNotes()}>
+                        {isSyncingNotes ? t("正在从笔记库同步…") : t("从笔记库同步（{0}）", { '0': syncSource.alias })}
+                      </Menu.Item>
+                    ) : null}
                     <Menu.Item leftSection={<Settings2 size={15} />} onClick={() => { void openChunkingConfig(); }}>{t("切块策略")}</Menu.Item>
                     <Menu.Item leftSection={<Workflow size={15} />} onClick={() => setShowPipeline(true)}>{t("切块与流水线")}</Menu.Item>
                     <Menu.Divider />
@@ -682,7 +716,9 @@ export default function MaterialsView({
                       <Badge size="xs" variant="light" color={selectedDocument.vectorState === 'indexed' ? 'teal' : 'orange'}>
                         {selectedDocument.vectorState === 'indexed' ? t("已索引") : t("待索引")}
                       </Badge>
-                      <Badge size="xs" variant="light" color="gray" leftSection={<Lock size={10} />}>{t("只读")}</Badge>
+                      <Tooltip label={syncSource ? t("资料库保存的是快照副本；原文请在笔记库「{0}」编辑，改完用右上角菜单的“从笔记库同步”更新此处", { '0': syncSource.alias }) : t("资料库文档只读，更新需删除后重新上传")}>
+                        <Badge size="xs" variant="light" color="gray" leftSection={<Lock size={10} />}>{t("只读")}</Badge>
+                      </Tooltip>
                     </Group>
                   </Stack>
                 </Group>

@@ -5,6 +5,7 @@ import type { CapabilityProbeRequest, CapabilityRequest } from '../shared/userCa
 import type { BackupConfiguration, BackupStatus, RestoreStatus } from '../shared/workspaceBackup';
 import type { NoteMutationRequest, SaveNoteRequest, NoteCloseResponse } from '../shared/noteSave';
 import type { CreateAssistantNoteRequest } from '../shared/assistantNote';
+import type { MaterialsDocument } from './materialsLibrary';
 import type { NoteExportRequest } from '../shared/noteExport';
 import type { SelectionTransformRequest } from './knowledge/selectionTransformTypes';
 import type { SelectionEditRunRequest, SelectionEditRunResult } from './knowledge/selectionEditIpc';
@@ -79,10 +80,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     removeMaterialsLibrary: (libraryPath: string) => ipcRenderer.invoke('remove-materials-library', libraryPath),
     deleteMaterialsLibrary: (libraryPath: string) => ipcRenderer.invoke('delete-materials-library', libraryPath),
     upgradeLibraryToMaterials: (libraryPath: string, icon?: string | null, chunkingConfigDraft?: unknown) => ipcRenderer.invoke('upgrade-library-to-materials', libraryPath, icon, chunkingConfigDraft),
+    previewLibraryUpgrade: (libraryPath: string) => ipcRenderer.invoke('preview-library-upgrade', libraryPath) as Promise<{ included: number; bytes: number; byExtension: Record<string, number>; skipped: Record<string, number> }>,
+    getMaterialsSourceInfo: (libraryPath: string) => ipcRenderer.invoke('materials:get-source-info', libraryPath) as Promise<{ libraryPath: string; alias: string } | null>,
+    syncMaterialsFromNotes: (libraryPath: string) => ipcRenderer.invoke('materials:sync-from-notes', libraryPath) as Promise<{ updated: number; added: number; unchanged: number; missingSources: number }>,
     listMaterialsDocuments: (libraryPath: string) => ipcRenderer.invoke('list-materials-documents', libraryPath),
     getMaterialsPipelineStatus: (libraryPath: string) => ipcRenderer.invoke('get-materials-pipeline-status', libraryPath),
     getWikiDocumentOutline: (libraryPath: string, documentId: string) => ipcRenderer.invoke('get-wiki-document-outline', libraryPath, documentId),
     importWikiDocumentToNoteLibrary: (sourceLibraryPath: string, documentId: string, contentHash: string, targetLibraryPath: string) => ipcRenderer.invoke('wiki:import-to-note-library', sourceLibraryPath, documentId, contentHash, targetLibraryPath),
+    importWikiNodeToNoteLibrary: (sourceLibraryPath: string, documentId: string, contentHash: string, nodeId: string, targetLibraryPath: string) => ipcRenderer.invoke('wiki:import-node-to-note-library', sourceLibraryPath, documentId, contentHash, nodeId, targetLibraryPath),
+    sendNoteToMaterials: (notePath: string, targetLibraryPath: string) => ipcRenderer.invoke('notes:send-to-materials', notePath, targetLibraryPath) as Promise<MaterialsDocument[]>,
     reorderWikiSiblingNodes: (libraryPath: string, request: WikiSiblingOrderRequest) => ipcRenderer.invoke('reorder-wiki-sibling-nodes', libraryPath, request) as Promise<WikiSiblingOrderResult>,
     addWikiDerivedNode: (libraryPath: string, request: WikiDerivedNodeRequest) => ipcRenderer.invoke('wiki:add-derived-node', libraryPath, request) as Promise<WikiDerivedNodeResult>,
     renameWikiDerivedNode: (libraryPath: string, request: WikiDerivedRenameRequest) => ipcRenderer.invoke('wiki:rename-derived-node', libraryPath, request) as Promise<WikiDerivedNodeResult>,

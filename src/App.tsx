@@ -892,8 +892,11 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
   /** 确认目标库后先保存当前草稿，再导入文档、切换库并通过版本化会话打开笔记。 */
   const handleOpenWikiDocumentInNotes = useCallback(async (source: WikiNoteSource, targetLibraryPath: string) => {
     if (!window.electronAPI?.importWikiDocumentToNoteLibrary) throw new Error(t("应用代码已更新，请重启桌面应用后再打开笔记。"));
+    const importDoc = source.nodeId
+      ? window.electronAPI.importWikiNodeToNoteLibrary(source.libraryPath, source.documentId, source.contentHash, source.nodeId, targetLibraryPath)
+      : window.electronAPI.importWikiDocumentToNoteLibrary(source.libraryPath, source.documentId, source.contentHash, targetLibraryPath);
     const notePath = await saveController.mutate(async () => {
-      const importedPath = await window.electronAPI.importWikiDocumentToNoteLibrary(source.libraryPath, source.documentId, source.contentHash, targetLibraryPath);
+      const importedPath = await importDoc;
       if (normalizePathForCompare(targetLibraryPath) !== normalizePathForCompare(libraryPath ?? '')) {
         await window.electronAPI.activateLibrary(targetLibraryPath);
         resetCurrentNote();

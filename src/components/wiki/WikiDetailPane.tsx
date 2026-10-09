@@ -25,6 +25,7 @@ interface WikiDetailPaneProps {
   onTabChange: (tab: WikiDetailTab) => void;
   onClose: () => void;
   onOpenInNotes?: () => void;
+  onOpenSectionInNotes?: () => void;
   onAnalyze: (prompt: string, actionKind: WikiActionKind, attachments: AssistantAttachment[], options: WikiNodeAiRequestOptions) => void;
   onCancelAnalysis: () => void;
   onRetryTask: (taskId: string) => void;
@@ -51,6 +52,7 @@ export default function WikiDetailPane({
   onTabChange,
   onClose,
   onOpenInNotes,
+  onOpenSectionInNotes,
   onAnalyze,
   onCancelAnalysis,
   onRetryTask,
@@ -105,7 +107,7 @@ export default function WikiDetailPane({
           <Tabs.Tab value="ai" leftSection={<Bot size={14} />}>AI</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="document" className="wiki-detail-panel">
-          <WikiDocumentTab node={node} pathLabel={pathLabel} resolvedTheme={resolvedTheme} onOpenInNotes={onOpenInNotes} />
+          <WikiDocumentTab node={node} pathLabel={pathLabel} resolvedTheme={resolvedTheme} onOpenInNotes={onOpenInNotes} onOpenSectionInNotes={onOpenSectionInNotes} />
         </Tabs.Panel>
         <Tabs.Panel value="ai" className="wiki-detail-panel">
           <WikiAssistantTab
