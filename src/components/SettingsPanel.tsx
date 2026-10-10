@@ -7,6 +7,7 @@ import type { ModelConfigurationChange, ModelProviderCatalogDraft } from '../../
 import { ModelConfigurationSaveCancelled } from './settings/useModelConfigurationSave';
 import WorkspaceBackupSettings from './WorkspaceBackupSettings';
 import WorkspaceRestoreSettings from './WorkspaceRestoreSettings';
+import { ModelHealthPanel, ZombieCleanupBar } from './settings/ModelHealthPanel';
 import './settings/WorkspaceSettings.css';
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
@@ -149,6 +150,7 @@ export default function SettingsPanel({
   const [modelCategory, setModelCategory] = useState<ModelSlotId>('generation');
   const [draftExtensions, setDraftExtensions] = useState<AiExtensionsSettings>(aiExtensionsSettings);
   const [aiStatus, setAiStatus] = useState<AiProviderStatus | null>(null);
+  const [wizardDismissed, setWizardDismissed] = useState(false);
   const [diagnostics, setDiagnostics] = useState<AppDiagnostics | null>(null);
   const [draftParsing, setDraftParsing] = useState<ParsingConfig | null>(null);
   const [mineruKeyInput, setMineruKeyInput] = useState('');
@@ -561,6 +563,27 @@ export default function SettingsPanel({
     }
   };
 
+  // 填完 API Key 且尚无可用模型时自动拉取目录（去抖、静默失败），省去手动“获取目录”。
+  useEffect(() => {
+    if (draftAi.kind !== 'openai-compatible') return;
+    if (!draftAi.apiKey?.trim() || modelNames.length > 0 || isFetchingModels) return;
+    const timer = window.setTimeout(() => {
+      void window.electronAPI.fetchAiProviderModels({ ...draftAi, provider: selectedRemoteProvider }, { profileId: selectedProfileId })
+        .then((status) => {
+          if (!status.available || !status.models.length) return;
+          setAiStatus(status);
+          setDraftAi((current) => ({
+            ...current,
+            provider: selectedRemoteProvider,
+            availableModels: status.models,
+            model: current.model && status.models.some((model) => model.name === current.model) ? current.model : status.models[0]?.name ?? current.model,
+          }));
+        })
+        .catch(() => undefined);
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [draftAi, selectedRemoteProvider, selectedProfileId, isFetchingModels, modelNames.length]);
+
   const fetchModels = async () => {
     const submitted = liveDraft.current;
     setIsFetchingModels(true);
@@ -603,6 +626,12 @@ export default function SettingsPanel({
         : getDefaultModelProfileLabel(selectedConfig);
       const draft = buildModelSettingsInput();
       draft.profiles = draft.profiles.map((profile) => profile.id === selectedProfileId ? { ...profile, label: selectedLabel, config: selectedConfig } : profile);
+      // 保存即完备：默认档案缺模型而当前档案配置完整时，自动把默认指向当前档案。
+      const savedProfileNow = draft.profiles.find((profile) => profile.id === selectedProfileId);
+      const currentDefault = draft.profiles.find((profile) => profile.id === draft.defaultProfileId);
+      if (savedProfileNow?.config.model && currentDefault && !currentDefault.config.model && draft.defaultProfileId !== selectedProfileId) {
+        draft.defaultProfileId = selectedProfileId;
+      }
       const saved = await onSaveAiModelSettings(draft);
       for (const profile of saved.profiles) savedDraftKeys.current.set(profile.id, modelDraftKey(profile.config));
       const savedProfile = saved.profiles.find((profile) => profile.id === submitted.profileId);
@@ -1162,8 +1191,9 @@ export default function SettingsPanel({
             <Tabs.Panel value="model">
               <SettingsSection group={t("AI 设置")} title={t("模型配置")}>
                 <Box className="settings-model-content" pt="md">
+                  <ModelHealthPanel settings={draftModelSettings} hub={draftModelHub} aiAvailable={aiStatus?.available ?? null} aiStatusMessage={aiStatus?.message ?? null} onFix={(category) => { setModelCategory(category); setModelSettingsTab('config'); if (category === 'generation') selectProfile(draftModelSettings.defaultProfileId ?? draftModelSettings.profiles[0]?.id ?? ''); }} onDismissWizard={() => setWizardDismissed(true)} wizardDismissed={wizardDismissed} />
                     <Transition mounted={modelSettingsTab === 'profiles'} transition="fade-right" duration={220} timingFunction="ease">
-                      {(styles) => <Box style={styles} pt="lg"><ModelConnectionList rows={visibleConfiguredModels} totalRows={configuredModelRows.length} languageProfileCount={draftModelSettings.profiles.length} page={modelProfilePage} pageCount={modelProfilePageCount} selectedProfileId={selectedProfileId} selectedCategory={modelCategory} onPageChange={setModelProfilePage} onAdd={startAddModelConnection} onOpen={(row) => {
+                      {(styles) => <Box style={styles} pt="lg"><ZombieCleanupBar settings={draftModelSettings} onClean={(ids) => { setDraftModelSettings((current) => ({ ...current, profiles: current.profiles.filter((profile) => !ids.includes(profile.id)) })); setFeedback(t('已清理 {0} 个未使用连接，保存后生效。', { '0': String(ids.length) })); }} /><ModelConnectionList rows={visibleConfiguredModels} totalRows={configuredModelRows.length} languageProfileCount={draftModelSettings.profiles.length} page={modelProfilePage} pageCount={modelProfilePageCount} selectedProfileId={selectedProfileId} selectedCategory={modelCategory} onPageChange={setModelProfilePage} onAdd={startAddModelConnection} onOpen={(row) => {
                         setModelCategory(row.category);
                         if (row.category === 'generation') selectProfile(row.id);
                         else setModelSettingsTab('config');
