@@ -949,7 +949,19 @@ const createWindow = () => {
   });
   // Clean up
   const detachDocumentRenderer = () => { noteCloseCoordinator.cancelPending(mainWindowWebContentsId); void documentSessionService?.detach(mainWindowWebContentsId); };
-  mainWindow.webContents.on('render-process-gone', detachDocumentRenderer);
+  // 渲染进程崩溃（SIGTRAP/GPU 等）后窗口会保持黑屏；自动重载一次自愈，避免用户面对死窗口。
+  let rendererReloadPending = false;
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    detachDocumentRenderer();
+    appLogger.record('error', 'renderer', `RENDERER_GONE_${details.reason.replace(/[^A-Za-z]/gu, '').toUpperCase() || 'UNKNOWN'}`);
+    if (rendererReloadPending || details.reason === 'clean-exit') return;
+    rendererReloadPending = true;
+    setTimeout(() => {
+      rendererReloadPending = false;
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.reload();
+    }, 1_000);
+  });
   mainWindow.webContents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => { if (isMainFrame && !isInPlace) detachDocumentRenderer(); });
   mainWindow.on('closed', () => {
     noteSaveService.release(mainWindowWebContentsId);
@@ -4924,6 +4936,8 @@ function syncLegacyDefaultProfile(config: AiProviderConfig | undefined, targetSt
   } else targetStore?.delete('aiProviderSecret');
 }
 
+// macOS 26 (Tahoe) 上 Electron 31 渲染层有 SIGTRAP 崩溃报告；文本应用禁用 GPU 加速以规避合成器路径。
+app.disableHardwareAcceleration();
 const ownsApplicationInstance = app.requestSingleInstanceLock();
 if (ownsApplicationInstance) documentOpenRouter.collect(process.argv, process.cwd(), app.isPackaged);
 app.on('second-instance', (_event, argv, workingDirectory) => {

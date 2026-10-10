@@ -1,6 +1,7 @@
 allowBuilds:
   better-sqlite3: true
   electron: true
+  electron-winstaller: false
   esbuild: true
 overrides:
   js-yaml@>=3 <4: 3.15.2
