@@ -128,7 +128,7 @@ export class PythonWorkerClient {
 
   private async ensureStarted(): Promise<void> {
     if (this.child && this.helloPromise) return this.helloPromise;
-    const { executable, args, cwd, packaged } = resolveWorkerCommand();
+    const { executable, args, cwd, packaged } = await resolveWorkerCommand();
     if (!fs.existsSync(cwd)) throw new WorkerClientError('WORKER_NOT_FOUND', '文档处理 Worker 目录不存在，请重新安装应用或配置开发环境。', false);
     if (packaged && path.isAbsolute(executable) && !fs.existsSync(executable)) {
       throw new WorkerClientError(
@@ -263,19 +263,92 @@ function isPipelineStage(value: string): value is PipelineStageId {
   return value === 'parse' || value === 'lines' || value === 'signals' || value === 'ambiguity' || value === 'tree' || value === 'chunks' || value === 'keywords' || value === 'entities';
 }
 
-function resolveWorkerCommand(): WorkerCommand {
+const MINIMUM_PYTHON_MAJOR = 3;
+const MINIMUM_PYTHON_MINOR = 10;
+let systemPythonProbe: Promise<string | null> | null = null;
+
+/** 校验解释器满足 Worker 源码的版本下限（graph_leiden 等使用 PEP 604 联合类型，需 3.10+）。 */
+function probePythonVersion(executable: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(executable, ['-E', '-c', 'import sys; print("%d.%d" % sys.version_info[:2])'], { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+    } catch {
+      resolve(false);
+      return;
+    }
+    let output = '';
+    let settled = false;
+    const finish = (value: boolean) => {
+      if (settled) return;
+      settled = true;
+      child.kill();
+      resolve(value);
+    };
+    child.stdout?.on('data', (chunk: Buffer) => { output += chunk.toString(); });
+    child.on('error', () => finish(false));
+    child.on('exit', (code) => {
+      const match = /^(\d+)\.(\d+)/m.exec(output.trim());
+      if (!match) return finish(false);
+      const [major, minor] = [Number(match[1]), Number(match[2])];
+      finish(code === 0 && (major > MINIMUM_PYTHON_MAJOR || (major === MINIMUM_PYTHON_MAJOR && minor >= MINIMUM_PYTHON_MINOR)));
+    });
+    setTimeout(() => finish(false), 6_000).unref();
+  });
+}
+
+/** 从 Finder 启动时 PATH 是干净的 /usr/bin:/bin，裸 python3 会命中系统 3.9；按绝对路径优先级探测。 */
+function darwinPythonCandidates(): string[] {
+  const candidates: string[] = [];
+  const configured = process.env.MENGHAN_PIPELINE_PYTHON?.trim();
+  if (configured) candidates.push(path.resolve(configured));
+  for (const directory of ['/opt/homebrew/bin', '/usr/local/bin']) {
+    for (const suffix of ['3.13', '3.12', '3.11', '3.10']) candidates.push(path.join(directory, `python${suffix}`));
+    candidates.push(path.join(directory, 'python3'));
+  }
+  const frameworkRoot = '/Library/Frameworks/Python.framework/Versions';
+  try {
+    for (const version of fs.readdirSync(frameworkRoot)) {
+      if (version === 'Current') continue;
+      candidates.push(path.join(frameworkRoot, version, 'bin', 'python3'));
+    }
+  } catch { /* 未安装 python.org 发行版。 */ }
+  candidates.push('/usr/bin/python3');
+  candidates.push('python3');
+  return candidates;
+}
+
+/** 进程内一次性探测可用解释器；结果缓存，安装新 Python 后重启应用即可生效。 */
+function findCompatibleSystemPython(): Promise<string | null> {
+  systemPythonProbe ??= (async () => {
+    for (const candidate of darwinPythonCandidates()) {
+      if (candidate.includes(path.sep) && !fs.existsSync(candidate)) continue;
+      if (await probePythonVersion(candidate)) return candidate;
+    }
+    return null;
+  })();
+  return systemPythonProbe;
+}
+
+async function resolveWorkerCommand(): Promise<WorkerCommand> {
   const developmentDirectory = path.resolve(__dirname, '../pipeline-python');
-  const pythonExecutable = process.platform === 'darwin' ? 'python3' : 'python';
   if (!app.isPackaged) {
     const venvPython = path.join(developmentDirectory, '.venv', process.platform === 'darwin' ? 'bin' : 'Scripts', process.platform === 'darwin' ? 'python' : 'python.exe');
     if (fs.existsSync(venvPython)) return { executable: venvPython, args: ['-m', 'pipeline_worker'], cwd: developmentDirectory, packaged: false };
-    return { executable: pythonExecutable, args: ['-m', 'pipeline_worker'], cwd: developmentDirectory, packaged: false };
+    if (process.platform === 'darwin') {
+      const systemPython = await findCompatibleSystemPython();
+      if (!systemPython) throw new WorkerClientError('WORKER_RUNTIME_MISSING', `开发环境缺少 Python ${MINIMUM_PYTHON_MAJOR}.${MINIMUM_PYTHON_MINOR}+，请创建 pipeline-python/.venv 或安装 Homebrew Python 后重试。`, false);
+      return { executable: systemPython, args: ['-m', 'pipeline_worker'], cwd: developmentDirectory, packaged: false };
+    }
+    return { executable: 'python', args: ['-m', 'pipeline_worker'], cwd: developmentDirectory, packaged: false };
   }
   const runtimeDirectory = path.join(process.resourcesPath, 'pipeline-runtime');
   if (process.platform === 'darwin') {
     const bundledPython = path.join(runtimeDirectory, 'python-worker');
     if (fs.existsSync(bundledPython)) return { executable: bundledPython, args: ['-E', '-m', 'pipeline_worker'], cwd: runtimeDirectory, packaged: true };
-    return { executable: pythonExecutable, args: ['-m', 'pipeline_worker'], cwd: runtimeDirectory, packaged: true };
+    const systemPython = await findCompatibleSystemPython();
+    if (!systemPython) throw new WorkerClientError('WORKER_RUNTIME_MISSING', `文档处理需要 Python ${MINIMUM_PYTHON_MAJOR}.${MINIMUM_PYTHON_MINOR} 或更高版本，当前系统未找到可用解释器。请安装 Homebrew Python（brew install python@3.12）后重启应用；笔记编辑和文件浏览仍可正常使用。`, false);
+    return { executable: systemPython, args: ['-E', '-m', 'pipeline_worker'], cwd: runtimeDirectory, packaged: true };
   }
   return { executable: path.join(runtimeDirectory, 'python-worker.exe'), args: ['-E', '-m', 'pipeline_worker'], cwd: runtimeDirectory, packaged: true };
 }
