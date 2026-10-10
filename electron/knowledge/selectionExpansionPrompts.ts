@@ -12,6 +12,14 @@ export function buildExpansionMarkdownInstruction(selectedMarkdown: string): str
   return `\n输出可直接写回的 Markdown 正文。保留选区已有的段落、标题层级、有序/无序列表、列表项、引用、加粗、斜体、删除线、行内代码、链接地址及代码块语言；逐项扩写列表，不合并成一段摘要。代码围栏是正文格式，应保留；不要给整篇结果额外套 Markdown 围栏，不附加说明、HTML 或 JSON。\n<selected_markdown trust="untrusted">\n${escapeExpansionData(selectedMarkdown)}\n</selected_markdown>`;
 }
 
+/**
+ * 结构化选区（表格、列表、引用、代码块、标题）下所有编辑动作共用的格式约束：
+ * 以 selected_markdown 为准，只按任务改写文字，结构本身必须原样带回，否则写回会破坏文档。
+ */
+export function buildStructurePreservationInstruction(selectedMarkdown: string): string {
+  return `\n选区包含 Markdown 结构，下面 <selected_markdown> 是它的原文形式（比 selected_text 更准确）。输出可直接写回的 Markdown 正文：保留表格的列数、表头与分隔行、列表层级与任务勾选、引用前缀、代码围栏及其语言、标题层级和行内格式，只按任务改写其中的文字。不要把表格压成段落或逐行文字，不要附加编辑说明、HTML 或 JSON，也不要给整篇结果再套一层围栏。\n<selected_markdown trust="untrusted">\n${escapeExpansionData(selectedMarkdown)}\n</selected_markdown>`;
+}
+
 /** The previous candidate is data; measured deficits are trusted repair constraints. */
 export function buildExpansionRepairInstruction(selectedText: string, candidate: string, targetCharacters: number | undefined, validation: SelectionEditValidation): string {
   const length = createSelectionLengthReceipt(selectedText, candidate, targetCharacters);

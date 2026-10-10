@@ -2,7 +2,8 @@ import type { ReActTerminalPolicy } from './reactAgent/reactEngineTypes';
 import { selectionEditProfiles } from './selectionEditProfiles';
 import type { SelectionEditRequest, SelectionEvidenceItem } from './selectionEditTypes';
 import type { SelectionEditPersonalization } from './selectionEditSources/personalizationSource';
-import { buildExpansionLengthInstruction, buildExpansionMarkdownInstruction } from './selectionExpansionPrompts';
+import { buildExpansionLengthInstruction, buildExpansionMarkdownInstruction, buildStructurePreservationInstruction } from './selectionExpansionPrompts';
+import { structuredSelectionMarkdown } from './selectionEditStructure';
 import { normalizeExpansionMarkdown } from '../../shared/selectionExpansionMarkdown';
 
 export interface SelectionEditAgentGoal {
@@ -48,6 +49,7 @@ export function buildSelectionEditAgentQuestion(input: {
   personalization?: SelectionEditPersonalization;
   options?: { nearbyContext?: { before: string; after: string }; targetCharacters?: number; style?: string; audience?: string };
 }): string {
+  const structured = structuredSelectionMarkdown(input.request.snapshot);
   const target = input.options?.targetCharacters ? `  <target_characters>${input.options.targetCharacters}</target_characters>` : '';
   const nearby = input.options?.nearbyContext
     ? `\n  <nearby_context trust="untrusted"><before>${escape(input.options.nearbyContext.before)}</before><after>${escape(input.options.nearbyContext.after)}</after></nearby_context>`
@@ -74,7 +76,11 @@ export function buildSelectionEditAgentQuestion(input: {
     '<research_plan trust="trusted-contract-reference">',
     ...input.goals.map((goal) => `  <goal id="${goal.goalId}" kind="${goal.kind}" required="${goal.required}"><question>${escape(goal.question)}</question><query_terms>${escape(goal.queryTerms.join('、'))}</query_terms></goal>`),
     '</research_plan>',
-    ...(input.request.action === 'expand' ? [buildExpansionLengthInstruction(input.request.snapshot.selectedText, input.options?.targetCharacters), buildExpansionMarkdownInstruction(input.request.snapshot.markdownFragment ?? input.request.snapshot.selectedText)] : []),
+    ...(input.request.action === 'expand'
+      ? [buildExpansionLengthInstruction(input.request.snapshot.selectedText, input.options?.targetCharacters), buildExpansionMarkdownInstruction(input.request.snapshot.markdownFragment ?? input.request.snapshot.selectedText)]
+      : structured
+        ? [buildStructurePreservationInstruction(structured)]
+        : []),
     '<preloaded_verified_evidence trust="untrusted-source-data">',
     evidence,
     '</preloaded_verified_evidence>',
@@ -87,8 +93,9 @@ export function buildSelectionEditAgentQuestion(input: {
   ].filter(Boolean).join('\n');
 }
 
-export function normalizeSelectionEditAgentAnswer(value: string, action?: SelectionEditRequest['action']): string {
-  if (action === 'expand') return normalizeExpansionMarkdown(value);
+export function normalizeSelectionEditAgentAnswer(value: string, action?: SelectionEditRequest['action'], preserveMarkdown = false): string {
+  // 结构化选区的建议必须原样带回表格/列表/代码围栏；旧的剥标签处理会拆掉刚要求保留的结构。
+  if (action === 'expand' || preserveMarkdown) return normalizeExpansionMarkdown(value);
   return value
     .replace(/```(?:[\w-]+)?\s*([\s\S]*?)```/gu, '$1')
     .replace(/<[^>]*>/gu, '')

@@ -25,22 +25,27 @@ export interface SelectionEditValidationInput {
  * inline.  Additive sentences must overlap an already-read evidence record.
  */
 export function validateSelectionEditOutput(input: SelectionEditValidationInput): SelectionEditValidation {
-  const original = normalizeForValidation(input.selectedText);
-  const candidate = normalizeForValidation(input.action === 'expand' ? expansionMarkdownText(input.candidateText) : input.candidateText);
+  // 结构化选区（含表格/列表/代码块等）以 Markdown 为准：长度与改写幅度按渲染文本度量，
+  // 锚点比对使用原始 Markdown，避免把表格分隔符误判成新增内容或丢掉代码/链接目标。
+  const structured = Boolean(input.selectedMarkdown);
+  const original = normalizeForValidation(structured ? expansionMarkdownText(input.selectedMarkdown ?? '') : input.selectedText);
+  const candidate = normalizeForValidation(structured ? expansionMarkdownText(input.candidateText) : input.candidateText);
+  const anchorSource = structured ? (input.selectedMarkdown ?? input.selectedText) : original;
+  const anchorCandidate = structured ? input.candidateText : candidate;
   const protectedAnchorLosses = findProtectedAnchorLosses(
-    original,
-    input.action === 'expand' ? input.candidateText : candidate,
+    anchorSource,
+    anchorCandidate,
     input.protectedAnchorKinds,
   );
   const warnings: string[] = [];
   const unsupportedClaims: string[] = [];
   const issues: SelectionEditQualityIssue[] = [];
 
-  if (input.action === 'expand' && input.selectedMarkdown) {
+  if (input.selectedMarkdown) {
     protectedAnchorLosses.push(...findProtectedAnchorLosses(input.selectedMarkdown, input.candidateText, ['code', 'link-target']));
     const lostFormats = expansionMarkdownFormatLosses(input.selectedMarkdown, input.candidateText);
     if (lostFormats.length) {
-      const message = '扩写未保留原文 Markdown 格式';
+      const message = input.action === 'expand' ? '扩写未保留原文 Markdown 格式' : '建议未保留原文 Markdown 结构';
       warnings.push(message);
       issues.push({ code: 'MARKDOWN_FORMAT_LOST', message, retryable: true });
     }

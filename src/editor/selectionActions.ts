@@ -126,6 +126,12 @@ const supportedBlockMarkdownNodes = new Set([
     'taskList',
     'taskItem',
     'codeBlock',
+    // 表格族：GFM 往返已有专用序列化（turndown tiptapTable + marked gfm），
+    // 结构稳定性由 parseBlockMarkdownSlice 的 canonical round-trip 兜底。
+    'table',
+    'tableRow',
+    'tableHeader',
+    'tableCell',
 ]);
 const supportedBlockMarkdownMarks = new Set(['bold', 'italic', 'strike', 'code', 'link']);
 
@@ -349,7 +355,18 @@ function sliceToMarkdown(editor: Editor, slice: Slice): string {
     const container = document.createElement('div');
     const serializer = DOMSerializer.fromSchema(editor.schema);
     container.appendChild(serializer.serializeFragment(slice.content));
-    return htmlToMarkdown(container.innerHTML).trim();
+    return htmlToMarkdown(wrapDetachedTableRows(container.innerHTML)).trim();
+}
+
+/**
+ * 表格切片的 openStart/openEnd 会让 DOMSerializer 只输出裸 <tr>，脱离 <table> 后
+ * turndown 的表格规则不触发，交给模型的原文就退化成压扁的段落文本。补回包裹，
+ * 使表格选区的改写建立在真实 GFM 结构上。
+ */
+function wrapDetachedTableRows(html: string): string {
+    const trimmed = html.trim();
+    if (!/^<(tr|td|th)\b/iu.test(trimmed)) return html;
+    return `<table><tbody>${trimmed}</tbody></table>`;
 }
 
 export function replaceSelectionWithText(editor: Editor, snapshot: SelectionSnapshot, text: string): void {

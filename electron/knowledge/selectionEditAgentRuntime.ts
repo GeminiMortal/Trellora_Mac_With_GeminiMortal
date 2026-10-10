@@ -17,6 +17,7 @@ import {
   selectionEditAgentTerminalPolicy,
   type SelectionEditAgentGoal,
 } from './selectionEditAgentPrompt';
+import { structuredSelectionMarkdown } from './selectionEditStructure';
 import { applySelectionEditQualityGate } from './selectionEditQuality';
 import { validateSelectionEditOutput } from './selectionEditValidator';
 import { createReActChatTransport, type ReActChatTransport } from './reactAgent/reactChatTransport';
@@ -150,13 +151,18 @@ export async function runSelectionEditAgentRuntime(input: SelectionEditAgentRunt
     personalization: input.personalization,
     options: input.options,
   });
+  // 扩写与结构化选区都按 Markdown 交付：剥标签的旧归一化会拆掉表格/列表/代码围栏。
+  const preserveMarkdown = input.request.action === 'expand' || Boolean(structuredSelectionMarkdown(input.request.snapshot));
+  const selectedMarkdownForValidation = input.request.action === 'expand' || preserveMarkdown
+    ? input.request.snapshot.markdownFragment
+    : undefined;
   let repairUsed = false;
   const validate = (candidateText: string): SelectionEditValidation => {
     const evidence = [...input.preloadedEvidence, ...session.evidenceItems()];
     return applySelectionEditQualityGate({
       action: input.request.action,
       selectedText: input.request.snapshot.selectedText,
-      candidateText: normalizeSelectionEditAgentAnswer(candidateText, input.request.action),
+      candidateText: normalizeSelectionEditAgentAnswer(candidateText, input.request.action, preserveMarkdown),
       targetCharacters: input.options?.targetCharacters,
       requiredGoalIds: selectionEditProfiles[input.request.action].evidencePolicy === 'require-for-new-facts'
         ? input.goals.filter((goal) => goal.required).map((goal) => goal.goalId)
@@ -165,8 +171,8 @@ export async function runSelectionEditAgentRuntime(input: SelectionEditAgentRunt
       validation: validateSelectionEditOutput({
         action: input.request.action,
         selectedText: input.request.snapshot.selectedText,
-        candidateText: normalizeSelectionEditAgentAnswer(candidateText, input.request.action),
-        ...(input.request.action === 'expand' ? { selectedMarkdown: input.request.snapshot.markdownFragment } : {}),
+        candidateText: normalizeSelectionEditAgentAnswer(candidateText, input.request.action, preserveMarkdown),
+        ...(selectedMarkdownForValidation ? { selectedMarkdown: selectedMarkdownForValidation } : {}),
         ...(input.request.targetLanguage ? { targetLanguage: input.request.targetLanguage } : {}),
         evidence,
         protectedAnchorKinds: selectionEditProfiles[input.request.action].protectedAnchorKinds,
@@ -206,7 +212,7 @@ export async function runSelectionEditAgentRuntime(input: SelectionEditAgentRunt
     },
   });
   assertCurrent(input);
-  const text = normalizeSelectionEditAgentAnswer(loop.finalAnswer, input.request.action);
+  const text = normalizeSelectionEditAgentAnswer(loop.finalAnswer, input.request.action, preserveMarkdown);
   const validation = validate(text);
   return {
     kind: 'completed',

@@ -7,11 +7,15 @@ import { getSchema } from '@tiptap/core';
 import Link from '@tiptap/extension-link';
 import { EditorState, TextSelection } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
+import Table from '@tiptap/extension-table';
+import TableCell from '@tiptap/extension-table-cell';
+import TableHeader from '@tiptap/extension-table-header';
+import TableRow from '@tiptap/extension-table-row';
 import { JSDOM } from 'jsdom';
 
 const rootDir = process.cwd();
 const bundlePath = path.join(rootDir, 'scripts', '.verify-selection-edit-writeback-bundle.mjs');
-const schema = getSchema([StarterKit, Link]);
+const schema = getSchema([StarterKit, Link, Table.configure({ resizable: false }), TableRow, TableHeader, TableCell]);
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
@@ -214,6 +218,38 @@ try {
     const nodes = editor.state.doc.firstChild.content.content;
     assert.ok(nodes.some((node) => node.type.name === 'hardBreak'), 'Explicit Markdown line breaks survive replacement');
     for (const name of ['bold', 'italic', 'strike']) assert.ok(nodes.some((node) => node.marks.some((mark) => mark.type.name === name)), `${name} survives replacement`);
+  }
+
+  {
+    // 表格选区：模型必须收到 GFM 原文，且改写结果按结构写回而不破坏前后文。
+    const cell = (type, text) => ({ type, content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] });
+    const source = { type: 'doc', content: [
+      { type: 'paragraph', content: [{ type: 'text', text: '前文' }] },
+      { type: 'table', content: [
+        { type: 'tableRow', content: [cell('tableHeader', '协议'), cell('tableHeader', '端口')] },
+        { type: 'tableRow', content: [cell('tableCell', 'HTTP'), cell('tableCell', '80')] },
+      ] },
+      { type: 'paragraph', content: [{ type: 'text', text: '后文' }] },
+    ] };
+    const doc = schema.nodeFromJSON(source);
+    let from = 0;
+    let to = 0;
+    doc.descendants((node, position) => {
+      if (node.isText && node.text === '协议' && !from) from = position;
+      if (node.isText && node.text === '80') to = position + node.text.length;
+    });
+    assert.ok(from && to, 'Table fixture cells are missing.');
+    const editor = createHarness({ from, to }, source);
+    const snapshot = createSnapshot(actions, editor, true);
+    assert.match(snapshot.structure.markdownFragment, /^\|\s*协议\s*\|\s*端口\s*\|/u, 'A table selection must reach the model as a GFM table, not flattened paragraphs.');
+    assert.equal(actions.getSelectionWritebackCapability(snapshot).mode, 'block-markdown', 'Table selections must allow structured writeback.');
+    actions.replaceSelectionWithMarkdown(editor, snapshot, '| 协议 | 默认端口 |\n| --- | --- |\n| HTTP | 80 |\n| HTTPS | 443 |');
+    const result = editor.state.doc.toJSON();
+    const table = result.content.find((node) => node.type === 'table');
+    assert.ok(table, 'Rewritten table must remain a table node.');
+    assert.equal(table.content.length, 3, 'The rewritten table must keep one header row and two body rows.');
+    assert.equal(result.content[0].content[0].text, '前文', 'Content before the table must survive.');
+    assert.equal(result.content.at(-1).content[0].text, '后文', 'Content after the table must survive.');
   }
 
   {
