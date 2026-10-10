@@ -1202,7 +1202,8 @@ function buildEmbeddingCandidate(hub: ModelHub | null, source: string, model: st
     vectorType: 'float32',
     distanceMetric: 'cosine',
     encodingFormat: 'float',
-    truncateInputs: false,
+    // 主进程要求 Ollama 候选必须开启截断（运行时 embedOllamaBatch 也恒用 truncate），远程保持关闭。
+    truncateInputs: isOllama,
     documentInputVersion: 'material-chunk-text-v1',
     queryInputVersion: 'material-query-text-v1',
   };
@@ -1347,7 +1348,7 @@ function VectorProfileSettings({
           placeholder={t("例如 bge-m3")}
         />
       </SimpleGrid>
-      {candidate ? <Text size="xs" c="dimmed">{t("当前端点：")}{candidate.endpointIdentity} {t("· 输入版本：")}{candidate.documentInputVersion} {t("· 截断：关闭")}</Text> : null}
+      {candidate ? <Text size="xs" c="dimmed">{t("当前端点：")}{candidate.endpointIdentity} {t("· 输入版本：")}{candidate.documentInputVersion} {t("· 截断：")}{candidate.truncateInputs ? t("开启") : t("关闭")}</Text> : null}
       {tested ? (
         <Alert icon={<Check size={15} />} color={testedMatchesCurrent ? 'teal' : 'orange'} variant="light">
           {testedMatchesCurrent ? t("测试通过：{0} 返回 {1} 维向量。", { '0': tested.responseModel ?? tested.candidate.requestedModel, '1': tested.vectorDimension }) : t("测试结果对应旧配置；模型或连接变化后必须重新测试。")}
