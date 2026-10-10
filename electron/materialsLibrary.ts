@@ -404,10 +404,11 @@ export function importMaterialsDocuments(libraryPath: string, sourcePaths: strin
   return syncMaterialsManifest(library, now);
 }
 
-/** 展开上传来源：文件夹递归收集支持的文档（跳过隐藏目录与不支持类型），文件保持原样。 */
+/** 展开上传来源：文件夹递归收集支持的文档（跳过隐藏/系统垃圾文件与不支持类型），文件保持原样。 */
 export function expandMaterialSources(sourcePaths: string[]): { files: string[]; skipped: string[] } {
   const files: string[] = [];
   const skipped: string[] = [];
+  const junkNames = new Set(['thumbs.db', 'desktop.ini']);
   const walk = (directoryPath: string) => {
     let entries: fs.Dirent[];
     try {
@@ -422,6 +423,7 @@ export function expandMaterialSources(sourcePaths: string[]): { files: string[];
         continue;
       }
       if (!entry.isFile()) continue;
+      if (entry.name.startsWith('.') || junkNames.has(entry.name.toLocaleLowerCase('en-US'))) continue;
       if (materialsDocumentExtensions.has(path.extname(entry.name).toLowerCase())) files.push(path.join(directoryPath, entry.name));
     }
   };
@@ -612,6 +614,7 @@ function copyLibraryDocuments(sourceLibraryPath: string, targetDocumentsDirector
 /** 升级前预览：统计笔记库会被收录的文档数、总字节与跳过的类型。 */
 export function previewLibraryUpgrade(libraryPath: string): { included: number; bytes: number; byExtension: Record<string, number>; skipped: Record<string, number> } {
   const library = assertExistingDirectory(libraryPath);
+  const junkNames = new Set(['thumbs.db', 'desktop.ini']);
   const result = { included: 0, bytes: 0, byExtension: {} as Record<string, number>, skipped: {} as Record<string, number> };
   const walk = (directoryPath: string) => {
     let entries: fs.Dirent[];
@@ -628,6 +631,7 @@ export function previewLibraryUpgrade(libraryPath: string): { included: number; 
         continue;
       }
       if (!entry.isFile()) continue;
+      if (entry.name.startsWith('.') || junkNames.has(entry.name.toLocaleLowerCase('en-US'))) continue;
       const extension = path.extname(entry.name).toLowerCase() || '(无扩展名)';
       if (materialsDocumentExtensions.has(extension)) {
         result.included += 1;

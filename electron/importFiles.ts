@@ -27,8 +27,9 @@ export function importTextFilesToLibrary(options: ImportTextFilesOptions): Impor
   const sourceFiles = options.sourcePaths.flatMap((sourcePath) => {
     const resolvedSourcePath = path.resolve(sourcePath);
     if (!fs.existsSync(resolvedSourcePath)) throw new Error(`找不到要导入的文件：${sourcePath}`);
-    // 文件夹按目录结构平铺导入：递归收集可识别的文本文件，隐藏目录跳过。
+    // 文件夹按目录结构平铺导入：递归收集可识别的文本文件，跳过隐藏与系统垃圾文件。
     if (fs.statSync(resolvedSourcePath).isDirectory()) {
+      const junkNames = new Set(['thumbs.db', 'desktop.ini']);
       const collected: string[] = [];
       const walk = (directoryPath: string) => {
         let entries: fs.Dirent[];
@@ -36,7 +37,10 @@ export function importTextFilesToLibrary(options: ImportTextFilesOptions): Impor
         for (const entry of entries) {
           if (entry.isSymbolicLink()) continue;
           if (entry.isDirectory()) { if (!entry.name.startsWith('.') && entry.name !== '.menghan-meta' && entry.name !== '.git') walk(path.join(directoryPath, entry.name)); continue; }
-          if (entry.isFile()) collected.push(path.join(directoryPath, entry.name));
+          if (entry.isFile()) {
+            if (entry.name.startsWith('.') || junkNames.has(entry.name.toLocaleLowerCase('en-US'))) continue;
+            collected.push(path.join(directoryPath, entry.name));
+          }
         }
       };
       walk(resolvedSourcePath);
