@@ -12,6 +12,7 @@ import {
   Drawer,
   Group,
   Modal,
+  NumberInput,
   Paper,
   Progress,
   ScrollArea,
@@ -91,6 +92,7 @@ export default function MaterialsPipelineView({ library, documents, onBack, onOp
   const [parsingConfig, setParsingConfig] = useState<ParsingConfig | null>(null);
   const [chunkingConfig, setChunkingConfig] = useState<LibraryChunkingConfig | null>(null);
   const [graphConfig, setGraphConfig] = useState<LibraryGraphEnhancementConfig | null>(null);
+  const graphConfigRef = useRef<LibraryGraphEnhancementConfig | null>(null);
   const [graphConfigSaving, setGraphConfigSaving] = useState(false);
   const [graphConfigError, setGraphConfigError] = useState<string | null>(null);
   const [graphStatus, setGraphStatus] = useState<LibraryGraphProjectionStatus | null>(null);
@@ -153,7 +155,7 @@ export default function MaterialsPipelineView({ library, documents, onBack, onOp
   useEffect(() => {
     void window.electronAPI.getParsingConfig().then(setParsingConfig).catch(() => setParsingConfig(null));
     void window.electronAPI.getLibraryChunkingConfig(library.path).then(setChunkingConfig).catch(() => setChunkingConfig(null));
-    void window.electronAPI.getLibraryGraphEnhancementConfig(library.path).then(setGraphConfig).catch(() => setGraphConfig(null));
+    void window.electronAPI.getLibraryGraphEnhancementConfig(library.path).then((cfg) => { graphConfigRef.current = cfg; setGraphConfig(cfg); }).catch(() => { graphConfigRef.current = null; setGraphConfig(null); });
     void window.electronAPI.getLibraryGraphStatus(library.path).then(setGraphStatus).catch(() => setGraphStatus(null));
     void window.electronAPI.getPipelineKeywordResources(library.path).then(setKeywordResources).catch(() => setKeywordResources(null));
     void loadEmbeddingConfig();
@@ -343,7 +345,14 @@ export default function MaterialsPipelineView({ library, documents, onBack, onOp
     setGraphConfigSaving(true);
     setGraphConfigError(null);
     try {
-      const saved = await window.electronAPI.saveLibraryGraphEnhancementConfig(library.path, patch);
+      // patch 只包含变更字段，必须合并当前 config 再提交，否则未传字段会被回滚到默认值。
+      // 乐观更新 ref：在 await 之前写入，避免并发 save（如先开开关再改超时）读到旧值互相覆盖。
+      const fullConfig = graphConfigRef.current ? { ...graphConfigRef.current, ...patch } : patch;
+      graphConfigRef.current = fullConfig as LibraryGraphEnhancementConfig;
+      console.debug('[GraphConfig] save →', { patch, fullConfig: { enabled: fullConfig.enabled, llmTimeoutMs: fullConfig.llmTimeoutMs } });
+      const saved = await window.electronAPI.saveLibraryGraphEnhancementConfig(library.path, fullConfig);
+      console.debug('[GraphConfig] saved ←', { enabled: saved.enabled, llmTimeoutMs: saved.llmTimeoutMs });
+      graphConfigRef.current = saved;
       setGraphConfig(saved);
       setPipelineStatuses(await window.electronAPI.getMaterialsPipelineStatus(library.path));
       void window.electronAPI.getLibraryGraphStatus(library.path).then(setGraphStatus).catch(() => setGraphStatus(null));
@@ -1481,6 +1490,29 @@ function GraphEnhancementPanel({ config, chunkCount, saving, error, onSave }: {
   onSave: (patch: Partial<LibraryGraphEnhancementConfig>) => void;
 }) {
   useI18n();
+  // 用本地 state 管理超时输入，只在失焦时保存，避免打字时反复触发并发保存导致配置回滚。
+  const [timeoutDraft, setTimeoutDraft] = useState<string>('');
+  const [timeoutDirty, setTimeoutDirty] = useState(false);
+
+  useEffect(() => {
+    if (!timeoutDirty && config) {
+      setTimeoutDraft(String(Math.round((config.llmTimeoutMs ?? 60000) / 1000)));
+    }
+  }, [config?.llmTimeoutMs, timeoutDirty]);
+
+  const saveTimeout = () => {
+    if (!timeoutDirty || !config) return;
+    const num = Number(timeoutDraft);
+    if (!Number.isFinite(num)) { setTimeoutDraft(String(Math.round((config.llmTimeoutMs ?? 60000) / 1000))); setTimeoutDirty(false); return; }
+    const clamped = Math.min(600, Math.max(10, Math.round(num)));
+    const currentMs = config.llmTimeoutMs ?? 60000;
+    if (clamped * 1000 !== currentMs) {
+      onSave({ llmTimeoutMs: clamped * 1000 });
+    }
+    setTimeoutDraft(String(clamped));
+    setTimeoutDirty(false);
+  };
+
   if (!config) return <Alert icon={<Info size={13} />} color="gray" variant="light" py={6}>{t("正在读取当前资料库的图谱增强配置。")}</Alert>;
   return (
     <Stack gap="sm">
@@ -1497,11 +1529,37 @@ function GraphEnhancementPanel({ config, chunkCount, saving, error, onSave }: {
         />
       </Group>
       {config.enabled ? (
-        <Alert icon={<Info size={13} />} color="blue" variant="light" py={6}>
-          <Text size="xs">{t("成本预估：当前文档约")} {chunkCount} {t("个子块，每 3 个子块为一批（不截断原文），预计调用生成模型约")} {Math.max(1, Math.ceil(chunkCount / 3))} {t("次；每个实体与关系都必须携带可召回原文的证据，无法给出出处的条目会被丢弃。")}</Text>
-        </Alert>
+        <>
+          <Alert icon={<Info size={13} />} color="blue" variant="light" py={6}>
+            <Text size="xs">{t("成本预估：当前文档约")} {chunkCount} {t("个子块，每 3 个子块为一批（不截断原文），预计调用生成模型约")} {Math.max(1, Math.ceil(chunkCount / 3))} {t("次；每个实体与关系都必须携带可召回原文的证据，无法给出出处的条目会被丢弃。")}</Text>
+          </Alert>
+          <Group gap="md" wrap="wrap" align="flex-end">
+            <NumberInput
+              label={t("单请求超时（秒）")}
+              description={t("推理型模型（如 MiMo）建议 120~180s；普通模型 60~120s。")}
+              value={Number(timeoutDraft) || 60}
+              min={10}
+              max={600}
+              step={10}
+              disabled={saving}
+              size="sm"
+              style={{ width: 140 }}
+              onChange={(value) => {
+                // 仅更新本地草稿，不立即保存。
+                if (value === null || value === undefined || value === '') { setTimeoutDraft(''); setTimeoutDirty(true); return; }
+                setTimeoutDraft(String(value));
+                setTimeoutDirty(true);
+              }}
+              onBlur={saveTimeout}
+              onKeyDown={(event) => { if (event.key === 'Enter') saveTimeout(); }}
+            />
+            <Text size="xs" c="dimmed" mb={2} style={{ maxWidth: 280 }}>
+              {t("图谱增强使用「模型与连接」中当前资料库绑定的语言模型；默认跟随全局生成槽位。推理型模型（MiMo/DeepSeek-R1 等）抽取结构化 JSON 时比普通模型慢 2~4 倍，超时后可重试。")}
+            </Text>
+          </Group>
+        </>
       ) : (
-        <Text size="xs" c="dimmed">{t("开启前请确认已在“模型与连接”中配置可用的生成模型；模型不可用时阶段会进入等待配置状态，不影响其他阶段。")}</Text>
+        <Text size="xs" c="dimmed">{t("开启前请确认已在\u201c模型与连接\u201d中配置可用的生成模型；模型不可用时阶段会进入等待配置状态，不影响其他阶段。")}</Text>
       )}
       {error ? <Alert icon={<AlertCircle size={13} />} color="red" variant="light" py={6}><Text size="xs">{error}</Text></Alert> : null}
     </Stack>

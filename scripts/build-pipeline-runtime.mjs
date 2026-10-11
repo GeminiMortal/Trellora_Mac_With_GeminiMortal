@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -160,20 +160,22 @@ function copyPythonRuntime(pythonHome, target, pythonDllName) {
 
 function copyWorkerDependencies(source, target) {
   mkdirSync(target, { recursive: true });
-  const jiebaSource = path.join(source, 'jieba');
-  cpSync(jiebaSource, path.join(target, 'jieba'), {
-    recursive: true,
-    // The application uses only jieba.Tokenizer. These optional POS/TF-IDF/
-    // paddle resources account for most of the package but are never imported.
-    filter: (entry) => {
-      const parts = path.relative(jiebaSource, entry).split(path.sep);
-      return !parts.some((part) => ['__pycache__', 'posseg', 'analyse', 'lac_small'].includes(part))
-        && !entry.endsWith('.pyc');
-    },
-  });
-  const metadataDirectory = readdirSync(source).find((name) => /^jieba-[\d.]+\.dist-info$/iu.test(name));
-  if (!metadataDirectory) throw new Error('Jieba 版本元数据不存在，请重新安装 pipeline-python/requirements.lock。');
-  cpSync(path.join(source, metadataDirectory), path.join(target, metadataDirectory), { recursive: true });
+  // 复制所有依赖包（jieba、networkx 等），跳过 __pycache__ 和 .pyc。
+  for (const name of readdirSync(source)) {
+    if (name.startsWith('.') || name === '__pycache__') continue;
+    const src = path.join(source, name);
+    const dst = path.join(target, name);
+    const stat = statSync(src, { throwIfNoEntry: false });
+    if (!stat) continue;
+    if (stat.isDirectory()) {
+      cpSync(src, dst, {
+        recursive: true,
+        filter: (entry) => !entry.endsWith('.pyc') && !path.relative(src, entry).split(path.sep).includes('__pycache__'),
+      });
+    } else if (stat.isFile() && !name.endsWith('.pyc')) {
+      cpSync(src, dst);
+    }
+  }
 }
 
 function writeRuntimePathFile(target, pythonDllName) {

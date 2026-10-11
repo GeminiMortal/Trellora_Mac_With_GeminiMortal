@@ -437,8 +437,9 @@ export function expandMaterialSources(sourcePaths: string[]): { files: string[];
   return { files, skipped };
 }
 
-/** 把单篇笔记复制进资料库 documents 目录（字节级复制，保留 frontmatter 与 [[wiki链接]]；同名自动加序号）。 */
-export function importNoteIntoMaterialsLibrary(libraryPath: string, notePath: string, now = new Date()): MaterialsDocument[] {
+/** 把单篇笔记复制进资料库 documents 目录（字节级复制，保留 frontmatter 与 [[wiki链接]]；同名自动加序号）。
+ *  记录 sourceNote 映射，供笔记保存后自动同步到资料库使用。 */
+export function importNoteIntoMaterialsLibrary(libraryPath: string, notePath: string, noteLibraryPath?: string, now = new Date()): MaterialsDocument[] {
   const library = assertExistingDirectory(libraryPath);
   const resolvedNote = path.resolve(notePath);
   if (!fs.existsSync(resolvedNote) || !fs.statSync(resolvedNote).isFile()) throw new Error('找不到要入库的笔记。');
@@ -447,7 +448,48 @@ export function importNoteIntoMaterialsLibrary(libraryPath: string, notePath: st
   fs.mkdirSync(documentsDirectory, { recursive: true });
   const targetPath = getUniquePath(documentsDirectory, path.basename(resolvedNote));
   fs.copyFileSync(resolvedNote, targetPath);
+  // 记录来源笔记映射：下次同步可追踪内容变化。
+  if (noteLibraryPath) {
+    const manifest = readMaterialsManifest(library) ?? ensureMaterialsMeta(library);
+    const relativeTarget = toRelativePath(library, targetPath);
+    const relativeSource = toRelativePath(assertExistingDirectory(noteLibraryPath), resolvedNote);
+    attachSourceNote(manifest, relativeTarget, noteLibraryPath, relativeSource);
+    writeMaterialsManifest(library, manifest);
+  }
   return syncMaterialsManifest(library, now);
+}
+
+/** 当笔记保存后，查找所有资料库中引用该笔记的文档并更新内容（哈希变化则覆盖 + 标记待索引）。
+ *  返回受影响的资料库路径列表。 */
+export function syncNoteToMaterialsLibraries(notePath: string, store: MaterialsRegistryStore, now = new Date()): string[] {
+  const resolvedNote = path.resolve(notePath);
+  if (!fs.existsSync(resolvedNote) || !fs.statSync(resolvedNote).isFile()) return [];
+  const affected: string[] = [];
+  for (const library of listMaterialsLibraries(store)) {
+    if (!isReadableDirectory(library.path)) continue;
+    const manifest = readMaterialsManifest(library.path);
+    if (!manifest) continue;
+    const documentsDirectory = materialsDocumentsDirectory(library.path);
+    let changed = false;
+    for (const entry of manifest.documents) {
+      if (!entry.sourceNote) continue;
+      const sourcePath = path.resolve(entry.sourceNote.libraryPath, entry.sourceNote.relativePath);
+      if (path.resolve(sourcePath) !== resolvedNote) continue;
+      const targetPath = path.join(documentsDirectory, entry.relativePath);
+      if (!fs.existsSync(targetPath)) continue;
+      if (hashFileContents(targetPath) === hashFileContents(resolvedNote)) continue;
+      fs.copyFileSync(resolvedNote, targetPath);
+      entry.contentHash = hashFileContents(targetPath);
+      entry.vectorState = 'pending';
+      entry.vectorIndexedAt = undefined;
+      changed = true;
+    }
+    if (changed) {
+      writeMaterialsManifest(library.path, manifest);
+      affected.push(library.path);
+    }
+  }
+  return affected;
 }
 
 /** 重命名资料文档（仅改文件名，不改动内容；无扩展名时保留原扩展名）。 */

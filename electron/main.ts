@@ -277,6 +277,7 @@ import {
   renameMaterialsDocument,
   summarizeMaterialsLibraries,
   syncMaterialsFromNoteLibrary,
+  syncNoteToMaterialsLibraries,
   upgradeRegisteredLibraryToMaterials,
 } from './materialsLibrary';
 import { readMineruApiKey, readParsingConfig, saveParsingConfig } from './parsingConfig';
@@ -370,6 +371,16 @@ const noteSaveService = new NoteSaveService({
   committed: async (library, filePath, diskHash) => {
     if (library !== getCurrentLibraryPath()) throw new Error('笔记库已切换。');
     if (await indexCoordinator.awaitIndexedVersion(filePath, diskHash) !== 'current') throw new Error('保存后的磁盘版本已变化。');
+    // 自动同步到资料库：如果该笔记曾入库且内容有变化，更新资料库副本并重新入队索引。
+    try {
+      const affectedLibraries = syncNoteToMaterialsLibraries(filePath, store);
+      for (const libraryPath of affectedLibraries) {
+        void pipelineOrchestrator?.enqueuePending(libraryPath).catch((error) => logToWindow(`[PIPELINE] 笔记自动同步后入队失败：${error instanceof Error ? error.message : String(error)}`));
+        if (mainWindow?.webContents) mainWindow.webContents.send('materials:auto-synced', { notePath: filePath, libraryPath });
+      }
+    } catch (error) {
+      logToWindow(`[MATERIALS] 笔记自动同步失败：${error instanceof Error ? error.message : String(error)}`);
+    }
   },
   state: (sender, state) => { if (mainWindow?.webContents.id === sender) mainWindow.webContents.send('notes:save-state', state); },
 });
@@ -6097,7 +6108,7 @@ registerAppHandler('notes:send-to-materials', async (_event, notePath: string, t
     } catch { return false; }
   });
   if (!ownerLibrary) throw new Error('只能导入已注册笔记库内的笔记。');
-  const documents = importNoteIntoMaterialsLibrary(targetPath, resolvedNote);
+  const documents = importNoteIntoMaterialsLibrary(targetPath, resolvedNote, ownerLibrary);
   void pipelineOrchestrator?.enqueuePending(targetPath).catch((error) => logToWindow(`[PIPELINE] 自动入队失败：${error instanceof Error ? error.message : String(error)}`));
   return documents;
 });
