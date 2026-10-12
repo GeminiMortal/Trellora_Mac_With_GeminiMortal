@@ -182,12 +182,24 @@ Windows 由安装包注册 `.md`、`.markdown`、`.txt` 的可选打开方式；
 
 ## 下载软件
 
-**macOS（Apple Silicon）· Trellora 1.0.0**
+**macOS（Apple Silicon）· Trellora v1.2.0**
 
 | 版本 | 下载 | 使用方式 |
 | --- | --- | --- |
-| DMG 安装镜像 | [Gitee Releases](https://gitee.com/GeminiMortal/trellora/releases) | 打开 DMG，将 Trellora 拖入"应用程序" |
-| 免安装 ZIP | [Gitee Releases](https://gitee.com/GeminiMortal/trellora/releases) | 解压后运行 Trellora.app |
+| DMG 安装镜像 | [Gitee Releases · v1.2.0](https://gitee.com/GeminiMortal/trellora/releases/tag/v1.2.0) | 合并分卷后打开 DMG，将 Trellora 拖入"应用程序" |
+| 源码包 | [Gitee tag v1.2.0](https://gitee.com/GeminiMortal/trellora/releases/tag/v1.2.0) | ZIP / TAR.GZ 可直接下载 |
+
+由于 Gitee 附件限制 100MB，DMG 已分卷上传（`Trellora-1.2.0-arm64.dmg.part_aa` + `Trellora-1.2.0-arm64.dmg.part_ab`），下载后合并：
+
+```bash
+# macOS / Linux
+cat Trellora-1.2.0-arm64.dmg.part_* > Trellora-1.2.0-arm64.dmg
+
+# Windows
+copy /b Trellora-1.2.0-arm64.dmg.part_aa + Trellora-1.2.0-arm64.dmg.part_ab Trellora-1.2.0-arm64.dmg
+```
+
+合并后打开 `Trellora-1.2.0-arm64.dmg`，将 Trellora.app 拖入"应用程序"即可。
 
 应用使用 ad-hoc 签名分发。首次打开如被 macOS Gatekeeper 拦截，请右键点击 Trellora.app → "打开"，或到"系统设置 → 隐私与安全性"允许运行。
 
