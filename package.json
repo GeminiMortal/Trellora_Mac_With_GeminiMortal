@@ -1,16 +1,16 @@
 {
   "name": "trellora",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "AI-native local-first Markdown knowledge management for Windows",
-  "author": "Elevenoven",
-  "homepage": "https://gitee.com/eleven-lxs/trellora",
+  "author": "GeminiMortal",
+  "homepage": "https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal",
   "repository": {
     "type": "git",
-    "url": "git+https://gitee.com/eleven-lxs/trellora.git"
+    "url": "git+https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal.git"
   },
   "bugs": {
-    "url": "https://gitee.com/eleven-lxs/trellora/issues"
+    "url": "https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/issues"
   },
   "main": "dist-electron/main.js",
   "dependencies": {

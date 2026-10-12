@@ -304,7 +304,6 @@ export function reconcileMaterialVectorState(input: {
       if (sameInput && state?.state === 'SUCCEEDED' && vectorExists) continue;
       if (sameInput && state?.state === 'FAILED' && !isRetryableErrorCode(state.last_error_code)) continue;
       if (sameInput && activeLease) continue;
-      deleteVector.run(BigInt(chunk.rowId));
       upsertPending.run(chunk.rowId, chunk.documentId, chunk.chunkId, chunk.contentHash, input.profile.profileHash, now);
     }
   })();

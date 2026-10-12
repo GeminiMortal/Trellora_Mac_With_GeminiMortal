@@ -145,7 +145,9 @@ export async function isParseCacheValid(layout: PipelineLayout): Promise<boolean
 
 export async function isStageCacheValid(layout: PipelineLayout, stage: PipelineStageId): Promise<boolean> {
   const manifestStage = getStage(layout, stage);
-  if (!manifestStage || manifestStage.status !== 'SUCCEEDED' || manifestStage.stageKey !== stageKey(layout, stage)) return false;
+  if (!manifestStage) return false;
+  if (stage === 'vectors' && manifestStage.status === 'RUNNING' && manifestStage.stageKey === stageKey(layout, 'vectors')) return true;
+  if (manifestStage.status !== 'SUCCEEDED' || manifestStage.stageKey !== stageKey(layout, stage)) return false;
   if (!manifestStage.outputs) return false;
   for (const fileName of stageOutputNames(layout, stage)) {
     const output = manifestStage.outputs[fileName];

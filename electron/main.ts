@@ -281,6 +281,7 @@ import {
   upgradeRegisteredLibraryToMaterials,
 } from './materialsLibrary';
 import { readMineruApiKey, readParsingConfig, saveParsingConfig } from './parsingConfig';
+import { MaterialsLibraryWatcher } from './pipeline/materialsLibraryWatcher';
 import { readWebSearchConfig, readWebSearchRuntimeConfig, saveWebSearchConfig, type WebSearchConfigPatch } from './websearch/webSearchConfig';
 import { listWebSearchProviders, resolveWebSearchProvider } from './websearch/webSearchProviders';
 import type { WebSearchProviderId } from './websearch/webSearchTypes';
@@ -442,6 +443,7 @@ function getDocumentSessionService(): DocumentSessionService {
 }
 let libraryRevision = 0;
 let pipelineOrchestrator: PipelineOrchestrator | null = null;
+let materialsWatcher: MaterialsLibraryWatcher | null = null;
 let workspaceBackupService: WorkspaceBackupService | undefined;
 let workspaceRestoreService: WorkspaceRestoreService | undefined;
 let workspaceMigrationService: WorkspaceMigrationService | undefined;
@@ -830,8 +832,15 @@ async function initAndCreate() {
       onLibraryGraphUpdated: (libraryPath) => mainWindow?.webContents.send('library-graph-updated', libraryPath),
     });
     if (workspaceMigrationService?.recoveryPending) pipelineOrchestrator.pauseForMaintenance();
+    materialsWatcher = new MaterialsLibraryWatcher({
+      onFilesChanged: (libraryPath) => {
+        void pipelineOrchestrator?.enqueuePending(libraryPath).catch((error) => logToWindow(`[WATCHER] 文件变更后入队失败：${error instanceof Error ? error.message : String(error)}`));
+      },
+      onLog: (message) => logToWindow(message),
+    });
     for (const library of workspaceMigrationService?.recoveryPending ? [] : listMaterialsLibraries(store)) {
       pipelineOrchestrator.recoverLibrary(library.path);
+      materialsWatcher.watch(library.path);
       void pipelineOrchestrator.enqueuePending(library.path).catch((error) => logToWindow(`[PIPELINE] 自动入队失败：${error instanceof Error ? error.message : String(error)}`));
     }
     const configuredWorkspacePath = getConfiguredWorkspacePath();
@@ -4990,6 +4999,7 @@ app.on('before-quit', (event) => {
     await Promise.all([...memoryExtractionServices.values(), ...memoryConsolidationServices.values()].map(service => service.stop()));
     await vectorGenerationService?.shutdown();
     await Promise.all([workspaceBackupService?.shutdown(), workspaceRestoreService?.shutdown(), workspaceMigrationService?.shutdown()]);
+    materialsWatcher?.dispose();
     await pipelineOrchestrator?.shutdown();
     await indexCoordinator.stopWatching();
     const deadline = Date.now() + 10_000;
@@ -5374,6 +5384,7 @@ registerAppHandler('create-materials-library', (_event, name: string, icon?: str
   try {
     ensureMaterialsMeta(created.path);
     registerMaterialsLibrary(store, created.path, created.alias, 'created', typeof icon === 'string' ? icon : undefined);
+    materialsWatcher?.watch(created.path);
   } catch (error) {
     if (fs.existsSync(created.path)) fs.rmSync(created.path, { recursive: true, force: true });
     throw error;
@@ -5384,6 +5395,7 @@ registerAppHandler('create-materials-library', (_event, name: string, icon?: str
 registerAppHandler('open-materials-library', (_event, libraryPath: string) => {
   if (typeof libraryPath !== 'string' || !libraryPath.trim()) throw new Error('资料库路径无效。');
   const targetPath = activateMaterialsLibrary(store, libraryPath);
+  materialsWatcher?.watch(targetPath);
   void pipelineOrchestrator?.enqueuePending(targetPath).catch((error) => logToWindow(`[PIPELINE] 自动入队失败：${error instanceof Error ? error.message : String(error)}`));
   return targetPath;
 });
@@ -5396,6 +5408,7 @@ registerAppHandler('rename-materials-library', (_event, libraryPath: string, ali
 
 registerAppHandler('remove-materials-library', (_event, libraryPath: string) => {
   if (typeof libraryPath !== 'string' || !libraryPath.trim()) throw new Error('资料库路径无效。');
+  materialsWatcher?.unwatch(libraryPath);
   removeMaterialsLibrary(store, libraryPath);
   return summarizeMaterialsLibraries(store);
 });

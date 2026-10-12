@@ -18,6 +18,7 @@ import {
   commitSignalsStage,
   commitTreeStage,
   createStageTempDirectory,
+  stageDirectory,
   ambiguityStageKey,
   chunksStageKey,
   entitiesStageKey,
@@ -133,14 +134,17 @@ export class PipelineOrchestrator {
   private readonly graphRebuildTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly graphRebuildActive = new Map<string, Promise<LibraryGraphRebuildResult>>();
   private readonly graphRebuildDirty = new Set<string>();
+  private readonly activeAsyncVectorSyncs = new Map<string, Promise<void>>();
   private draining = false;
   private maintenancePaused = false;
 
-  get maintenanceBusy(): boolean { return this.activeJobs.size > 0 || this.graphRebuildActive.size > 0; }
-  /** 索引代际切换前必须等待本库的流水线和图谱写入结束。 */
+  get maintenanceBusy(): boolean { return this.activeJobs.size > 0 || this.graphRebuildActive.size > 0 || this.activeAsyncVectorSyncs.size > 0; }
+  /** 索引代际切换前必须等待本库的流水线、图谱写入和异步向量同步结束。 */
   isLibraryBusy(libraryPath: string): boolean {
     const target = path.resolve(libraryPath);
-    return [...this.activeJobs.values()].some(job => path.resolve(job.libraryPath) === target) || this.graphRebuildActive.has(target);
+    return [...this.activeJobs.values()].some(job => path.resolve(job.libraryPath) === target)
+      || this.graphRebuildActive.has(target)
+      || [...this.activeAsyncVectorSyncs.keys()].some(key => key.startsWith(`${target}:`));
   }
   pauseForMaintenance(): void {
     this.maintenancePaused = true;
@@ -202,9 +206,9 @@ export class PipelineOrchestrator {
       const layout = this.createLayout(libraryPath, document, this.getMineruConfig().endpoint);
       const pendingStage = await nextPendingStage(layout);
       if (pendingStage === undefined) {
-        // 全部阶段（含 vectors 投影）均最新：校准清单状态，修复历史版本未回写的“待索引”。
         markMaterialsDocumentVectorState(libraryPath, document.id, 'indexed');
       }
+      if (pendingStage === 'vectors' && status.state === 'RUNNING' && status.stage === 'vectors') continue;
       const vectorWaitingForProfile = pendingStage === 'vectors' && !hasLockedMaterialEmbeddingProfile(libraryPath);
       const shouldResume = !vectorWaitingForProfile && (pendingStage !== undefined
         || status.state === 'IDLE'
@@ -360,7 +364,8 @@ export class PipelineOrchestrator {
     this.graphRebuildTimers.clear();
     this.graphRebuildDirty.clear();
     await this.worker.shutdown();
-    await Promise.allSettled([...this.activeCompletions.values()]);
+    await Promise.allSettled([...this.activeCompletions.values(), ...this.activeAsyncVectorSyncs.values()]);
+    this.activeAsyncVectorSyncs.clear();
   }
 
   /** 防抖触发库级图谱重建（默认 60 秒）；在 entities 提交、文档删除或启动续跑后调用。 */
@@ -807,6 +812,10 @@ export class PipelineOrchestrator {
           this.options.onStatus?.(this.getStatus(queued.libraryPath, document));
           continue;
         }
+        if (pendingStage === 'vectors' && readPipelineManifest(layout)?.stages.vectors?.status === 'RUNNING') {
+          this.options.onStatus?.(this.getStatus(queued.libraryPath, document));
+          continue;
+        }
 
         const jobId = crypto.randomUUID();
         const active: ActiveJob = {
@@ -871,12 +880,8 @@ export class PipelineOrchestrator {
           await this.importCommittedKeywordsStage(layout);
         }
       }
-      if (!await isStageCacheValid(layout, 'vectors') || !isVectorProjectionCurrent(layout)) {
-        markMaterialsDocumentVectorState(layout.libraryPath, layout.document.id, 'pending');
-        await this.executeVectorsStage(layout, active);
-      }
+      this.triggerAsyncVectorSync(layout, active.jobId);
       await this.executeEntitiesStage(layout, active);
-      markMaterialsDocumentVectorState(layout.libraryPath, layout.document.id, isVectorProjectionCurrent(layout) ? 'indexed' : 'pending');
       this.options.onStatus?.(this.getStatus(layout.libraryPath, layout.document));
     } catch (error) {
       const normalized = normalizeError(error);
@@ -889,6 +894,84 @@ export class PipelineOrchestrator {
           ? 'WAITING_CONFIG'
         : normalized.retryable ? 'FAILED_RETRYABLE' : 'FAILED';
       markStageState(layout, stage, state, normalized, active.jobId);
+      this.options.onStatus?.(this.getStatus(layout.libraryPath, layout.document));
+    }
+  }
+
+  private triggerAsyncVectorSync(layout: ReturnType<typeof prepareParseLayout>, jobId: string): void {
+    const keywordStage = readPipelineManifest(layout)?.stages.keywords;
+    if (!keywordStage || keywordStage.status !== 'SUCCEEDED') return;
+    const expectedChunks = Number(keywordStage.counts?.chunks) || 0;
+    const expectedKeywords = Number(keywordStage.counts?.keywords) || 0;
+    if (!isKeywordIndexCurrent({
+      libraryPath: layout.libraryPath,
+      documentId: layout.document.id,
+      sourceContentHash: layout.document.contentHash,
+      stageKey: keywordStage.stageKey,
+      expectedChunks,
+      expectedKeywords,
+    })) return;
+    if (isVectorProjectionCurrent(layout)) return;
+    const syncKey = `${path.resolve(layout.libraryPath)}:${layout.document.id}`;
+    if (this.activeAsyncVectorSyncs.has(syncKey)) return;
+    markStageState(layout, 'vectors', 'RUNNING', undefined, jobId);
+    this.options.onStatus?.(this.getStatus(layout.libraryPath, layout.document));
+    const sync = this.runAsyncVectorSync(layout).finally(() => this.activeAsyncVectorSyncs.delete(syncKey));
+    this.activeAsyncVectorSyncs.set(syncKey, sync);
+  }
+
+  private async runAsyncVectorSync(layout: ReturnType<typeof prepareParseLayout>): Promise<void> {
+    try {
+      const profileStatus = readMaterialEmbeddingProfile(layout.libraryPath);
+      if (profileStatus.state !== 'LOCKED' || !profileStatus.profile) return;
+      const adapter = await this.options.getMaterialEmbeddingAdapter?.({ libraryPath: layout.libraryPath, profile: profileStatus.profile });
+      if (!adapter) return;
+      const startedAt = new Date().toISOString();
+      const result = await synchronizeMaterialVectors({
+        libraryPath: layout.libraryPath,
+        documentId: layout.document.id,
+        profile: profileStatus.profile,
+        adapter,
+      });
+      if (result.state === 'CANCELLED') {
+        markStageState(layout, 'vectors', 'CANCELLED');
+        markMaterialsDocumentVectorState(layout.libraryPath, layout.document.id, 'pending');
+        this.options.onStatus?.(this.getStatus(layout.libraryPath, layout.document));
+        return;
+      }
+      if (result.state !== 'SUCCEEDED') {
+        const error: PipelineError = { code: result.errorCode ?? 'EMBEDDING_BATCH_FAILED', message: result.errorMessage ?? '向量批处理未完成。', retryable: result.state === 'FAILED_RETRYABLE' };
+        markStageState(layout, 'vectors', result.state === 'FAILED_RETRYABLE' ? 'FAILED_RETRYABLE' : 'FAILED', error);
+        markMaterialsDocumentVectorState(layout.libraryPath, layout.document.id, 'pending');
+        this.options.onStatus?.(this.getStatus(layout.libraryPath, layout.document));
+        return;
+      }
+      const profileStatus2 = readMaterialEmbeddingProfile(layout.libraryPath);
+      if (profileStatus2.state !== 'LOCKED' || !profileStatus2.profile) return;
+      const report: PipelineVectorReport = {
+        schemaVersion: 1,
+        documentId: layout.document.id,
+        stageKey: vectorsStageKey(layout),
+        profileHash: profileStatus2.profile.profileHash,
+        sourceId: profileStatus2.profile.sourceId,
+        model: profileStatus2.profile.responseModel ?? profileStatus2.profile.requestedModel,
+        dimension: profileStatus2.profile.vectorDimension,
+        distanceMetric: profileStatus2.profile.distanceMetric,
+        counts: { chunks: result.totalItems, indexed: result.completedItems, skipped: result.skippedItems, failed: result.failedItems, batches: result.batchCount, retries: result.retryCount },
+        usage: { available: false },
+        startedAt: result.startedAt ?? startedAt,
+        completedAt: result.finishedAt ?? new Date().toISOString(),
+      };
+      const vectorsDir = stageDirectory(layout, 'vectors');
+      fs.mkdirSync(vectorsDir, { recursive: true });
+      fs.writeFileSync(path.join(vectorsDir, 'vector-report.json'), `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+      commitVectorsStage(layout, vectorsDir);
+      markMaterialsDocumentVectorState(layout.libraryPath, layout.document.id, 'indexed');
+      this.options.onStatus?.(this.getStatus(layout.libraryPath, layout.document));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      markStageState(layout, 'vectors', 'FAILED_RETRYABLE', { code: 'EMBEDDING_ASYNC_FAILED', message, retryable: true });
+      markMaterialsDocumentVectorState(layout.libraryPath, layout.document.id, 'pending');
       this.options.onStatus?.(this.getStatus(layout.libraryPath, layout.document));
     }
   }
