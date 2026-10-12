@@ -20,7 +20,7 @@ Where ideas grow connected.
 [![Local First](https://img.shields.io/badge/data-local_first-26745C)](#数据与隐私)
 [![Stack](https://img.shields.io/badge/stack-Electron_·_React_·_TypeScript-3178C6)](#技术架构)
 
-[下载软件](#下载软件) · [产品功能](#产品功能) · [菜单与截图](#菜单与截图) · [快速开始](#快速开始) · [详细代码架构](docs/architecture.md) · [问题反馈](https://github.com/Elevenoven/Trellora-plus/issues)
+[下载软件](#下载软件) · [产品功能](#产品功能) · [菜单与截图](#菜单与截图) · [快速开始](#快速开始) · [详细代码架构](docs/architecture.md) · [问题反馈](https://gitee.com/GeminiMortal/trellora/issues)
 
 </div>
 

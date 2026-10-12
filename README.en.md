@@ -4,7 +4,7 @@
 
 # Trellora
 
-**A local-first AI knowledge workspace for Windows**
+**A local-first AI knowledge workspace for macOS (Apple Silicon)**
 
 Where ideas grow connected.
 
@@ -12,11 +12,11 @@ Markdown notes, source documents, AI conversations, and connected knowledge in o
 
 [简体中文](README.md) · **English**
 
-[![Platform](https://img.shields.io/badge/platform-Windows_x64-0078D4)](#quick-start)
+[![Platform](https://img.shields.io/badge/platform-macOS_arm64-black)](#quick-start)
 [![Local First](https://img.shields.io/badge/data-local_first-26745C)](#data-and-privacy)
 [![Stack](https://img.shields.io/badge/stack-Electron_·_React_·_TypeScript-3178C6)](#architecture)
 
-[Download](#download) · [Features](#features) · [Menus and screenshots](#menus-and-screenshots) · [Quick start](#quick-start) · [Detailed architecture](docs/architecture.en.md) · [Report an issue](https://github.com/Elevenoven/Trellora-plus/issues)
+[Download](#download) · [Features](#features) · [Menus and screenshots](#menus-and-screenshots) · [Quick start](#quick-start) · [Detailed architecture](docs/architecture.en.md) · [Report an issue](https://gitee.com/GeminiMortal/trellora/issues)
 
 </div>
 
@@ -26,7 +26,7 @@ Trellora is for developers, students, and knowledge workers who regularly read, 
 
 The workflow is **collect → parse and index → read and ask → save as notes → connect → reuse**. Note libraries support writing; materials libraries preserve and retrieve sources; Wiki supports chapter-based learning; Map reveals relationships across documents; the assistant connects these workflows.
 
-The current target is **Windows x64**, and development is ongoing. This README describes the current working tree. Model, embedding, web search, and PDF cloud parsing requirements are stated where relevant. See the [desktop distribution acceptance record](docs/verification/desktop-distribution-acceptance.md) for release validation status.
+The current target is **macOS (Apple Silicon arm64)**, and development is ongoing. This README describes the current working tree. Model, embedding, web search, and PDF cloud parsing requirements are stated where relevant. See the [desktop distribution acceptance record](docs/verification/desktop-distribution-acceptance.md) for release validation status.
 
 ![Trellora notes workspace with the English interface and dark theme](docs/assets/screenshots/notes-en-dark.png)
 
@@ -135,7 +135,7 @@ Open MD, Markdown, TXT, and other supported text files directly with `Ctrl+O`. T
 
 The standalone workspace shows the path, encoding, line endings, save status, and character count. It supports Edit / Preview / Source, Save, Save As, and adding the document to a library. Standalone Markdown includes controlled local-image access, image pasting, and document AI. **Edits are saved as recovery drafts; the original file is written when you explicitly save**, separately from library autosave.
 
-Windows launch arguments and drag-and-drop share an open queue. The installer offers optional Open With registration for `.md`, `.markdown`, and `.txt`.
+macOS launch arguments and drag-and-drop share an open queue. On macOS, right-click → Open With to select Trellora for `.md`, `.markdown`, and `.txt`.
 
 ![Standalone Markdown editing without a note library](docs/assets/screenshots/external-document-zh-light.png)
 
@@ -185,46 +185,58 @@ Settings has ten sections organized under Workspace, Documents, AI settings, and
 
 ## Download
 
-**Windows x64 · Trellora 1.0.0**
+**macOS (Apple Silicon) · Trellora v1.2.0**
 
 | Edition | Download | Usage |
 | --- | --- | --- |
-| Installer | [Download setup](downloads/Trellora-1.0.0-setup-x64.exe?raw=true) | Run the setup wizard and choose an installation directory |
-| Portable | [Download portable](downloads/Trellora-1.0.0-portable-x64.exe?raw=true) | Download and run directly |
+| DMG installer | [Gitee Releases · v1.2.0](https://gitee.com/GeminiMortal/trellora/releases/tag/v1.2.0) | Merge split parts, open DMG, drag Trellora to Applications |
+| Source | [Gitee tag v1.2.0](https://gitee.com/GeminiMortal/trellora/releases/tag/v1.2.0) | ZIP / TAR.GZ available directly |
 
-Release files are collected in [`downloads/`](downloads/README.md). Upload this directory with the source to GitHub to enable these downloads. [SHA-256 checksums](downloads/SHA256SUMS.txt) · [Release file manifest](downloads/release-manifest.json) · [GitHub Releases](https://github.com/Elevenoven/Trellora-plus/releases).
+Gitee limits attachments to 100 MB. The DMG is split into two parts (`Trellora-1.2.0-arm64.dmg.part_aa` + `Trellora-1.2.0-arm64.dmg.part_ab`). Merge after download:
+
+```bash
+# macOS / Linux
+cat Trellora-1.2.0-arm64.dmg.part_* > Trellora-1.2.0-arm64.dmg
+
+# Windows
+copy /b Trellora-1.2.0-arm64.dmg.part_aa + Trellora-1.2.0-arm64.dmg.part_ab Trellora-1.2.0-arm64.dmg
+```
+
+Open `Trellora-1.2.0-arm64.dmg` and drag Trellora.app into Applications.
+
+The app is distributed with an ad-hoc signature. If macOS Gatekeeper blocks it, right-click Trellora.app → Open, or allow it in System Settings → Privacy & Security.
+
+The upstream Windows x64 installer and portable package are available in the [original repository](https://gitee.com/eleven-lxs/trellora).
 
 ## Quick start
 
 ### Desktop packages
 
-Choose a Windows x64 installer or portable package from [Download](#download).
+Download the macOS DMG or ZIP from [Download](#download).
 
-See the [distribution, backup, and recovery guide](docs/桌面分发与备份恢复使用说明.md) for first launch, updates, and moving to another computer. Packages are designed to include the required Python runtime; end users do not need to deploy a Python web service. Configure Ollama or external services only when needed.
+See the [distribution, backup, and recovery guide](docs/桌面分发与备份恢复使用说明.md) for first launch, updates, and moving to another computer. The macOS package uses the system Python 3 for the document processing Worker (no separate Python deployment required). Offline PDF cloud parsing requires configuration when needed. Configure Ollama or external services only when needed.
 
 ### Run from source
 
-Prepare Windows x64, Git, Node.js, and pnpm. The lockfile uses v9; use pnpm 9 or later. Node.js 22 or 24 is suggested. Visual Studio C++ Build Tools may be needed when native prebuilt dependencies are unavailable.
+Prepare macOS (Apple Silicon), Git, Node.js, and pnpm (use pnpm 9 or later).
 
-```powershell
-git clone https://github.com/Elevenoven/Trellora-plus.git
-cd Trellora-plus
+```bash
+git clone https://gitee.com/GeminiMortal/trellora.git
+cd trellora
 pnpm install
-pnpm run rebuild:native
 pnpm dev
 ```
 
 `pnpm dev` starts Vite and Electron together. A browser-only page does not provide desktop filesystem, SQLite, Worker, or IPC capabilities.
 
-For pipeline development and tests, prepare Python separately:
+For pipeline development and tests, prepare Python (jieba installs to `pipeline-python/.deps`, the Worker automatically adds it to the search path):
 
-```powershell
-python -m venv pipeline-python\.venv
-.\pipeline-python\.venv\Scripts\python.exe -m pip install -r pipeline-python\requirements.txt
-.\pipeline-python\.venv\Scripts\python.exe -m unittest discover -s pipeline-python\tests -v
+```bash
+python3 -m pip install --target pipeline-python/.deps jieba==0.42.1
+python3 -m unittest discover -s pipeline-python/tests -v
 ```
 
-The Worker prefers this virtual environment and communicates over NDJSON stdin/stdout. It does not start FastAPI or listen on a local HTTP port.
+The Worker prefers `pipeline-python/.venv/bin/python` (if created), otherwise falls back to the system `python3`, communicating over NDJSON stdin/stdout. It does not start FastAPI or listen on a local HTTP port.
 
 ## Models and external services
 
@@ -302,7 +314,7 @@ Relocation blocks other operations while progressing; interrupted jobs can resum
 
 ## Development and validation
 
-```powershell
+```bash
 # Types and code quality
 pnpm exec tsc -b
 pnpm lint
@@ -315,17 +327,15 @@ pnpm run verify:pipeline-worker
 pnpm run verify:wiki-workspace
 ```
 
-Packaging needs release Worker dependencies in `.deps`, separately from the development `.venv`:
+macOS packaging needs release Worker dependencies in `.deps`, separately from the development `.venv`:
 
-```powershell
-python -m pip install -r pipeline-python\requirements.txt --target pipeline-python\.deps
-pnpm build
+```bash
+python3 -m pip install -r pipeline-python/requirements.txt --target pipeline-python/.deps
+pnpm run build:mac
 pnpm run release:manifest
 ```
 
-The runtime builder prefers CPython through Windows `py -3`; set `MENGHAN_PIPELINE_PYTHON` to a standalone CPython x64 `python.exe` when necessary. See [development and packaging](docs/architecture.en.md#development-build-and-validation) for ABI details and validation layers.
-
-Versions come from `package.json.version`. Output names are `trellora/Trellora-<version>-portable-x64.exe` and `trellora/Trellora-<version>-setup-x64.exe`. The release manifest records hashes, sizes, runtime information, and signing status. Type checking and builds do not replace real-model, document-parsing, Windows association, or clean-machine acceptance.
+The builder locates the interpreter through `python3`; set `MENGHAN_PIPELINE_PYTHON` to a specific Python 3 when necessary. Versions come from `package.json.version`. Output names are `trellora/Trellora-<version>-arm64.dmg` and `trellora/Trellora-<version>-arm64-mac.zip`. Packaging uses the `afterPack` hook for ad-hoc re-signing (avoids Gatekeeper "damaged" when no developer certificate is configured). Use `ELECTRON_MIRROR` when direct GitHub access is unreliable. The original Windows packaging workflow is preserved in `pnpm run build` (requires a Windows environment).
 
 ## Documentation and participation
 
@@ -338,6 +348,6 @@ Versions come from `package.json.version`. Output names are `trellora/Trellora-<
 | [Desktop acceptance](docs/verification/desktop-distribution-acceptance.md) | Verified behavior and remaining release gates |
 | [Showcase assets](docs/assets/README.md) | Screenshot provenance and presentation references |
 
-Report issues through [GitHub Issues](https://github.com/Elevenoven/Trellora-plus/issues), including version, UI language, reproduction steps, and relevant diagnostics without keys or private documents. Read [AGENTS.md](AGENTS.md) before contributing changes, particularly process responsibilities, original-content protection, and phased contracts.
+Report issues through [Gitee Issues](https://gitee.com/GeminiMortal/trellora/issues), including version, UI language, reproduction steps, and relevant diagnostics without keys or private documents. Read [AGENTS.md](AGENTS.md) before contributing changes, particularly process responsibilities, original-content protection, and phased contracts.
 
 The repository currently has no `LICENSE` file and has not declared an open-source license. Licensing and released versions follow future repository files and Releases.
