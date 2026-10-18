@@ -1,11 +1,19 @@
-import { isRestorePaused } from '../backup/restorePause';
+/**
+ * Pipeline orchestrator: the top-level task scheduler that drives every document
+ * through parse→lines→signals→ambiguity→tree→chunks→keywords→vectors→entities,
+ * plus debounced library-level graph rebuilds and async vector sync.
+ * 流水线编排器：顶层任务调度器，驱动每份文档经过 parse→lines→signals→ambiguity→tree→
+ * chunks→keywords→vectors→entities 全流程，并管理防抖的库级图重建与异步向量同步。
+ */
+
+import { isRestorePaused } from '../backup/restorePause.ts';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { MaterialsDocument } from '../materialsLibrary';
-import { findMaterialsDocument, listMaterialsDocuments, markMaterialsDocumentVectorState } from '../materialsLibrary';
-import type { AiProviderConfig } from '../knowledge/aiTypes';
-import { resolveParsingRoute } from './routes';
+import type { MaterialsDocument } from '../library/materialsLibrary.ts';
+import { findMaterialsDocument, listMaterialsDocuments, markMaterialsDocumentVectorState } from '../library/materialsLibrary.ts';
+import type { AiProviderConfig } from '../knowledge/ai/aiTypes.ts';
+import { resolveParsingRoute } from './routes.ts';
 import {
   cleanupStageTempDirectory,
   commitAmbiguityStage,
@@ -35,36 +43,36 @@ import {
   removePipelineArtifacts,
   signalsStageKey,
   treeStageKey,
-} from './artifactStore';
-import { runAmbiguityStage } from './ambiguityStage';
-import { ambiguityConfigHash, DEFAULT_PIPELINE_AMBIGUITY_CONFIG } from './ambiguityConfig';
-import { DEFAULT_PIPELINE_STRUCTURE_CONFIG, structureConfigHash } from './structureConfig';
-import { chunkingConfigHash, pipelineChunkingV2Enabled, readLibraryChunkingConfig } from './chunkingConfig';
-import { graphEnhancementConfigHash, readLibraryGraphEnhancementConfig } from './graphEnhancementConfig';
-import { commitLibraryGraph, computeLibraryGraphKey, createLibraryGraphStagingDirectory, DEFAULT_LIBRARY_LEIDEN_CONFIG, libraryGraphDirectory, libraryGraphRoot, readLibraryGraphReport } from './libraryGraphStore';
-import { isGraphProjectionCurrent, readGraphCommunities, readGraphEntityDescriptions, readGraphProjectionStatus, replaceGraphProjection, updateGraphCommunitySummaries } from './graphProjection';
-import { computeCommunitySummaryKey, generateCommunitySummaries, inheritReusableSummaries, isCommunitySummaryCurrent, readCommunitySummaryRecords, type CommunitySummaryRecord } from './communitySummaries';
-import { buildGraphVectorIndex, computeGraphVectorKey, isGraphVectorIndexCurrent, buildGraphEntityVectorText, queryGraphEntityVectorNeighbors } from './graphVectorIndex';
+} from './artifactStore.ts';
+import { runAmbiguityStage } from './ambiguityStage.ts';
+import { ambiguityConfigHash, DEFAULT_PIPELINE_AMBIGUITY_CONFIG } from './ambiguityConfig.ts';
+import { DEFAULT_PIPELINE_STRUCTURE_CONFIG, structureConfigHash } from './structureConfig.ts';
+import { chunkingConfigHash, pipelineChunkingV2Enabled, readLibraryChunkingConfig } from './chunkingConfig.ts';
+import { graphEnhancementConfigHash, readLibraryGraphEnhancementConfig } from './graphEnhancementConfig.ts';
+import { commitLibraryGraph, computeLibraryGraphKey, createLibraryGraphStagingDirectory, DEFAULT_LIBRARY_LEIDEN_CONFIG, libraryGraphDirectory, libraryGraphRoot, readLibraryGraphReport } from './libraryGraphStore.ts';
+import { isGraphProjectionCurrent, readGraphCommunities, readGraphEntityDescriptions, readGraphProjectionStatus, replaceGraphProjection, updateGraphCommunitySummaries } from './graphProjection.ts';
+import { computeCommunitySummaryKey, generateCommunitySummaries, inheritReusableSummaries, isCommunitySummaryCurrent, readCommunitySummaryRecords, type CommunitySummaryRecord } from './communitySummaries.ts';
+import { buildGraphVectorIndex, computeGraphVectorKey, isGraphVectorIndexCurrent, buildGraphEntityVectorText, queryGraphEntityVectorNeighbors } from './graphVectorIndex.ts';
 import {
   ALIAS_ARBITRATION_CACHE_FILE_NAME, ARBITRATION_MAX_CANDIDATES,
   applyAliasMapToEntitiesDirs, appendAliasArbitrationCache, arbitrateAliasGroups,
   filterAliasCandidates, loadEntitiesFromArtifactDirs, readAliasArbitrationCache, writeAliasArtifacts,
   type AliasArbitrationGroup,
-} from './aliasArbitration';
-import { keywordStageConfigHash, readLibraryKeywordStageResources, type KeywordStageResources } from './keywordConfig';
-import { importKeywordsStage, isKeywordIndexCurrent, readFtsIndexProjectionSnapshot, removeKeywordIndexEntries } from './keywordIndex';
-import { runMineruPdfParse } from './mineruClient';
-import { CloudAuthorization, cloudAuthorizationRequired } from './cloudAuthorization';
-import { runMammothDocxParse } from './mammothStage';
-import { PythonWorkerClient, WorkerClientError } from './pythonWorkerClient';
-import { PipelineLlmCoordinator, type PipelineLlmAvailability, type PipelineLlmRequest } from './pipelineLlmCoordinator';
-import { runDirectTextParse } from './textStage';
-import { createParseImageSink, planDirectMarkdownImages } from './parseImages';
-import { isPipelineStageError, PipelineStageError } from './stageErrors';
-import { readMaterialEmbeddingProfile } from './materialEmbeddingProfile';
-import { readMaterialVectorProjectionSnapshot, synchronizeMaterialVectors, type MaterialEmbeddingAdapter } from './materialVectorCoordinator';
-import { MaterialEmbeddingProfileError, type MaterialEmbeddingProfile } from './materialEmbeddingTypes';
-import type { AmbiguityModelClient, LibraryChunkingConfig, LibraryGraphEnhancementConfig, MineruRuntimeConfig, PipelineAmbiguityConfig, PipelineDocumentStatus, PipelineError, PipelineFtsIndexStatus, PipelineProgressEvent, PipelineStageId, PipelineStageManifest, PipelineStructureConfig, PipelineVectorReport } from './types';
+} from './aliasArbitration.ts';
+import { keywordStageConfigHash, readLibraryKeywordStageResources, type KeywordStageResources } from './keywordConfig.ts';
+import { importKeywordsStage, isKeywordIndexCurrent, readFtsIndexProjectionSnapshot, removeKeywordIndexEntries } from './keywordIndex.ts';
+import { runMineruPdfParse } from './mineruClient.ts';
+import { CloudAuthorization, cloudAuthorizationRequired } from './cloudAuthorization.ts';
+import { runMammothDocxParse } from './mammothStage.ts';
+import { PythonWorkerClient, WorkerClientError } from './pythonWorkerClient.ts';
+import { PipelineLlmCoordinator, type PipelineLlmAvailability, type PipelineLlmRequest } from './pipelineLlmCoordinator.ts';
+import { runDirectTextParse } from './textStage.ts';
+import { createParseImageSink, planDirectMarkdownImages } from './parseImages.ts';
+import { isPipelineStageError, PipelineStageError } from './stageErrors.ts';
+import { readMaterialEmbeddingProfile } from './materialEmbeddingProfile.ts';
+import { readMaterialVectorProjectionSnapshot, synchronizeMaterialVectors, type MaterialEmbeddingAdapter } from './materialVectorCoordinator.ts';
+import { MaterialEmbeddingProfileError, type MaterialEmbeddingProfile } from './materialEmbeddingTypes.ts';
+import type { AmbiguityModelClient, LibraryChunkingConfig, LibraryGraphEnhancementConfig, MineruRuntimeConfig, PipelineAmbiguityConfig, PipelineDocumentStatus, PipelineError, PipelineFtsIndexStatus, PipelineProgressEvent, PipelineStageId, PipelineStageManifest, PipelineStructureConfig, PipelineVectorReport } from './types.ts';
 
 const stageOrder: readonly PipelineStageId[] = ['parse', 'lines', 'signals', 'ambiguity', 'tree', 'chunks', 'keywords', 'vectors', 'entities'];
 
@@ -72,18 +80,34 @@ const GRAPH_REBUILD_DEBOUNCE_MS = 60_000;
 const GRAPH_REBUILD_STARTUP_DELAY_MS = 5_000;
 const GRAPH_VECTOR_EMBED_TIMEOUT_MS = 60_000;
 
+/** Freshness state of a library-level graph projection / 库级图投影的新鲜度状态 */
 export type LibraryGraphState = 'disabled' | 'missing' | 'building' | 'current' | 'stale' | 'failed';
 
+/**
+ * Status snapshot of the library-level graph, displayed in the renderer.
+ * 库级图谱状态快照，供渲染进程展示。
+ */
 export interface LibraryGraphStatus {
+  /** Current freshness state / 当前新鲜度状态 */
   state: LibraryGraphState;
+  /** Graph key if a projection exists / 存在投影时的图谱键 */
   graphKey?: string;
+  /** Engine that produced the graph / 产出图谱的引擎 */
   engine?: string;
+  /** Aggregate counters / 聚合计数 */
   counts?: { nodes: number; edges: number; communities: number; levels: number };
+  /** When the projection was imported / 投影导入时间 */
   importedAt?: string;
+  /** Last error if any / 如有则为最后一次错误 */
   error?: PipelineError;
 }
 
+/**
+ * Result returned by a library graph rebuild, indicating whether the output was cached.
+ * 库级图重建的结果，指示产出是否为缓存命中。
+ */
 export interface LibraryGraphRebuildResult extends LibraryGraphStatus {
+  /** True when an existing graph projection was reused / 重用了已有图投影时为 true */
   cached: boolean;
 }
 
@@ -102,25 +126,53 @@ interface ActiveJob extends QueuedJob {
   cancelRequested: boolean;
 }
 
+/**
+ * Callbacks and configuration injected into the orchestrator.
+ * 注入到编排器的回调与配置。
+ */
 export interface PipelineOrchestratorOptions {
+  /** Status push callback / 状态推送回调 */
   onStatus?: (status: PipelineDocumentStatus) => void;
+  /** Progress event callback / 进度事件回调 */
   onProgress?: (event: PipelineProgressEvent) => void;
+  /** Log callback / 日志回调 */
   onLog?: (message: string) => void;
+  /** Provides MinerU credentials and consent state / 提供 MinerU 凭据与同意状态 */
   getMineruConfig?: () => MineruRuntimeConfig;
+  /** Returns the ambiguity stage config for a library / 返回资料库的歧义阶段配置 */
   getAmbiguityConfig?: () => PipelineAmbiguityConfig;
+  /** Returns the ambiguity LLM client for a library / 返回资料库的歧义 LLM 客户端 */
   getAmbiguityModel?: (libraryPath: string) => AmbiguityModelClient;
-  /** 资料库级语言模型解析（绑定优先、全局回退）；用于歧义消解、智能切块与图谱增强的 LLM 调用与缓存指纹。 */
+  /**
+   * Library-level LLM config (bound profile first, global fallback); used by
+   * ambiguity disambiguation, LLM chunking and graph enhancement for LLM calls and cache fingerprints.
+   * 资料库级语言模型解析（绑定优先、全局回退）；用于歧义消解、智能切块与图谱增强的 LLM 调用与缓存指纹。
+   */
   getPipelineLlmConfig?: (libraryPath: string) => AiProviderConfig;
+  /** Returns the structure config for a library / 返回资料库的结构配置 */
   getStructureConfig?: () => PipelineStructureConfig;
+  /** Returns the chunking config for a library / 返回资料库的切块配置 */
   getChunkingConfig?: (libraryPath: string) => LibraryChunkingConfig;
+  /** Returns the graph enhancement config for a library / 返回资料库的图增强配置 */
   getGraphEnhancementConfig?: (libraryPath: string) => LibraryGraphEnhancementConfig;
+  /** Shared LLM coordinator (defaults to a new one) / 共享 LLM 协调器（缺省新建） */
   pipelineLlmCoordinator?: PipelineLlmCoordinator;
+  /** Returns keyword stage resources for a library / 返回资料库的关键词阶段资源 */
   getKeywordResources?: (libraryPath: string) => KeywordStageResources;
+  /** Returns an embedding adapter for a profile / 为配置返回嵌入适配器 */
   getMaterialEmbeddingAdapter?: (input: { libraryPath: string; profile: MaterialEmbeddingProfile }) => MaterialEmbeddingAdapter | undefined | Promise<MaterialEmbeddingAdapter | undefined>;
-  /** 库级图谱投影重建完成后通知渲染进程刷新只读视图。 */
+  /**
+   * Notifies the renderer to refresh its read-only graph view after a rebuild.
+   * 库级图谱投影重建完成后通知渲染进程刷新只读视图。
+   */
   onLibraryGraphUpdated?: (libraryPath: string) => void;
 }
 
+/**
+ * Orchestrates document pipeline runs, manages a single-worker process and
+ * schedules debounced library-level graph rebuilds.
+ * 编排文档流水线运行，管理单个 Worker 进程并调度防抖的库级图重建。
+ */
 export class PipelineOrchestrator {
   private readonly cloudAuthorization = new CloudAuthorization();
   private readonly activeJobs = new Map<string, ActiveJob>();
@@ -138,19 +190,28 @@ export class PipelineOrchestrator {
   private draining = false;
   private maintenancePaused = false;
 
+  /** Whether any pipeline job, graph rebuild or async vector sync is active / 是否有任何流水线任务、图重建或异步向量同步正在运行 */
   get maintenanceBusy(): boolean { return this.activeJobs.size > 0 || this.graphRebuildActive.size > 0 || this.activeAsyncVectorSyncs.size > 0; }
-  /** 索引代际切换前必须等待本库的流水线、图谱写入和异步向量同步结束。 */
+  /**
+   * 索引代际切换前必须等待本库的流水线、图谱写入和异步向量同步结束。
+   * Index-generation switching must wait until this library's pipeline, graph writes and async vector sync finish.
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   * @returns True when the library is busy / 资料库正忙时返回 true
+   */
   isLibraryBusy(libraryPath: string): boolean {
     const target = path.resolve(libraryPath);
     return [...this.activeJobs.values()].some(job => path.resolve(job.libraryPath) === target)
       || this.graphRebuildActive.has(target)
       || [...this.activeAsyncVectorSyncs.keys()].some(key => key.startsWith(`${target}:`));
   }
+  /** Pauses all graph rebuild scheduling and queue draining for maintenance operations. / 暂停所有图重建调度与队列排空，用于维护操作。 */
   pauseForMaintenance(): void {
     this.maintenancePaused = true;
     for (const [key, timer] of this.graphRebuildTimers) { clearTimeout(timer); this.graphRebuildDirty.add(key); }
     this.graphRebuildTimers.clear();
   }
+  /** Resumes graph rebuild scheduling and queue draining after maintenance. / 维护操作后恢复图重建调度与队列排空。 */
   resumeAfterMaintenance(): void {
     this.maintenancePaused = false;
     for (const key of this.graphRebuildDirty) this.scheduleLibraryGraphRebuild(key);
@@ -158,7 +219,13 @@ export class PipelineOrchestrator {
     void this.drainQueue();
   }
 
-  /** Rebind queued work while maintenance owns all writers; the old workspace becomes a read-only copy. */
+  /**
+   * Rebind queued work while maintenance owns all writers; the old workspace becomes a read-only copy.
+   * 维护操作独占写者时重新绑定队列中的任务；旧工作区变为只读副本。
+   *
+   * @param source - Source workspace path / 源工作区路径
+   * @param target - Target workspace path / 目标工作区路径
+   */
   rebindWorkspace(source: string, target: string): void {
     if (!this.maintenancePaused || this.maintenanceBusy) throw new Error('请先暂停资料任务后再迁移工作区。');
     const map = (file: string) => {
@@ -171,6 +238,12 @@ export class PipelineOrchestrator {
     for (const library of dirty) this.graphRebuildDirty.add(library);
   }
 
+  /**
+   * Creates the orchestrator and its worker client.
+   * 创建编排器及其 Worker 客户端。
+   *
+   * @param options - Injected callbacks and config / 注入的回调与配置
+   */
   constructor(options: PipelineOrchestratorOptions = {}) {
     this.options = options;
     this.pipelineLlmCoordinator = options.pipelineLlmCoordinator ?? new PipelineLlmCoordinator();
@@ -184,6 +257,12 @@ export class PipelineOrchestrator {
     });
   }
 
+  /**
+   * Recovers orphaned RUNNING stages on app restart.
+   * 应用重启时回收孤立的 RUNNING 阶段。
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   */
   recoverLibrary(libraryPath: string): void {
     recoverRunningStages(libraryPath);
     this.recoverLibraryGraphProjection(libraryPath);
@@ -197,6 +276,12 @@ export class PipelineOrchestrator {
     }
   }
 
+  /**
+   * Enqueues all pending documents in a library.
+   * 将资料库中所有待处理文档加入队列。
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   */
   async enqueuePending(libraryPath: string): Promise<void> {
     if (isRestorePaused(libraryPath)) return;
     const configReady = this.hasMineruConfig();
@@ -218,19 +303,47 @@ export class PipelineOrchestrator {
     }
   }
 
+  /**
+   * Enqueues pending documents across multiple libraries.
+   * 将多个资料库的待处理文档加入队列。
+   *
+   * @param libraryPaths - Library root paths / 资料库根路径列表
+   */
   async enqueuePendingAll(libraryPaths: string[]): Promise<void> {
     for (const libraryPath of libraryPaths) await this.enqueuePending(libraryPath);
   }
 
+  /**
+   * Returns the pipeline status for every document in a library.
+   * 返回资料库中每份文档的流水线状态。
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   * @returns Document statuses / 文档状态列表
+   */
   getStatuses(libraryPath: string): PipelineDocumentStatus[] {
     return listMaterialsDocuments(libraryPath).map((document) => this.getStatus(libraryPath, document));
   }
 
-  /** Reuse the exact active configuration fingerprint for manifest consumers. */
+  /**
+   * Reuse the exact active configuration fingerprint for manifest consumers.
+   * 以当前活跃配置指纹供清单消费者复用。
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   * @param document - Document metadata / 文档元数据
+   * @returns The layout for this document / 本文档的布局
+   */
   getCurrentLayout(libraryPath: string, document: MaterialsDocument): ReturnType<typeof prepareParseLayout> {
     return this.createLayout(libraryPath, document, this.getMineruConfig().endpoint);
   }
 
+  /**
+   * Builds the full pipeline status for one document by reading its manifest and FTS projection.
+   * 通过读取清单与 FTS 投影，构建单份文档的完整流水线状态。
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   * @param document - Document metadata / 文档元数据
+   * @returns Document status / 文档状态
+   */
   getStatus(libraryPath: string, document: MaterialsDocument): PipelineDocumentStatus {
     const config = this.getMineruConfig();
     const layout = this.createLayout(libraryPath, document, config.endpoint);
@@ -270,10 +383,26 @@ export class PipelineOrchestrator {
     };
   }
 
+  /**
+   * Enqueues a single document for processing (called from IPC).
+   * 将单份文档加入处理队列（从 IPC 调用）。
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   * @param documentId - Document id / 文档 ID
+   * @returns Document status after enqueueing / 加入队列后的文档状态
+   */
   async startParse(libraryPath: string, documentId: string): Promise<PipelineDocumentStatus> {
     return this.enqueueParse(libraryPath, documentId);
   }
 
+  /**
+   * Tokenizes a search query using the library's Jieba dictionary via the Worker.
+   * 通过 Worker 使用资料库的 Jieba 词典对检索查询分词。
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   * @param query - Query text / 查询文本
+   * @returns Tokenized tokens / 分词后的词元列表
+   */
   async tokenizeMaterialSearchQuery(libraryPath: string, query: string): Promise<string[]> {
     const resources = this.getKeywordResources(libraryPath);
     if (resources.validationError) {
@@ -291,7 +420,14 @@ export class PipelineOrchestrator {
     return result.tokens;
   }
 
-  /** 停止文档任务后再删除其全部缓存，避免取消中的任务重新提交阶段产物。 */
+  /**
+   * 停止文档任务后再删除其全部缓存，避免取消中的任务重新提交阶段产物。
+   * Stops the document task first, then removes all its caches, preventing cancelled
+   * tasks from recommitting stage artifacts.
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   * @param documentId - Document id to remove / 要移除的文档 ID
+   */
   async removeDocument(libraryPath: string, documentId: string): Promise<void> {
     const key = jobKey(libraryPath, documentId);
     this.removingKeys.add(key);
@@ -324,6 +460,14 @@ export class PipelineOrchestrator {
     }
   }
 
+  /**
+   * Cancels a running or queued parse job for one document.
+   * 取消单份文档的运行中或已排队的解析任务。
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   * @param documentId - Document id / 文档 ID
+   * @returns Document status after cancellation / 取消后的文档状态
+   */
   async cancelParse(libraryPath: string, documentId: string): Promise<PipelineDocumentStatus> {
     const key = jobKey(libraryPath, documentId);
     const active = this.activeJobs.get(key);
@@ -355,6 +499,10 @@ export class PipelineOrchestrator {
     return this.getStatus(libraryPath, document);
   }
 
+  /**
+   * Shuts down the orchestrator: cancels all work, stops the worker and waits for completion.
+   * 关闭编排器：取消所有工作、停止 Worker 并等待完成。
+   */
   async shutdown(): Promise<void> {
     this.maintenancePaused = true;
     for (const active of this.activeJobs.values()) active.abortController.abort();
@@ -368,7 +516,13 @@ export class PipelineOrchestrator {
     this.activeAsyncVectorSyncs.clear();
   }
 
-  /** 防抖触发库级图谱重建（默认 60 秒）；在 entities 提交、文档删除或启动续跑后调用。 */
+  /**
+   * 防抖触发库级图谱重建（默认 60 秒）；在 entities 提交、文档删除或启动续跑后调用。
+   * Debounces library graph rebuild (default 60 s); called after entities commits, document removal or restart.
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   * @param delayMs - Debounce delay in ms / 防抖延迟（毫秒）
+   */
   scheduleLibraryGraphRebuild(libraryPath: string, delayMs: number = GRAPH_REBUILD_DEBOUNCE_MS): void {
     if (isRestorePaused(libraryPath)) return;
     const key = path.resolve(libraryPath);
@@ -383,12 +537,24 @@ export class PipelineOrchestrator {
     }, delayMs));
   }
 
-  /** 手动重建库级图谱；并发调用合并为同一任务，后续变更重新排队。 */
+  /**
+   * 手动重建库级图谱；并发调用合并为同一任务，后续变更重新排队。
+   * Manually rebuilds the library graph; concurrent calls coalesce into one task; later changes re-queue.
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   * @returns Rebuild result / 重建结果
+   */
   rebuildLibraryGraph(libraryPath: string): Promise<LibraryGraphRebuildResult> {
     return this.runLibraryGraphRebuild(path.resolve(libraryPath));
   }
 
-  /** 库级图谱状态（供 UI 展示）：以真实投影与已提交产物为准，不推断。 */
+  /**
+   * 库级图谱状态（供 UI 展示）：以真实投影与已提交产物为准，不推断。
+   * Library graph status (for UI display): based on actual projection and committed artifacts only, never inferred.
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   * @returns Graph status / 图谱状态
+   */
   getLibraryGraphStatus(libraryPath: string): LibraryGraphStatus {
     const resolved = path.resolve(libraryPath);
     const config = this.getGraphEnhancementConfig(resolved);
@@ -460,6 +626,7 @@ export class PipelineOrchestrator {
         },
       });
       // commit 会清理旧图目录：先把旧社区摘要读入内存，供重建时增量继承（成员未变的社区零调用复用）。
+      // Commit clears the old graph directory: read old summaries into memory first, for incremental inheritance during rebuild (communities with unchanged members reuse with zero LLM calls).
       const previousSummaries = readPreviousGraphSummaryRecords(libraryPath);
       const committedDirectory = commitLibraryGraph(libraryPath, graphKey, stagingDirectory);
       const projection = replaceGraphProjection({ libraryPath, graphKey, graphDirectory: committedDirectory });
@@ -487,6 +654,9 @@ export class PipelineOrchestrator {
   /**
    * 社区摘要（方案 §3.3）：图装配成功后 best-effort 生成或应用摘要并写回投影；
    * 失败仅记日志，不让图谱重建失败。模型/提示词/预算变化经 summaryKey 只失效摘要。
+   * Community summaries (plan §3.3): best-effort generates or applies summaries and writes them
+   * back to the projection after graph assembly; failures only log without failing the rebuild.
+   * Model/prompt/budget changes only invalidate summaries via summaryKey.
    */
   private async ensureLibraryGraphSummaries(libraryPath: string, graphKey: string, graphDirectory: string, previousSummaries?: CommunitySummaryRecord[]): Promise<void> {
     try {
@@ -510,6 +680,7 @@ export class PipelineOrchestrator {
         return;
       }
       // 增量继承（方案 §4.7）：新社区成员指纹命中旧记录 → 沿用，只重算受影响社区。
+      // Incremental inheritance (plan §4.7): new community members whose fingerprint matches old records are reused; only affected communities are recomputed.
       let preloaded: CommunitySummaryRecord[] | undefined;
       if (previousSummaries && previousSummaries.length > 0) {
         const newCommunities = readGraphCommunities(libraryPath) ?? [];
@@ -555,6 +726,9 @@ export class PipelineOrchestrator {
   /**
    * 实体/社区向量索引（方案 §4.5）：摘要写回后 best-effort 建立；图重建整体失效，
    * embedding 模型指纹变化只失效向量。失败仅记日志，不让图谱重建失败。
+   * Entity/community vector index (plan §4.5): best-effort built after summaries are written back;
+   * graph rebuild invalidates all; embedding model fingerprint changes only invalidate vectors.
+   * Failures only log without failing the rebuild.
    */
   private async ensureLibraryGraphVectors(libraryPath: string, graphKey: string): Promise<void> {
     try {
@@ -597,6 +771,11 @@ export class PipelineOrchestrator {
    * 别名裁决（方案 §4.6 先召回后裁决）：图装配前把新实体与既有向量索引做余弦召回，
    * LLM 严格契约仲裁后在 Electron 侧预映射（Python 侧零改动）。失败仅记日志回退原始产物；
    * 无向量索引/未锁定模型/无候选时静默跳过，不影响存量库行为。
+   * Alias arbitration (plan §4.6 recall-then-arbitrate): before graph assembly, performs cosine
+   * recall of new entities against the existing vector index, then applies LLM strict-contract
+   * arbitration with Electron-side pre-mapping (zero changes on the Python side). Failures only
+   * log and fall back to original artifacts; silently skipped when no vector index / profile is
+   * locked / no candidates exist, without affecting existing library behavior.
    */
   private async prepareLibraryAliasArbitration(
     libraryPath: string,
@@ -634,6 +813,7 @@ export class PipelineOrchestrator {
       const fingerprint = this.pipelineLlmCoordinator.fingerprint(providerConfig);
 
       // 召回：新实体批量 embedding 后对既有实体向量索引做 KNN，类型相容 + 阈值过滤。
+      // Recall: batch-embeds new entities then queries the existing entity vector index with KNN, filtering by type compatibility + threshold.
       const entities = loadEntitiesFromArtifactDirs(entries);
       if (entities.size === 0) return { entitiesDirs: defaultDirs };
       const keys = [...entities.keys()];
@@ -664,6 +844,7 @@ export class PipelineOrchestrator {
       }
 
       // 裁决：缓存命中的候选组不重复调用；强契约输出校验失败该组记痕跳过。
+      // Arbitration: cached candidate groups are not re-called; groups whose strict-contract output validation fails are stamped and skipped.
       const cachePath = path.join(libraryGraphRoot(libraryPath), ALIAS_ARBITRATION_CACHE_FILE_NAME);
       const { result, newRecords } = await arbitrateAliasGroups({
         groups,
@@ -709,7 +890,10 @@ export class PipelineOrchestrator {
     }
   }
 
-  /** 枚举各文档在当前配置指纹下已提交成功的 entities 产物目录与 stageKey。 */
+  /**
+   * Enumerates committed entities artifact directories and stageKeys under the current config fingerprint.
+   * 枚举各文档在当前配置指纹下已提交成功的 entities 产物目录与 stageKey。
+   */
   private collectCommittedEntities(libraryPath: string): Array<{ documentId: string; stageKey: string; directory: string }> {
     const entries: Array<{ documentId: string; stageKey: string; directory: string }> = [];
     for (const document of listMaterialsDocuments(libraryPath)) {
@@ -1322,6 +1506,7 @@ export class PipelineOrchestrator {
     const graphConfig = this.getGraphEnhancementConfig(layout.libraryPath);
     if (!graphConfig.enabled) {
       // 图谱增强是 opt-in 阶段：关闭时不阻塞流水线，只留下可展示的状态。
+      // Graph enhancement is an opt-in stage: when disabled it does not block the pipeline, only leaves a displayable state.
       markStageState(layout, 'entities', 'SKIPPED', undefined, active.jobId);
       this.options.onStatus?.(this.getStatus(layout.libraryPath, layout.document));
       return;
@@ -1449,6 +1634,7 @@ export class PipelineOrchestrator {
       return this.options.getGraphEnhancementConfig?.(libraryPath) ?? readLibraryGraphEnhancementConfig(libraryPath);
     } catch {
       // 配置损坏时退回默认值（默认关闭），不能因此阻塞其他阶段。
+      // When config is corrupted, fall back to defaults (disabled); must not block other stages.
       return this.options.getGraphEnhancementConfig?.(libraryPath) ?? { schemaVersion: 1, enabled: false, maxChars: 6000, maxEntitiesPerChunk: 20, maxRelationsPerChunk: 30, promptVersion: 'graph-entities-v3', llmTimeoutMs: 60_000, llmMaxOutputTokens: 4_000, leidenConfig: { ...DEFAULT_LIBRARY_LEIDEN_CONFIG } };
     }
   }
@@ -1657,7 +1843,11 @@ function hasLockedMaterialEmbeddingProfile(libraryPath: string): boolean {
   try { return readMaterialEmbeddingProfile(libraryPath).state === 'LOCKED'; } catch { return false; }
 }
 
-/** commit 前读取当前投影对应图目录的社区摘要，供重建时增量继承；任何缺失静默返回空。 */
+/**
+ * commit 前读取当前投影对应图目录的社区摘要，供重建时增量继承；任何缺失静默返回空。
+ * Reads community summary records from the current projection's graph directory before commit,
+ * for incremental inheritance during rebuild; returns empty silently on any missing state.
+ */
 function readPreviousGraphSummaryRecords(libraryPath: string): CommunitySummaryRecord[] {
   try {
     const status = readGraphProjectionStatus(libraryPath);

@@ -25,7 +25,7 @@
 
 ## 整体架构与进程边界
 
-Trellora 是一个 **Windows 本地优先 Electron 桌面应用**。React 负责交互，Electron 主进程持有文件和数据库权限，计算任务分配给 Node Worker Thread 与 Python Sidecar。运行核心功能无需部署独立 Web 后端、Redis、PostgreSQL 或外部向量数据库。
+Trellora 是一个 **macOS 本地优先 Electron 桌面应用**。React 负责交互，Electron 主进程持有文件和数据库权限，计算任务分配给 Node Worker Thread 与 Python Sidecar。运行核心功能无需部署独立 Web 后端、Redis、PostgreSQL 或外部向量数据库。
 
 ```mermaid
 flowchart TB
@@ -224,7 +224,7 @@ flowchart LR
 
 ### Worker 协议与生命周期
 
-[pythonWorkerClient.ts](../electron/pipeline/pythonWorkerClient.ts) 集中启动 Python。开发环境优先 `pipeline-python/.venv/Scripts/python.exe -m pipeline_worker`；打包环境使用 `resources/pipeline-runtime/python-worker.exe -E -m pipeline_worker`。启动 `hello` 校验协议版本、引擎版本与能力。
+[pythonWorkerClient.ts](../electron/pipeline/pythonWorkerClient.ts) 集中启动 Python。开发环境优先 `pipeline-python/.venv/bin/python -m pipeline_worker`；打包环境使用 `resources/pipeline-runtime/python-worker -E -m pipeline_worker`。启动 `hello` 校验协议版本、引擎版本与能力。
 
 ```json
 {"id":"request-1","method":"hello","params":{"protocolVersion":1}}
@@ -555,15 +555,15 @@ pnpm dev
 
 ### 打包链
 
-```powershell
-python -m pip install -r pipeline-python\requirements.txt --target pipeline-python\.deps
+```bash
+python3 -m pip install -r pipeline-python/requirements.txt --target pipeline-python/.deps
 pnpm build
 pnpm run release:manifest
 ```
 
-[build-pipeline-runtime.mjs](../scripts/build-pipeline-runtime.mjs) 组装 CPython、Python 标准库、Worker、Jieba 及图谱依赖，校验握手并生成 runtime manifest；需要可用 CPython 安装而非仅靠项目 `.venv`。脚本优先 `py -3`，可用 `MENGHAN_PIPELINE_PYTHON` 指定解释器。
+[build-pipeline-runtime.mjs](../scripts/build-pipeline-runtime.mjs) 组装 CPython、Python 标准库、Worker、Jieba 及图谱依赖，校验握手并生成 runtime manifest；需要可用 CPython 安装而非仅靠项目 `.venv`。可用 `MENGHAN_PIPELINE_PYTHON` 指定解释器。
 
-electron-builder 的 `extraResources` 携带 `pipeline-runtime` 和 `builtin-skills`，原生 SQLite / sqlite-vec 与适用 Node Worker 放到 `asarUnpack`。[build-windows-packages.mjs](../scripts/build-windows-packages.mjs) 生成 portable 和 NSIS；[installer.nsh](../build/installer.nsh) 处理可选 Windows 文件打开方式。`portable.unpackDirName: true` 对应每次运行的独立解压目录。签名状态以实际清单为准。
+electron-builder 的 `extraResources` 携带 `pipeline-runtime` 和 `builtin-skills`，原生 SQLite / sqlite-vec 与适用 Node Worker 放到 `asarUnpack`。[build-mac-packages.mjs](../scripts/build/build-mac-packages.mjs) 生成 DMG 和 ZIP；Mac 使用 `icon.icns` 作为应用图标。签名状态以实际清单为准。
 
 ### 验证层次
 
@@ -571,10 +571,10 @@ electron-builder 的 `extraResources` 携带 `pipeline-runtime` 和 `builtin-ski
 | --- | --- | --- |
 | 静态检查 | `pnpm exec tsc -b`、`pnpm lint` | 类型、代码规则和基本调用合同 |
 | 聚焦模块验证 | `verify:markdown`、`verify:ai-provider`、`verify:wiki-workspace` 等 | 固定夹具下的功能与边界 |
-| Python 测试 | `.venv/Scripts/python.exe -m unittest discover -s pipeline-python/tests -v` | 结构、切块、关键词、图阶段算法与协议 |
+| Python 测试 | `.venv/bin/python -m unittest discover -s pipeline-python/tests -v` | 结构、切块、关键词、图阶段算法与协议 |
 | 实际 Electron | `verify:*electron` 系列及 `docs/verification/` | 主进程 / preload / UI、事件时序与文件交互 |
 | 真实服务 | 相关脚本 `--real` 或专属真实模型脚本 | 指定配置和范围下的实际模型 / 云服务行为 |
-| 发行包和干净 Windows | 分发及文件打开方式验收记录 | runtime 携带、原生依赖、安装 / 启动 / 移机与关联 |
+| 发行包和干净 macOS | 分发及文件打开方式验收记录 | runtime 携带、原生依赖、安装 / 启动 / 移机与关联 |
 
 本次自行拍摄的演示截图完成了当前源码的隔离 Electron 构建、本地 Markdown 流水线和八个菜单的界面拍摄，没有执行远程模型、MinerU、图谱增强或干净机器发行验收。README 另外收录了用户提供的实际使用截图，两组图片的来源分别记录在 [展示资源说明](assets/README.md)。不能把截图来源说明解释成全部功能的端到端保证。
 

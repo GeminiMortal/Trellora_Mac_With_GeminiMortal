@@ -1,8 +1,8 @@
 import { Button, Group, Modal, Paper, Select, Stack, Text } from '@mantine/core';
 import { useEffect, useState } from 'react';
-import { t, useI18n } from '../../i18n';
-import type { MemoryProposalContext, MemoryProposalReview } from '../../../electron/knowledge/memory/memoryTypes';
-import { reviewReasonLabel } from './memoryPresentation';
+import { t, useI18n } from '../../i18n/index.ts';
+import type { MemoryProposalContext, MemoryProposalReview } from '../../../electron/knowledge/memory/memoryTypes.ts';
+import { reviewReasonLabel } from './memoryPresentation.ts';
 
 /** Keep the displayed snapshots fixed until confirmation; the main process rejects changes that occur while this dialog is open. */
 export function MemoryProposalReviewDialog({ context, busy, error, onClose, onConfirm, onReject, onEdit }: {

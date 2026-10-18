@@ -3,6 +3,7 @@ import { extractMarkdownEvidenceBlocks, extractMarkdownKnowledgeFacts } from './
 import { buildCurrentNoteStructure, getMarkdownLineOffsets } from './currentNoteStructure';
 import { countNoteAnalysisCharacters } from './noteAnalysisLengthPolicy';
 import type { NoteAnalysisPreparationStats, NoteAnalysisSourceSpan } from './noteAnalysisTypes';
+import type { FileKind } from '../files/fileTypes';
 
 export const NOTE_ANALYSIS_PREPARATION_VERSION = 'markdown-clean-exact-block-v1';
 
@@ -95,7 +96,10 @@ function cleanUnit(markdown: string, source: NoteAnalysisSourceSpan): { text: st
 }
 
 /** 清洗和精确块去重只改变模型输入，原文坐标与重复出现的位置全部保存。 */
-export function prepareNoteAnalysisInput(markdown: string): NoteAnalysisPreparedDocument {
+export function prepareNoteAnalysisInput(markdown: string, fileKind?: FileKind): NoteAnalysisPreparedDocument {
+  if (fileKind === 'code') {
+    return prepareCodeAnalysisInput(markdown);
+  }
   const facts = extractMarkdownKnowledgeFacts(markdown);
   const structure = buildCurrentNoteStructure({ markdown, contentHash: facts.contentHash, headings: facts.headings });
   const offsets = structure.lineOffsets;
@@ -168,4 +172,43 @@ export function readPreparedNoteAnalysisSpans(document: NoteAnalysisPreparedDocu
 
 export function getPreparedNoteAnalysisOffsets(markdown: string): number[] {
   return getMarkdownLineOffsets(markdown);
+}
+
+/**
+ * 代码文件专用分析输入准备：将整个文件作为单个代码块，不做 Markdown 解析。
+ */
+function prepareCodeAnalysisInput(source: string): NoteAnalysisPreparedDocument {
+  const offsets = getMarkdownLineOffsets(source);
+  const unitIndex = 1;
+  const sourceSpan: NoteAnalysisSourceSpan = {
+    startOffset: 0,
+    endOffset: source.length,
+    kind: 'code',
+    unitIndex,
+    unitId: `unit-${unitIndex}`,
+    lineFrom: 1,
+    lineTo: offsets.length,
+  };
+  const unit: NoteAnalysisPreparedUnit = {
+    source: sourceSpan,
+    headingPath: [],
+    headingId: 'code-file',
+    text: source,
+    mapping: [{ cleanedFrom: 0, cleanedTo: source.length, sourceFrom: 0, sourceTo: source.length }],
+    duplicateSpans: [],
+  };
+  return {
+    version: NOTE_ANALYSIS_PREPARATION_VERSION,
+    sourceTextHash: noteAnalysisTextHash(source),
+    units: [unit],
+    excluded: [],
+    stats: {
+      sourceCharacters: countNoteAnalysisCharacters(source),
+      originalBodyCharacters: countNoteAnalysisCharacters(source),
+      cleanedBodyCharacters: countNoteAnalysisCharacters(source),
+      duplicateBlocks: 0,
+      duplicateCharacters: 0,
+      removedBlocks: 0,
+    },
+  };
 }

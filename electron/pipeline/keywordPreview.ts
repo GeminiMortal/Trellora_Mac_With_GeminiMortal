@@ -1,3 +1,11 @@
+/**
+ * Module: keywordPreview
+ * Keyword preview data reader. Reads keyword extraction results from stage
+ * artifacts and formats them for UI display with pagination.
+ * 模块：keywordPreview
+ * 关键词预览数据读取器。从阶段产物读取关键词提取结果，并格式化为分页的 UI 显示数据。
+ */
+
 import fs from 'node:fs';
 import readline from 'node:readline';
 import type {
@@ -5,9 +13,11 @@ import type {
   PipelineKeywordPreviewItem,
   PipelineKeywordPreviewOccurrence,
   PipelineKeywordPreviewRow,
-} from './types';
+} from './types.ts';
 
+// Maximum preview rows per page / 每页最大预览行数
 const MAX_PREVIEW_ROWS = 30;
+// Maximum preview offset / 最大预览偏移量
 const MAX_PREVIEW_OFFSET = 10_000_000;
 
 interface JsonRecord {
@@ -15,20 +25,33 @@ interface JsonRecord {
 }
 
 interface KeywordRecord {
+  /** Chunk ID / 切块 ID */
   chunkId: string;
+  /** Parent chunk ID (null for top-level) / 父块 ID（顶层为 null） */
   parentChunkId: string | null;
+  /** Keyword items / 关键词条目 */
   keywords: PipelineKeywordPreviewItem[];
+  /** Reason for empty keywords (if applicable) / 关键词为空的原因（如适用） */
   emptyReason: string | null;
 }
 
 interface ChunkRecord {
+  /** Chunk ID / 切块 ID */
   chunkId: string;
+  /** Parent chunk ID / 父块 ID */
   parentChunkId: string | null;
+  /** Chunk ordinal / 切块序号 */
   ordinal: number;
+  /** Chunk text / 切块文本 */
   text: string;
+  /** Source location references / 来源位置引用 */
   sourceLocations: string[];
 }
 
+/**
+ * Options for reading keyword preview data from stage artifacts.
+ * 从阶段产物读取关键词预览数据的选项。
+ */
 export interface KeywordPreviewReadOptions {
   documentId: string;
   keywordsPath: string;
@@ -37,6 +60,14 @@ export interface KeywordPreviewReadOptions {
   limit?: number;
 }
 
+/**
+ * Normalizes the preview window offset and limit, clamping to safe bounds.
+ * 归一化预览窗口的 offset 和 limit，钳制到安全范围。
+ *
+ * @param offset - Raw offset value / 原始 offset 值
+ * @param limit - Raw limit value / 原始 limit 值
+ * @returns Normalized offset and limit / 归一化后的 offset 和 limit
+ */
 export function normalizeKeywordPreviewWindow(offset: unknown, limit: unknown): { offset: number; limit: number } {
   const parsedOffset = Number(offset);
   const parsedLimit = Number(limit);
@@ -48,6 +79,13 @@ export function normalizeKeywordPreviewWindow(offset: unknown, limit: unknown): 
   };
 }
 
+/**
+ * Reads keyword preview rows from keyword and chunk JSONL artifacts.
+ * 从关键词和 chunk 的 JSONL 产物中读取关键词预览行。
+ *
+ * @param options - Read options including document ID and file paths / 读取选项，含文档 ID 和文件路径
+ * @returns Paginated keyword preview result / 分页的关键词预览结果
+ */
 export async function readKeywordPreview(options: KeywordPreviewReadOptions): Promise<PipelineKeywordPreview> {
   const window = normalizeKeywordPreviewWindow(options.offset, options.limit);
   const selected = new Map<string, KeywordRecord>();

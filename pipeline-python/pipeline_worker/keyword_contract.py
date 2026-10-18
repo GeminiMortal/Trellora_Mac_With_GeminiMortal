@@ -1,3 +1,11 @@
+"""
+Module: keyword_contract
+Data contracts for keyword extraction stage. Defines input/output formats,
+normalization rules, and validation logic.
+模块：keyword_contract
+关键词提取阶段的数据契约。定义输入/输出格式、标准化规则和验证逻辑。
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -9,14 +17,23 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 
+# Schema version for keyword contract / 关键词契约的 schema 版本
 KEYWORD_CONTRACT_SCHEMA_VERSION = 1
+# Schema version for keyword output / 关键词输出的 schema 版本
 KEYWORD_OUTPUT_SCHEMA_VERSION = 3
+# Maximum search tokens per chunk / 每块最大搜索 token 数
 MAX_SEARCH_TOKENS_PER_CHUNK = 8_192
+# Maximum characters per search token / 每个搜索 token 的最大字符数
 MAX_SEARCH_TOKEN_CHARACTERS = 128
+# Baseline keyword algorithm version / 基线关键词算法版本
 KEYWORD_BASELINE_ALGORITHM_VERSION = 'kw-baseline-1'
 
 
 class KeywordContractError(ValueError):
+    """
+    Error for keyword contract violations.
+    关键词契约违规的错误。
+    """
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
@@ -25,6 +42,10 @@ class KeywordContractError(ValueError):
 
 @dataclass(frozen=True)
 class KeywordChunkInput:
+    """
+    Input data structure for keyword extraction from a single chunk.
+    从单个切块提取关键词的输入数据结构。
+    """
     document_id: str
     chunk_id: str
     parent_chunk_id: str | None
@@ -40,7 +61,10 @@ class KeywordChunkInput:
 
 
 def normalize_term(value: str) -> str:
-    """Normalize only for comparison; offsets always refer to the original text."""
+    """
+    Normalize term for comparison only; offsets always refer to the original text.
+    仅用于比较的标准化；偏移量始终引用原始文本。
+    """
     normalized = unicodedata.normalize('NFKC', value).strip().lower()
     return re.sub(r'\s+', ' ', normalized)
 

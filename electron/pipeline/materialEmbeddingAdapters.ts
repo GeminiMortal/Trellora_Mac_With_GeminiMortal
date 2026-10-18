@@ -1,5 +1,5 @@
-import { embedOllamaBatch } from '../knowledge/ollamaClient';
-import { embedRemoteBatch } from '../knowledge/remoteModelClient';
+import { embedOllamaBatch } from '../knowledge/ai/ollamaClient.ts';
+import { embedRemoteBatch } from '../knowledge/ai/remoteModelClient.ts';
 import {
   MaterialEmbeddingProfileError,
   normalizeEndpointIdentity,
@@ -7,11 +7,15 @@ import {
   type MaterialEmbeddingCandidate,
   type MaterialEmbeddingProfile,
   type MaterialEmbeddingProbeResult,
-} from './materialEmbeddingTypes';
+} from './materialEmbeddingTypes.ts';
 
-export { embedOllamaBatch } from '../knowledge/ollamaClient';
-export { embedRemoteBatch } from '../knowledge/remoteModelClient';
+export { embedOllamaBatch } from '../knowledge/ai/ollamaClient.ts';
+export { embedRemoteBatch } from '../knowledge/ai/remoteModelClient.ts';
 
+/**
+ * Request payload for a single embedding batch call.
+ * 单次向量批处理调用的请求载荷。
+ */
 export interface EmbeddingBatchRequest {
   profile: MaterialEmbeddingCandidate | MaterialEmbeddingProfile;
   texts: string[];
@@ -19,15 +23,30 @@ export interface EmbeddingBatchRequest {
   timeoutMs: number;
 }
 
+/**
+ * Abstraction over embedding providers (Ollama, remote OpenAI-compatible).
+ * 向量嵌入提供方的抽象（Ollama、远程 OpenAI 兼容服务）。
+ */
 export interface MaterialEmbeddingAdapter {
   probe(candidate: MaterialEmbeddingCandidate, signal: AbortSignal): Promise<MaterialEmbeddingProbeResult>;
   embedBatch(request: EmbeddingBatchRequest): Promise<MaterialEmbeddingBatchResult>;
 }
 
+/**
+ * Runtime source descriptor for creating an embedding adapter.
+ * 创建嵌入适配器时使用的运行时来源描述。
+ */
 export type MaterialEmbeddingRuntimeSource =
   | { kind: 'ollama'; endpoint?: string }
   | { kind: 'remote'; endpoint: string; apiKey: string };
 
+/**
+ * Creates an embedding adapter from the given runtime source, with endpoint validation.
+ * 根据给定的运行时来源创建嵌入适配器，并进行端点校验。
+ *
+ * @param source - Embedding runtime source descriptor / 嵌入运行时来源描述
+ * @returns MaterialEmbeddingAdapter instance / MaterialEmbeddingAdapter 实例
+ */
 export function createMaterialEmbeddingAdapter(source: MaterialEmbeddingRuntimeSource): MaterialEmbeddingAdapter {
   const adapter = createSourceAdapter(source);
   const assertSource = (profile: MaterialEmbeddingCandidate | MaterialEmbeddingProfile) => {

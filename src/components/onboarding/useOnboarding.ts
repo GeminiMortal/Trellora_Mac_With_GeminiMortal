@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { OnboardingAction, OnboardingState, OnboardingStep } from '../../../shared/onboarding';
-import { t } from '../../i18n';
+import type { OnboardingAction, OnboardingState, OnboardingStep } from '../../../shared/onboarding.ts';
+import { t } from '../../i18n/index.ts';
 
 /** Main owns progress; local state only controls review and presentation. */
 export function useOnboarding(ready: boolean) {

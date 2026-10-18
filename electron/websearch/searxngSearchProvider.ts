@@ -1,23 +1,31 @@
-import type { WebSearchProviderAdapter, WebSearchResult } from './webSearchTypes';
-import { WEB_SEARCH_TIMEOUT_MS } from './webSearchTypes';
+import type { WebSearchProviderAdapter, WebSearchResult } from './webSearchTypes.ts';
+import { WEB_SEARCH_TIMEOUT_MS } from './webSearchTypes.ts';
 
 /**
+ * SearXNG self-hosted adapter (web search design §3.2 advanced option).
+ * A user-hosted metasearch engine; the instance must enable JSON output (formats in settings.yml must include json).
  * SearXNG 自部署适配器（联网搜索设计方案 §3.2 高级选项）。
  * 用户自建元搜索引擎，要求实例开启 JSON 输出（settings.yml 的 formats 含 json）。
+ */
+/**
+ * SearXNG self-hosted provider adapter, registered under id "searxng".
+ * SearXNG 自部署适配器，注册 id 为 "searxng"。
  */
 export const searxngSearchProvider: WebSearchProviderAdapter = {
   id: 'searxng',
   label: 'SearXNG（自部署）',
   description: '指向你自己部署的 SearXNG 实例；无需密钥，但需要实例开启 JSON 输出。',
   requirements: 'endpoint',
+  /** Checks that a SearXNG instance URL is configured / 校验 SearXNG 实例地址是否已配置 */
   validateConfig: (config) => (config.searxng?.url?.trim() ? undefined : '「SearXNG（自部署）」需要配置实例地址后才能使用。'),
+  /** Queries the self-hosted instance with JSON output enabled / 查询自部署实例（需开启 JSON 输出） */
   search: async ({ query, maxResults, config, signal }) => {
     const baseUrl = config.searxng?.url?.trim().replace(/\/+$/u, '');
     if (!baseUrl) throw new Error('尚未配置 SearXNG 实例地址。');
     const timeout = AbortSignal.timeout(WEB_SEARCH_TIMEOUT_MS);
     const params = new URLSearchParams({ q: query, format: 'json', language: 'zh-CN' });
     const response = await fetch(`${baseUrl}/search?${params.toString()}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36' },
       signal: AbortSignal.any([signal, timeout]),
     });
     if (!response.ok) {
@@ -44,6 +52,7 @@ export const searxngSearchProvider: WebSearchProviderAdapter = {
     }
     return results;
   },
+  /** Probes connectivity with a "ping" query / 用 ping 查询探测连接可用性 */
   testConnection: async (config) => {
     try {
       const results = await searxngSearchProvider.search({
@@ -56,6 +65,7 @@ export const searxngSearchProvider: WebSearchProviderAdapter = {
   },
 };
 
+/** Raw SearXNG result item shape; fields stay unknown for defensive parsing / SearXNG 原始结果条目结构；字段保持 unknown 以便防御式解析 */
 interface SearxngResultItem {
   title?: unknown;
   url?: unknown;

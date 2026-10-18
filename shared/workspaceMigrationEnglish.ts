@@ -1,3 +1,12 @@
+/**
+ * English translation strings for the workspace migration dialogs.
+ * 工作区迁移对话框的英文翻译文案。
+ */
+
+/**
+ * Chinese-to-English translation map for workspace migration UI strings.
+ * 工作区迁移界面文案的中英翻译映射。
+ */
 export const workspaceMigrationEnglish: Record<string, string> = {
   '工作区数据位置': 'Workspace data location',
   '默认创建的笔记库、资料库及会话记忆保存在这里。更改位置时，会迁移现有工作区数据。': 'Default note libraries, material libraries, conversations and memories are stored here. Changing the location migrates the existing workspace data.',

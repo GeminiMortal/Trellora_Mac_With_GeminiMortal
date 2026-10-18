@@ -1,80 +1,163 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { estimateTokenCount } from '../knowledge/tokenEstimator';
-import { atomicWriteJson } from './pathLayout';
-import type { LibraryGraphEnhancementConfig } from './types';
+import { estimateTokenCount } from '../knowledge/model/tokenEstimator.ts';
+import { atomicWriteJson } from './pathLayout.ts';
+import type { LibraryGraphEnhancementConfig } from './types.ts';
 
 /**
+ * Community summary generation (GraphRAG spec §3.3): after the library-level graph
+ * assembly is committed, the Electron side issues batched small LLM calls to produce
+ * structured summaries bottom-up. LLM calls are made through the injected callSummary
+ * (the Worker never holds API keys); strict JSON failures fall back to lenient parsing,
+ * and failed communities are recorded and skipped (best-effort, never blocks assembly).
  * 社区摘要生成（GraphRAG 方案 §3.3）：库级图装配提交后由 Electron 侧批量小调用
  * 自底向上生成结构化摘要。LLM 调用经注入的 callSummary 发起（Worker 永不持钥），
  * strict JSON 失败走宽松回退，失败社区记痕跳过（best-effort，不阻塞图装配）。
  */
 
+/** Schema version identifier for community summary artifacts. / 社区摘要产物的 schema 版本标识。 */
 export const COMMUNITY_SUMMARY_SCHEMA_VERSION = 'community-summary-v1';
+/** File name of the per-community summary JSONL records. / 单社区摘要 JSONL 记录的文件名。 */
 export const COMMUNITY_SUMMARIES_FILE_NAME = 'community-summaries.jsonl';
+/** File name of the summary run report (cache key, counts, failures). / 摘要运行报告的文件名（缓存键、计数、失败清单）。 */
 export const COMMUNITY_SUMMARY_REPORT_FILE_NAME = 'community-summary-report.json';
-/** 批量小调用并发上限（方案 §3.3：并发 ≤3）。 */
+/**
+ * Batch small-call concurrency cap (spec §3.3: concurrency ≤3).
+ * 批量小调用并发上限（方案 §3.3：并发 ≤3）。
+ */
 export const SUMMARY_CALL_CONCURRENCY = 3;
 const SUMMARY_KEY_POINTS_LIMIT = 6;
 const SUMMARY_ENTITIES_LIMIT = 12;
 const SUMMARY_TEXT_LIMIT = 1200;
 const FAILURE_RAW_OUTPUT_LIMIT = 400;
 
+/**
+ * One community summary record persisted to community-summaries.jsonl.
+ * 持久化到 community-summaries.jsonl 的单条社区摘要记录。
+ */
 export interface CommunitySummaryRecord {
+  /** Id of the summarized community. / 被摘要社区的 id。 */
   communityId: string;
+  /** Community hierarchy level (0 = top). / 社区层级（0 为顶层）。 */
   level: number;
+  /** Structured summary text. / 结构化摘要文本。 */
   summary: string;
+  /** Extracted key points (count-capped). / 提取的要点（数量有上限）。 */
   keyPoints: string[];
+  /** Salient entity mentions (count-capped). / 突出实体提及（数量有上限）。 */
   entities: string[];
-  /** 摘要文本的估算 token 数（高层替换与全局检索装窗用）。 */
+  /**
+   * Estimated token count of the summary text (upper-level replacement and global-search windowing).
+   * 摘要文本的估算 token 数（高层替换与全局检索装窗用）。
+   */
   tokens: number;
-  /** 成员集合指纹（方案 §4.7 增量继承键）；旧产物可能缺失。 */
+  /**
+   * Member-set fingerprint (spec §4.7 incremental inheritance key); may be missing on legacy artifacts.
+   * 成员集合指纹（方案 §4.7 增量继承键）；旧产物可能缺失。
+   */
   memberFingerprint?: string;
-  /** 重建时从旧图继承（成员未变的社区零调用复用）。 */
+  /**
+   * Inherited from the previous graph at rebuild time (communities with unchanged members reuse with zero LLM calls).
+   * 重建时从旧图继承（成员未变的社区零调用复用）。
+   */
   inherited?: boolean;
 }
 
+/**
+ * A community whose summary call failed; recorded for inspection and skipped (best-effort).
+ * 摘要调用失败的社区；记痕供排查并跳过（best-effort）。
+ */
 export interface CommunitySummaryFailure {
+  /** Id of the failed community. / 失败社区的 id。 */
   communityId: string;
+  /** Human-readable failure reason. / 可读的失败原因。 */
   reason: string;
+  /** Truncated raw model output, when available. / 截断后的模型原始输出（若有）。 */
   rawOutput?: string;
 }
 
+/**
+ * Run report written next to the summaries; its summaryKey drives cache-hit detection.
+ * 与摘要产物一同落盘的运行报告；其 summaryKey 用于缓存命中判定。
+ */
 export interface CommunitySummaryReport {
+  /** Artifact schema version. / 产物 schema 版本。 */
   schemaVersion: string;
+  /** Cache key for this summary run (see computeCommunitySummaryKey). / 本次摘要运行的缓存键（见 computeCommunitySummaryKey）。 */
   summaryKey: string;
+  /** Key of the source graph artifacts. / 源图产物的 graphKey。 */
   graphKey: string;
+  /** Version of the summary prompt used. / 使用的摘要 prompt 版本。 */
   promptVersion: string;
+  /** Model fingerprint (model/endpoint/consent). / 模型指纹（模型/endpoint/consent）。 */
   fingerprint: string;
+  /** Per-community context budget in tokens. / 单社区上下文预算（token）。 */
   budgetTokens: number;
+  /** counts: total / newly summarized / inherited / level count. / counts：总数 / 新生成 / 继承 / 层数。 */
   counts: { communities: number; summarized: number; inherited: number; levels: number };
+  /** Communities that failed to summarize. / 摘要失败的社区清单。 */
   failures: CommunitySummaryFailure[];
+  /** Wall-clock duration of the run. / 本次运行耗时。 */
   durationMs: number;
+  /** ISO timestamp of generation. / 生成时间（ISO）。 */
   generatedAt: string;
 }
 
+/**
+ * Inputs for generateCommunitySummaries.
+ * generateCommunitySummaries 的输入。
+ */
 export interface GenerateCommunitySummariesInput {
-  /** 已提交的 `.menghan-meta/graph/<graphKey>` 目录。 */
+  /**
+   * Committed `.menghan-meta/graph/<graphKey>` directory.
+   * 已提交的 `.menghan-meta/graph/<graphKey>` 目录。
+   */
   graphDirectory: string;
+  /** Graph artifact key. / 图产物键。 */
   graphKey: string;
+  /** Library graph enhancement configuration. / 库图增强配置。 */
   config: LibraryGraphEnhancementConfig;
-  /** 模型指纹（模型/endpoint/consent 任一变化即失效，方案 §3.1 缓存键口径）。 */
+  /**
+   * Model fingerprint (any change of model/endpoint/consent invalidates the cache, spec §3.1 cache-key rules).
+   * 模型指纹（模型/endpoint/consent 任一变化即失效，方案 §3.1 缓存键口径）。
+   */
   fingerprint: string;
-  /** 注入的 LLM 调用：输入装配好的社区上下文文本，返回模型原始输出。 */
+  /**
+   * Injected LLM call: takes the assembled community context text, returns raw model output.
+   * 注入的 LLM 调用：输入装配好的社区上下文文本，返回模型原始输出。
+   */
   callSummary: (text: string) => Promise<string>;
-  /** 重建时从旧图继承的摘要（成员指纹命中的社区）；已继承社区不再调用。 */
+  /**
+   * Summaries inherited from the previous graph (communities whose member fingerprint matched); inherited communities are not called again.
+   * 重建时从旧图继承的摘要（成员指纹命中的社区）；已继承社区不再调用。
+   */
   preloaded?: CommunitySummaryRecord[];
+  /** Cancellation signal. / 取消信号。 */
   signal?: AbortSignal;
+  /** Progress callback (completed, total). / 进度回调（已完成，总数）。 */
   onProgress?: (completed: number, total: number) => void;
 }
 
+/**
+ * Result of generateCommunitySummaries: sorted summary records plus the run report.
+ * generateCommunitySummaries 的结果：排序后的摘要记录与运行报告。
+ */
 export interface GenerateCommunitySummariesResult {
+  /** Final summary records (including inherited ones). / 最终摘要记录（含继承记录）。 */
   summaries: CommunitySummaryRecord[];
+  /** Run report persisted next to the artifacts. / 与产物一同落盘的运行报告。 */
   report: CommunitySummaryReport;
 }
 
-/** summaryKey = hash(graphKey + 摘要 prompt 版本 + 模型指纹 + 预算)；leidenConfig 变化经 graphKey 传导。 */
+/**
+ * Computes the summary cache key: hash(graphKey + summary prompt version + model fingerprint + budget);
+ * leidenConfig changes propagate through graphKey.
+ * summaryKey = hash(graphKey + 摘要 prompt 版本 + 模型指纹 + 预算)；leidenConfig 变化经 graphKey 传导。
+ *
+ * @param input - Cache key ingredients / 缓存键要素
+ * @returns Hex-encoded SHA-256 summary key / 十六进制 SHA-256 的 summaryKey
+ */
 export function computeCommunitySummaryKey(input: { graphKey: string; promptVersion: string; fingerprint: string; budgetTokens: number }): string {
   return crypto.createHash('sha256').update(JSON.stringify({
     schemaVersion: COMMUNITY_SUMMARY_SCHEMA_VERSION,
@@ -85,12 +168,26 @@ export function computeCommunitySummaryKey(input: { graphKey: string; promptVers
   })).digest('hex');
 }
 
+/**
+ * Checks whether both the summaries JSONL and the run report exist on disk.
+ * 检查摘要 JSONL 与运行报告是否都已存在于磁盘。
+ *
+ * @param graphDirectory - Committed graph artifact directory / 已提交的图产物目录
+ * @returns True when both artifact files are present / 两个产物文件都存在时为 true
+ */
 export function communitySummaryArtifactsExist(graphDirectory: string): boolean {
   return fs.existsSync(path.join(graphDirectory, COMMUNITY_SUMMARIES_FILE_NAME))
     && fs.existsSync(path.join(graphDirectory, COMMUNITY_SUMMARY_REPORT_FILE_NAME));
 }
 
-/** 成员集合指纹 = sha256(sorted memberKeys + level)：图重建后成员未变的社区可沿用旧摘要（方案 §4.7）。 */
+/**
+ * Member-set fingerprint = sha256(sorted memberKeys + level): communities whose members are unchanged after a graph rebuild can reuse the old summary (spec §4.7).
+ * 成员集合指纹 = sha256(sorted memberKeys + level)：图重建后成员未变的社区可沿用旧摘要（方案 §4.7）。
+ *
+ * @param memberKeys - Canonical keys of community members / 社区成员的规范键
+ * @param level - Community hierarchy level / 社区层级
+ * @returns Hex-encoded SHA-256 member fingerprint / 十六进制 SHA-256 的成员指纹
+ */
 export function computeCommunityMemberFingerprint(memberKeys: readonly string[], level: number): string {
   return crypto.createHash('sha256').update(JSON.stringify({
     schemaVersion: COMMUNITY_SUMMARY_SCHEMA_VERSION,
@@ -99,16 +196,30 @@ export function computeCommunityMemberFingerprint(memberKeys: readonly string[],
   })).digest('hex');
 }
 
+/**
+ * Lightweight manifest of a community to summarize (id, level, members).
+ * 待摘要社区的轻量清单（id、层级、成员）。
+ */
 export interface SummaryCommunityManifest {
+  /** Id of the community. / 社区 id。 */
   communityId: string;
+  /** Community hierarchy level. / 社区层级。 */
   level: number;
+  /** Canonical keys of community members. / 社区成员的规范键。 */
   memberKeys: string[];
 }
 
 /**
+ * Incremental inheritance: a new community whose member fingerprint exactly matches an old record reuses it
+ * (keeps the original summary/tokens, marks inherited, remaps communityId to the new community); misses go to
+ * the pending list (handed by the caller to generateCommunitySummaries). Old records without a fingerprint
+ * (legacy artifacts) or with an empty summary do not participate; each old record is inherited at most once.
  * 增量继承：新社区的成员指纹精确命中旧记录 → 沿用（保留原 summary/tokens，标记 inherited，
  * communityId 重映射为新社区）；未命中进待生成清单（由调用方交给 generateCommunitySummaries）。
  * 旧记录缺指纹（存量产物）或空摘要不参与继承；一条旧记录最多被一个新社区继承。
+ *
+ * @param input - Old summary records and the new community manifests / 旧摘要记录与新社区清单
+ * @returns Reusable preloaded records and communities still needing generation / 可复用的继承记录与待生成社区
  */
 export function inheritReusableSummaries(input: {
   oldRecords: CommunitySummaryRecord[];
@@ -124,6 +235,8 @@ export function inheritReusableSummaries(input: {
     const fingerprint = computeCommunityMemberFingerprint(community.memberKeys, community.level);
     const reusable = byFingerprint.get(fingerprint);
     if (reusable) {
+      // Consume the matched record so each old summary is inherited at most once.
+      // 命中即从表中移除，保证一条旧摘要最多被继承一次。
       byFingerprint.delete(fingerprint);
       preloaded.push({ ...reusable, communityId: community.communityId, level: community.level, memberFingerprint: fingerprint, inherited: true });
     } else {
@@ -133,6 +246,13 @@ export function inheritReusableSummaries(input: {
   return { preloaded, pending };
 }
 
+/**
+ * Reads and defensively validates the summary run report; returns null on missing or malformed files.
+ * 读取并防御性校验摘要运行报告；文件缺失或格式非法时返回 null。
+ *
+ * @param graphDirectory - Committed graph artifact directory / 已提交的图产物目录
+ * @returns The parsed report, or null when unavailable / 解析后的报告，不可用时为 null
+ */
 export function readCommunitySummaryReport(graphDirectory: string): CommunitySummaryReport | null {
   const reportPath = path.join(graphDirectory, COMMUNITY_SUMMARY_REPORT_FILE_NAME);
   if (!fs.existsSync(reportPath)) return null;
@@ -145,13 +265,27 @@ export function readCommunitySummaryReport(graphDirectory: string): CommunitySum
   }
 }
 
-/** 缓存命中判定：summaryKey 一致且产物齐全。 */
+/**
+ * Cache-hit check: artifacts are complete and the recorded summaryKey matches the expected one.
+ * 缓存命中判定：summaryKey 一致且产物齐全。
+ *
+ * @param graphDirectory - Committed graph artifact directory / 已提交的图产物目录
+ * @param expectedSummaryKey - Summary key computed for the current inputs / 当前输入计算出的 summaryKey
+ * @returns True when the cached summaries are up to date / 缓存摘要为最新时为 true
+ */
 export function isCommunitySummaryCurrent(graphDirectory: string, expectedSummaryKey: string): boolean {
   if (!communitySummaryArtifactsExist(graphDirectory)) return false;
   const report = readCommunitySummaryReport(graphDirectory);
   return Boolean(report && report.summaryKey === expectedSummaryKey);
 }
 
+/**
+ * Reads summary records from the JSONL artifact, skipping malformed lines and normalizing fields.
+ * 从 JSONL 产物读取摘要记录，跳过非法行并规范化字段。
+ *
+ * @param graphDirectory - Committed graph artifact directory / 已提交的图产物目录
+ * @returns Parsed summary records (empty when the file is absent) / 解析出的摘要记录（文件缺失时为空）
+ */
 export function readCommunitySummaryRecords(graphDirectory: string): CommunitySummaryRecord[] {
   const summariesPath = path.join(graphDirectory, COMMUNITY_SUMMARIES_FILE_NAME);
   if (!fs.existsSync(summariesPath)) return [];
@@ -179,8 +313,14 @@ export function readCommunitySummaryRecords(graphDirectory: string): CommunitySu
 }
 
 /**
+ * Generates all community summaries bottom-up and writes the artifacts. Leaf levels pack a budgeted
+ * context from community edges (ordered by summed endpoint degree); upper levels first pack child
+ * details and, when over budget, replace details with child summaries in descending token order (paper §3.1.5).
  * 自底向上生成全部社区摘要并落产物。叶级按边（两端 degree 和降序）装预算上下文；
  * 高层先装子社区明细，超预算时按 token 降序用子社区摘要替换（论文 §3.1.5）。
+ *
+ * @param input - Generation inputs (graph directory, config, injected LLM call, preloaded summaries) / 生成输入（图目录、配置、注入的 LLM 调用、继承摘要）
+ * @returns Sorted summary records and the run report / 排序后的摘要记录与运行报告
  */
 export async function generateCommunitySummaries(input: GenerateCommunitySummariesInput): Promise<GenerateCommunitySummariesResult> {
   const startedAt = Date.now();
@@ -195,6 +335,7 @@ export async function generateCommunitySummaries(input: GenerateCommunitySummari
 
   const failures: CommunitySummaryFailure[] = [];
   const summaries = new Map<string, CommunitySummaryRecord>();
+  // Inherited summaries enter the map first: later layers reference them as usual, with no new calls.
   // 继承的摘要先入表：后续层级装配照常引用，不再为其发起调用。
   for (const record of input.preloaded ?? []) {
     if (record.summary.trim()) summaries.set(record.communityId, record);
@@ -202,6 +343,7 @@ export async function generateCommunitySummaries(input: GenerateCommunitySummari
   const levels = communities.length > 0 ? Math.max(...communities.map((community) => community.level)) : 0;
   const childrenByParent = groupChildren(communities);
 
+  // Bottom-up: the finest (leaf) level runs first, aggregating up toward level 0.
   // 自底向上：最细层（叶）先行，逐层向 level 0 汇总。
   for (let level = levels; level >= 0; level -= 1) {
     const layer = communities

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Modal } from '@mantine/core';
 import { Database, LoaderCircle } from 'lucide-react';
-import { t, useI18n } from '../../i18n';
-import type { MemoryCitationSnapshot, MemoryCitationSource } from '../../../shared/memoryCitations';
-import { getReferencedMemoryCitations, memoryCitationElementId } from '../assistantMemoryCitations';
+import { t, useI18n } from '../../i18n/index.ts';
+import type { MemoryCitationSnapshot, MemoryCitationSource } from '../../../shared/memoryCitations.ts';
+import { getReferencedMemoryCitations, memoryCitationElementId } from './assistantMemoryCitations.ts';
 
 interface Props {
   turnId: string;

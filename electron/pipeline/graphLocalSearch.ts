@@ -1,31 +1,40 @@
+/**
+ * Graph local search over the projected knowledge graph: anchors entities from a query,
+ * traverses within hop/node/edge budgets, and assembles evidence chunks for RAG answers.
+ * 图谱局部检索（基于图谱投影的知识图谱）：按查询锚定实体，在跳数/节点/边预算内遍历，并为 RAG 回答装配证据块。
+ */
 import type Database from 'better-sqlite3';
 import { openGraphDatabase } from './graphProjection';
 import { queryGraphEntityVectorNeighbors } from './graphVectorIndex';
 
-/** 遍历预算（方案 §4.1）：≤2 跳、节点 ≤50、边 ≤100。 */
+/** Traversal budget (plan §4.1): ≤2 hops, ≤50 nodes, ≤100 edges. / 遍历预算（方案 §4.1）：≤2 跳、节点 ≤50、边 ≤100。 */
 const DEFAULT_MAX_HOPS = 2;
 const DEFAULT_SEED_LIMIT = 5;
 const DEFAULT_NODE_BUDGET = 50;
 const DEFAULT_EDGE_BUDGET = 100;
 const DEFAULT_EVIDENCE_LIMIT = 6;
-/** 多跳遍历距离衰减（优化方案 P0-3）：排序键 = weight × decay^(hop-1)，与 chunk 图扩展一致。 */
+/** Multi-hop distance decay (optimization plan P0-3): sort key = weight × decay^(hop-1), consistent with chunk-graph expansion. / 多跳遍历距离衰减（优化方案 P0-3）：排序键 = weight × decay^(hop-1)，与 chunk 图扩展一致。 */
 const HOP_DECAY = 0.5;
-/** 语义种子通道（优化方案 P1-4）：实体向量近邻 Top-K 与相似度下限。 */
+/** Semantic seed channel (optimization plan P1-4): entity-vector KNN Top-K and similarity floor. / 语义种子通道（优化方案 P1-4）：实体向量近邻 Top-K 与相似度下限。 */
 const VECTOR_SEED_TOP_K = 5;
 const DEFAULT_VECTOR_SEED_MIN_SIMILARITY = 0.35;
-/** 向量种子打分权重：上限低于词法命中（mention 1.5 / FTS 2+），语义链接只做补充不作主锚。 */
+/** Vector-seed scoring weight: capped below lexical hits (mention 1.5 / FTS 2+); semantic links only supplement, never anchor. / 向量种子打分权重：上限低于词法命中（mention 1.5 / FTS 2+），语义链接只做补充不作主锚。 */
 const VECTOR_SEED_SCORE_WEIGHT = 0.8;
 
+/**
+ * Input parameters for graph local search.
+ * 图谱局部检索的输入参数。
+ */
 export interface GraphLocalSearchInput {
   libraryPath: string;
   query: string;
-  /** Jieba 检索分词结果；未提供时退化为标点/空白切分。 */
+  /** Jieba retrieval tokenization results; falls back to punctuation/whitespace splitting when absent. / Jieba 检索分词结果；未提供时退化为标点/空白切分。 */
   queryTerms?: string[];
-  /** 问题 embedding（优化方案 P1-4）：提供时叠加实体向量近邻种子通道；维度不匹配静默降级。 */
+  /** Question embedding (optimization plan P1-4): when provided, adds an entity-vector KNN seed channel; silently degrades on dimension mismatch. / 问题 embedding（优化方案 P1-4）：提供时叠加实体向量近邻种子通道；维度不匹配静默降级。 */
   queryEmbedding?: number[];
-  /** 语义种子必须与图向量索引使用同一模型档案，维度相同也不能跨模型。 */
+  /** Semantic seeds must use the same model profile as the graph vector index; identical dimensions still cannot cross models. / 语义种子必须与图向量索引使用同一模型档案，维度相同也不能跨模型。 */
   queryProfileHash?: string;
-  /** 语义种子相似度下限（1 - cosine distance）；缺省 0.35。 */
+  /** Semantic-seed similarity floor (1 - cosine distance); defaults to 0.35. / 语义种子相似度下限（1 - cosine distance）；缺省 0.35。 */
   vectorSeedMinSimilarity?: number;
   maxHops?: number;
   seedLimit?: number;
@@ -34,6 +43,10 @@ export interface GraphLocalSearchInput {
   evidenceLimit?: number;
 }
 
+/**
+ * An entity node returned by graph local search.
+ * 图谱局部检索返回的实体节点。
+ */
 export interface GraphLocalSearchEntity {
   canonicalKey: string;
   mention: string;
@@ -41,10 +54,14 @@ export interface GraphLocalSearchEntity {
   description: string;
   degree: number;
   communityId: string;
-  /** 0=锚点种子；1/2=遍历跳数。 */
+  /** 0 = anchor seed; 1/2 = traversal hop count. / 0=锚点种子；1/2=遍历跳数。 */
   hop: number;
 }
 
+/**
+ * A relation edge between two entities in the local-search subgraph.
+ * 局部检索子图中两实体间的关系边。
+ */
 export interface GraphLocalSearchRelation {
   sourceKey: string;
   targetKey: string;
@@ -54,6 +71,10 @@ export interface GraphLocalSearchRelation {
   chunkIds: string[];
 }
 
+/**
+ * Evidence chunk assembled back from the original material chunks.
+ * 从原始资料块回装得到的证据块。
+ */
 export interface GraphLocalSearchEvidence {
   documentId: string;
   chunkId: string;
@@ -62,21 +83,29 @@ export interface GraphLocalSearchEvidence {
   text: string;
   sourceText: string;
   sectionContext: string;
-  /** 产出该证据的实体键或边，用于解释装配来源。 */
+  /** Entity keys or edges that produced this evidence, explaining assembly provenance. / 产出该证据的实体键或边，用于解释装配来源。 */
   matchedBy: string[];
 }
 
+/**
+ * Community-orientation hint for the seed entities' level-0 communities.
+ * 种子实体所在 level-0 社区的导向提示。
+ */
 export interface GraphLocalSearchCommunityHint {
   communityId: string;
   level: number;
   summary: string;
-  /** 按 degree 降序的成员显示名，仅做导向，不做事实。 */
+  /** Member display names sorted by descending degree; guidance only, not facts. / 按 degree 降序的成员显示名，仅做导向，不做事实。 */
   topMembers: string[];
 }
 
+/**
+ * Aggregated result of a graph local-search query.
+ * 图谱局部检索查询的聚合结果。
+ */
 export interface GraphLocalSearchResult {
   seeds: string[];
-  /** 仅由向量通道引入的种子键（遥测/调试轨道统计种子命中率用，优化方案 P1-4）。 */
+  /** Seed keys introduced only by the vector channel (for telemetry/debug seed-hit-rate stats, optimization plan P1-4). / 仅由向量通道引入的种子键（遥测/调试轨道统计种子命中率用，优化方案 P1-4）。 */
   vectorSeedKeys: string[];
   entities: GraphLocalSearchEntity[];
   relations: GraphLocalSearchRelation[];
@@ -87,9 +116,16 @@ export interface GraphLocalSearchResult {
 }
 
 /**
+ * graph_local_search query core (plan §4.1): entity anchors (FTS5 + lexical substring
+ * dual channels, optionally overlaid with the entity-vector KNN channel, optimization
+ * plan P1-4) → weighted traversal within ≤2 hops → evidence mapped back to original chunks.
+ * Returns null when the graph projection is absent (the tool uses this for a fallback hint).
  * graph_local_search 查询核心（方案 §4.1）：实体锚点（FTS5 + 词法子串双通道，
  * 可选叠加实体向量近邻通道，优化方案 P1-4）→ ≤2 跳加权遍历 → 证据回原始 Chunk。
  * 图谱投影不存在时返回 null（工具据此降级提示）。
+ *
+ * @param input - Query text, budgets, and optional embedding for semantic seeds / 查询文本、预算与可选的语义种子 embedding
+ * @returns The local-search result, or null if the graph projection is unavailable / 局部检索结果；图谱投影不可用时返回 null
  */
 export function runGraphLocalSearch(input: GraphLocalSearchInput): GraphLocalSearchResult | null {
   const database = openGraphDatabase(input.libraryPath, false);
@@ -171,6 +207,9 @@ function normalizeSearchTerms(query: string, queryTerms?: string[]): string[] {
 }
 
 /**
+ * Semantic-seed candidates (optimization plan P1-4): question embedding vs entity-vector
+ * KNN Top-K; similarity = 1 - cosine distance, dropped below the floor; silently returns
+ * empty when no vector index exists or dimensions mismatch.
  * 语义种子候选（优化方案 P1-4）：问题 embedding 对实体向量 KNN Top-K，
  * 相似度 = 1 - cosine distance，低于下限丢弃；无向量索引/维度不符时静默返回空。
  */
@@ -195,6 +234,9 @@ function findVectorSeedCandidates(input: GraphLocalSearchInput, seedLimit: numbe
 }
 
 /**
+ * Merged scoring over the FTS5 channel + LIKE substring channel; under Chinese corpora
+ * the substring channel covers tokenization-boundary misses. Optionally overlays the
+ * vector-seed channel (optimization plan P1-4): scores below literal hits, supplemental anchors only.
  * FTS5 通道 + LIKE 子串通道合并打分；中文语料下子串通道兜底分词边界。
  * 可选叠加向量种子通道（优化方案 P1-4）：打分低于字面命中，只作补充锚点。
  */
@@ -219,6 +261,7 @@ function findSeedEntities(
     `).all(ftsQuery, seedLimit * 4) as Array<{ canonicalKey: string; bm25: number }>;
     ftsRows.forEach((row, index) => boost(row.canonicalKey, 2 + (ftsRows.length - index) * 0.1));
   } catch {
+    // Token fragments can produce an invalid MATCH expression; fall back to the substring channel only.
     // 分词碎片可能构造出非法 MATCH 表达式；此时只依赖子串通道。
   }
 
@@ -237,6 +280,7 @@ function findSeedEntities(
     }
   }
 
+  // Vector channel: similarity mapped linearly to score, capped at 0.8, below mention hits (1.5) and FTS (2+).
   // 向量通道：相似度线性映射为打分，上限 0.8，低于 mention 命中（1.5）与 FTS（2+）。
   for (const candidate of vectorSeeds) {
     boost(candidate.canonicalKey, candidate.similarity * VECTOR_SEED_SCORE_WEIGHT);
@@ -251,7 +295,11 @@ function findSeedEntities(
   return candidates.map((entity) => ({ ...entity, hop: 0 }));
 }
 
-/** BFS 遍历：按边权降序扩展，受节点/边预算约束；产出按 weight × 衰减^(hop-1) 降序（优化方案 P0-3）。 */
+/**
+ * BFS traversal: expands in descending edge-weight order under node/edge budgets; output
+ * sorted by weight × decay^(hop-1) descending (optimization plan P0-3).
+ * BFS 遍历：按边权降序扩展，受节点/边预算约束；产出按 weight × 衰减^(hop-1) 降序（优化方案 P0-3）。
+ */
 function traverseGraph(database: Database.Database, seedKeys: string[], maxHops: number, nodeBudget: number, edgeBudget: number): {
   entities: GraphLocalSearchEntity[];
   relations: GraphLocalSearchRelation[];
@@ -300,12 +348,20 @@ function traverseGraph(database: Database.Database, seedKeys: string[], maxHops:
   };
 }
 
-/** 距离衰减后的边排序键：深层边按 0.5 逐跳衰减，避免噪声边与近层边同台竞争预算。 */
+/**
+ * Distance-decayed edge sort key: deeper edges decay by 0.5 per hop so noisy deep edges
+ * do not compete with near-hop edges for budget.
+ * 距离衰减后的边排序键：深层边按 0.5 逐跳衰减，避免噪声边与近层边同台竞争预算。
+ */
 function decayedWeight(relation: { weight: number; hop: number }): number {
   return relation.weight * HOP_DECAY ** Math.max(0, relation.hop - 1);
 }
 
-/** 证据装配：种子与遍历边的 chunkIds 汇总后回 material_chunks 取原文（引用必须指向原始 Chunk）。 */
+/**
+ * Evidence assembly: aggregates chunkIds from seeds and traversal edges, then reads
+ * originals from material_chunks (citations must point at original chunks).
+ * 证据装配：种子与遍历边的 chunkIds 汇总后回 material_chunks 取原文（引用必须指向原始 Chunk）。
+ */
 function collectChunkEvidence(database: Database.Database, traversal: {
   entities: GraphLocalSearchEntity[];
   relations: GraphLocalSearchRelation[];
@@ -389,7 +445,11 @@ function collectChunkEvidence(database: Database.Database, traversal: {
   return evidence;
 }
 
-/** 种子实体所在 level-0 社区的导向信息；P2 摘要为空，仅列核心成员。 */
+/**
+ * Guidance info for the level-0 communities of seed entities; P2 summaries may be empty,
+ * so only core members are listed.
+ * 种子实体所在 level-0 社区的导向信息；P2 摘要为空，仅列核心成员。
+ */
 function collectCommunityHints(database: Database.Database, seedKeys: string[]): GraphLocalSearchCommunityHint[] {
   const hints: GraphLocalSearchCommunityHint[] = [];
   const seen = new Set<string>();

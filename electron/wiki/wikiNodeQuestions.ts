@@ -1,11 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { assertInsideDirectory } from '../pathGuards';
-import { atomicWriteJson, safeSegment } from '../pipeline/pathLayout';
-import { getLibraryMetaDirectory } from '../treeOrder';
-import { generateAiJson } from '../knowledge/aiProvider';
-import type { AiProviderConfig } from '../knowledge/aiTypes';
-import { isStructuredOutputContractError } from '../knowledge/structuredOutputContract';
+import { assertInsideDirectory } from '../files/pathGuards.ts';
+import { atomicWriteJson, safeSegment } from '../pipeline/pathLayout.ts';
+import { getLibraryMetaDirectory } from '../files/treeOrder.ts';
+import { generateAiJson } from '../knowledge/ai/aiProvider.ts';
+import type { AiProviderConfig } from '../knowledge/ai/aiTypes.ts';
+import { isStructuredOutputContractError } from '../knowledge/plan/structuredOutputContract.ts';
 
 /**
  * Wiki 节点建议问题（方案 §7）：站在读者角度为某个章节生成 3~4 个最可能想问的问题，
@@ -17,7 +17,9 @@ import { isStructuredOutputContractError } from '../knowledge/structuredOutputCo
  * 源文档变化整文件失效；单节点可强制刷新。只写元数据目录，绝不改用户原始文件。
  */
 
+/** Maximum output tokens for the questions generation model call. / 建议问题生成模型调用的最大输出 token 数。 */
 export const WIKI_QUESTIONS_MAX_OUTPUT_TOKENS = 256;
+/** Timeout in milliseconds for the questions generation model call. / 建议问题生成模型调用的超时时间（毫秒）。 */
 export const WIKI_QUESTIONS_TIMEOUT_MS = 8_000;
 /** 建议问题数量上限（方案 §7.1）。 */
 export const WIKI_QUESTIONS_MAX_COUNT = 4;
@@ -103,6 +105,13 @@ const WIKI_QUESTIONS_JSON_SCHEMA = {
   },
 } as const;
 
+/**
+ * Build the prompt string for generating suggested questions for a wiki node.
+ * 构建用于生成 Wiki 节点建议问题的提示词。
+ *
+ * @param input - Node title, path, child titles, and markdown content / 节点标题、路径、子节点标题和 markdown 内容
+ * @returns Assembled prompt string / 拼装后的提示词
+ */
 export function buildWikiNodeQuestionsPrompt(input: {
   nodeTitle: string;
   nodePath: string;
@@ -157,6 +166,10 @@ function parseLenientJson(text: string): unknown {
   throw new WikiNodeQuestionsError('invalid-questions', '节点建议问题原始输出不是合法 JSON。');
 }
 
+/**
+ * Error thrown by the wiki node questions pipeline with a stable machine-readable code.
+ * Wiki 节点建议问题流水线抛出的错误，带稳定的机器可读 code。
+ */
 export class WikiNodeQuestionsError extends Error {
   readonly code: string;
   readonly rawOutput?: string;

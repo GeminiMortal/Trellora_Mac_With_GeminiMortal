@@ -1,6 +1,6 @@
-import { estimateTokenCount } from '../knowledge/tokenEstimator';
-import { GLOBAL_SEARCH_MAX_LEVEL, readLibraryGraphEnhancementConfig } from './graphEnhancementConfig';
-import { readGraphCommunities, readGraphTopEntities } from './graphProjection';
+import { estimateTokenCount } from '../knowledge/model/tokenEstimator.ts';
+import { GLOBAL_SEARCH_MAX_LEVEL, readLibraryGraphEnhancementConfig } from './graphEnhancementConfig.ts';
+import { readGraphCommunities, readGraphTopEntities } from './graphProjection.ts';
 
 /**
  * graph_global_search 核心（GraphRAG 方案 §4.2）：选层 → 社区摘要 shuffle 分块
@@ -21,12 +21,25 @@ export const GLOBAL_SEARCH_SMALL_COMMUNITY_THRESHOLD = 3;
 const GLOBAL_SEARCH_MAP_CONCURRENCY = 3;
 /** 查询侧 map-reduce 单次调用超时与输出上限（复用问答 generation 槽位模型）。 */
 export const GLOBAL_SEARCH_LLM_TIMEOUT_MS = 120_000;
+/**
+ * Query-side map-reduce single-call max output tokens.
+ * 查询侧 map-reduce 单次调用最大输出 token 数。
+ */
 export const GLOBAL_SEARCH_MAP_MAX_OUTPUT_TOKENS = 800;
+
+/**
+ * Reduce phase single-call max output tokens.
+ * Reduce 阶段单次调用最大输出 token 数。
+ */
 export const GLOBAL_SEARCH_REDUCE_MAX_OUTPUT_TOKENS = 1_600;
 const PARTIAL_ANSWER_CHAR_LIMIT = 2_000;
 const REDUCE_ANSWER_CHAR_LIMIT = 4_000;
 const ENTITY_OVERVIEW_LIMIT = 20;
 
+/**
+ * Input parameters for graph global search (map-reduce over community summaries).
+ * 图谱全局检索输入参数（对社区摘要进行 map-reduce）。
+ */
 export interface GraphGlobalSearchInput {
   libraryPath: string;
   query: string;
@@ -38,18 +51,30 @@ export interface GraphGlobalSearchInput {
   onProgress?: (phase: 'map' | 'reduce', completed: number, total: number) => void;
 }
 
+/**
+ * A scored partial answer fragment produced by the map phase.
+ * Map 阶段生成的带评分部分答案片段。
+ */
 export interface GraphGlobalSearchPartial {
   score: number;
   content: string;
   communityIds: string[];
 }
 
+/**
+ * Community reference included in the global search result.
+ * 全局检索结果中包含的社区引用。
+ */
 export interface GraphGlobalSearchCommunityRef {
   communityId: string;
   level: number;
   summary: string;
 }
 
+/**
+ * Top entity returned in entity-overview fallback mode.
+ * 实体概览降级模式返回的顶级实体。
+ */
 export interface GraphGlobalSearchEntity {
   mention: string;
   type: string;
@@ -57,6 +82,10 @@ export interface GraphGlobalSearchEntity {
   degree: number;
 }
 
+/**
+ * Result of graph global search including answer, partials, and metadata.
+ * 图谱全局检索结果，包含答案、部分片段和元数据。
+ */
 export interface GraphGlobalSearchResult {
   /** map-reduce 正常完成 | 小图实体概览降级 | 成本护栏拦截 | 投影/摘要不可用。 */
   mode: 'map-reduce' | 'entity-overview' | 'cost-guard' | 'unavailable';
@@ -70,6 +99,15 @@ export interface GraphGlobalSearchResult {
   note: string;
 }
 
+/**
+ * Run a graph global search: select community layer → shuffle → map (partial answers + scores)
+ * → reduce (ordered merge). Falls back to entity overview for small graphs.
+ * 执行图谱全局检索：选择社区层 → shuffle → map（部分答案 + 评分）→ reduce（有序合并）。
+ * 小图自动降级为实体概览模式。
+ *
+ * @param input - Search parameters including library path, query, and LLM caller / 搜索参数，含资料库路径、查询和 LLM 调用器
+ * @returns Global search result with answer, partials, and metadata / 全局检索结果，含答案、部分片段和元数据
+ */
 export async function runGraphGlobalSearch(input: GraphGlobalSearchInput): Promise<GraphGlobalSearchResult> {
   const empty: GraphGlobalSearchResult = { mode: 'unavailable', level: 0, answer: '', partials: [], communities: [], entities: [], mapChunks: 0, llmCalls: 0, note: '' };
   const communities = readGraphCommunities(input.libraryPath);

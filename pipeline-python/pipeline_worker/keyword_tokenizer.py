@@ -1,3 +1,10 @@
+"""
+Module: keyword_tokenizer
+Jieba-based keyword tokenizer with custom dictionary support and rule-based fallback.
+模块：keyword_tokenizer
+基于 Jieba 的关键词分词器，支持自定义词典和基于规则的后备方案。
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -9,21 +16,31 @@ from typing import Iterable, Protocol
 from .keyword_contract import normalize_term
 
 
+# Jieba tokenizer name / Jieba 分词器名称
 TOKENIZER_NAME = 'jieba-accurate-hmm-off'
+# Rule-based tokenizer name / 基于规则的分词器名称
 RULE_TOKENIZER_NAME = 'rule-explicit'
+# Maximum dictionary terms / 最大词典词条数
 MAX_DICTIONARY_TERMS = 5_000
+# Technical token pattern (e.g., API, v1.2, C++) / 技术词模式（如 API、v1.2、C++）
 TECHNICAL_TOKEN_RE = re.compile(
     r'(?<![A-Za-z0-9_])'
     r'(?:[A-Za-z][A-Za-z0-9]*(?:[._+#/-][A-Za-z0-9]+)*)'
     r'(?:\s+\d+(?:\.\d+)?)?'
     r'(?![A-Za-z0-9_])'
 )
+# Chinese character run pattern / 中文字符连续模式
 CHINESE_RUN_RE = re.compile(r'[\u3400-\u9fff]+')
+# Sentence boundary characters / 句子边界字符
 SENTENCE_BOUNDARIES = frozenset('。！？；.!?;\n\r')
 
 
 @dataclass(frozen=True)
 class TokenSpan:
+    """
+    A token with its position in the original text.
+    带有原始文本位置信息的 token。
+    """
     term: str
     start: int
     end: int
@@ -32,11 +49,19 @@ class TokenSpan:
 
 
 class KeywordTokenizer(Protocol):
+    """
+    Protocol for keyword tokenizers.
+    关键词分词器的协议。
+    """
     def tokenize(self, text: str) -> list[TokenSpan]:
-        """Tokenize without changing the input text or its offsets."""
+        """Tokenize without changing the input text or its offsets. / 分词时不改变输入文本或其偏移量。"""
 
 
 class KeywordTokenizerUnavailable(RuntimeError):
+    """
+    Raised when the required tokenizer is not available.
+    当所需分词器不可用时抛出。
+    """
     code = 'KEYWORDS_TOKENIZER_UNAVAILABLE'
 
     def __init__(self, message: str) -> None:
@@ -45,6 +70,10 @@ class KeywordTokenizerUnavailable(RuntimeError):
 
 
 class KeywordTokenizerConfigError(ValueError):
+    """
+    Raised when tokenizer configuration is invalid.
+    当分词器配置无效时抛出。
+    """
     code = 'KEYWORDS_CONFIG_INVALID'
 
 

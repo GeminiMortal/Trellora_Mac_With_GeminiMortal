@@ -1,11 +1,18 @@
+/**
+ * Graph projection persistence layer: imports graph artifacts into the library SQLite database,
+ * manages FTS5/vector indexes, and exposes read/query APIs for the visualization, search, and
+ * community-summary pipelines.
+ * 图谱投影持久层：将图谱产物导入资料库 SQLite 数据库，管理 FTS5/向量索引，并为可视化、检索和
+ * 社区摘要流水线提供读取/查询接口。
+ */
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import { getLibraryMetaDirectory } from '../treeOrder';
-import { sqliteVecPackagedExtensionPath } from '../loadSqliteVec';
-import { PipelineStageError } from './stageErrors';
-import { readLibraryGraphReportFromDirectory } from './libraryGraphStore';
-import type { CommunitySummaryRecord } from './communitySummaries';
+import { getLibraryMetaDirectory } from '../files/treeOrder.ts';
+import { sqliteVecPackagedExtensionPath } from '../loadSqliteVec.ts';
+import { PipelineStageError } from './stageErrors.ts';
+import { readLibraryGraphReportFromDirectory } from './libraryGraphStore.ts';
+import type { CommunitySummaryRecord } from './communitySummaries.ts';
 
 const sqliteVec = require('sqlite-vec') as { load(database: Database.Database): void };
 
@@ -14,18 +21,28 @@ const graphEntitiesTableName = 'graph_entities';
 const graphRelationsTableName = 'graph_relations';
 const graphCommunitiesTableName = 'graph_communities';
 const graphEntitiesFtsTableName = 'graph_entities_fts';
-// chunk 级图投影（优化方案 P0-2）：实体关系投影出的同文档 chunk 对加权边，供混合检索图扩展。
-const graphChunkEdgesTableName = 'graph_chunk_edges';
-// 向量表由 graphVectorIndex 建立；投影替换/清理时需一并废弃（图重建整体失效）。
+  // Chunk-level graph projection (optimization plan P0-2): weighted edges between same-document chunk pairs, for hybrid-retrieval graph expansion.
+  // chunk 级图投影（优化方案 P0-2）：实体关系投影出的同文档 chunk 对加权边，供混合检索图扩展。
+  const graphChunkEdgesTableName = 'graph_chunk_edges';
+  // Vector tables created by graphVectorIndex; must be dropped alongside projection replacement/cleanup (full graph rebuild invalidates them).
+  // 向量表由 graphVectorIndex 建立；投影替换/清理时需一并废弃（图重建整体失效）。
 const graphVectorTableNames = ['graph_entity_vec', 'graph_community_vec'];
 
+/**
+ * Input for importing a committed graph-artifact set into the library meta SQLite.
+ * 将已提交的图谱产物集合导入资料库元数据 SQLite 的输入参数。
+ */
 export interface GraphProjectionImportInput {
   libraryPath: string;
   graphKey: string;
-  /** 已提交的 `.menghan-meta/graph/<graphKey>` 目录。 */
+  /** The committed `.menghan-meta/graph/<graphKey>` directory. / 已提交的 `.menghan-meta/graph/<graphKey>` 目录。 */
   graphDirectory: string;
 }
 
+/**
+ * Result of a successful graph-projection import, including both sent and read-back counts.
+ * 图谱投影导入成功的结果，包含提交计数与读回计数。
+ */
 export interface GraphProjectionImportResult {
   graphKey: string;
   engine: string;
@@ -41,6 +58,10 @@ export interface GraphProjectionImportResult {
   readBackFts: number;
 }
 
+/**
+ * Status snapshot of the current graph projection for the library-level status display.
+ * 当前图谱投影的状态快照，用于库级状态展示。
+ */
 export interface GraphProjectionStatus {
   graphKey: string;
   engine: string;
@@ -48,15 +69,19 @@ export interface GraphProjectionStatus {
   entityCount: number;
   relationCount: number;
   communityCount: number;
-  /** 已生成非空摘要的社区数（方案 §4.4 状态徽标）。 */
+  /** Communities that have generated non-empty summaries (plan §4.4 status badge). / 已生成非空摘要的社区数（方案 §4.4 状态徽标）。 */
   summaryCoverage: number;
   summaryGeneratedAt: string;
-  /** 实体向量 + 社区向量总数（方案 §4.4 状态徽标）。 */
+  /** Entity vectors + community vector count (plan §4.4 status badge). / 实体向量 + 社区向量总数（方案 §4.4 状态徽标）。 */
   vectorCoverage: number;
   vectorGeneratedAt: string;
   importedAt: string;
 }
 
+/**
+ * A community projection row including summary text and token count.
+ * 社区投影行，包含摘要文本与 token 计数。
+ */
 export interface GraphCommunityProjectionRow {
   communityId: string;
   level: number;
@@ -67,6 +92,10 @@ export interface GraphCommunityProjectionRow {
   tokens: number;
 }
 
+/**
+ * An entity projection row (canonical key, mention, type, description, degree).
+ * 实体投影行（规范化键、提及、类型、描述、度数）。
+ */
 export interface GraphEntityProjectionRow {
   canonicalKey: string;
   mention: string;
@@ -75,7 +104,10 @@ export interface GraphEntityProjectionRow {
   degree: number;
 }
 
-/** 图谱可视化（地图菜单，方案 §5）：实体节点 + 保留边 + level 0/1 社区与聚合边。 */
+/**
+ * Entity node for the graph-visualization map menu (plan §5).
+ * 图谱可视化（地图菜单，方案 §5）的实体节点。
+ */
 export interface GraphVisualizationEntityNode {
   canonicalKey: string;
   mention: string;
@@ -83,10 +115,14 @@ export interface GraphVisualizationEntityNode {
   description: string;
   degree: number;
   communityId: string;
-  /** 来源文档 id（地图视图左侧文档筛选用）。 */
+  /** Source document IDs (for the map view's left-side document filter). / 来源文档 id（地图视图左侧文档筛选用）。 */
   docIds: string[];
 }
 
+/**
+ * A retained edge between two entity nodes in the visualization payload.
+ * 可视化载荷中两个实体节点间的保留边。
+ */
 export interface GraphVisualizationEdgeRow {
   sourceKey: string;
   targetKey: string;
@@ -94,6 +130,10 @@ export interface GraphVisualizationEdgeRow {
   kinds: string[];
 }
 
+/**
+ * Community node for the graph-visualization community view.
+ * 图谱可视化社区视图中的社区节点。
+ */
 export interface GraphVisualizationCommunityNode {
   communityId: string;
   level: number;
@@ -104,7 +144,10 @@ export interface GraphVisualizationCommunityNode {
   tokens: number;
 }
 
-/** 社区间聚合边：跨社区成员边的权重和（社区视图用）。 */
+/**
+ * Aggregated edge between communities: weight sum of cross-community member edges (community view).
+ * 社区间聚合边：跨社区成员边的权重和（社区视图用）。
+ */
 export interface GraphVisualizationCommunityEdge {
   sourceCommunityId: string;
   targetCommunityId: string;
@@ -112,6 +155,10 @@ export interface GraphVisualizationCommunityEdge {
   edgeCount: number;
 }
 
+/**
+ * Complete visualization payload for the graph UI: entities, edges, communities, and community-entity links.
+ * 图谱 UI 的完整可视化载荷：实体、边、社区和社区-实体链接。
+ */
 export interface GraphVisualizationPayload {
   status: GraphProjectionStatus;
   entities: GraphVisualizationEntityNode[];
@@ -670,6 +717,14 @@ function loadGraphSqliteVec(database: Database.Database): void {
   sqliteVec.load(database);
 }
 
+/**
+ * Open (or create) the library's graph SQLite database at `.menghan-meta/index.db`.
+ * 打开（或创建）资料库的图谱 SQLite 数据库（`.menghan-meta/index.db`）。
+ *
+ * @param libraryPath - Absolute path to the materials library / 资料库绝对路径
+ * @param create - When true, create the database and directory if absent / 为 true 时若数据库和目录不存在则创建
+ * @returns Database handle, or null when not creating and the file does not exist / 数据库句柄；不创建且文件不存在时返回 null
+ */
 export function openGraphDatabase(libraryPath: string, create: boolean): Database.Database | null {
   const metadataDirectory = getLibraryMetaDirectory(libraryPath);
   if (create) fs.mkdirSync(metadataDirectory, { recursive: true });

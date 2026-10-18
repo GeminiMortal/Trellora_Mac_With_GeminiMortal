@@ -1,3 +1,12 @@
+"""
+Module: lines_stage
+Logical line extraction stage. Converts normalized Markdown into a bounded,
+source-aware line stream with metadata for downstream processing.
+模块：lines_stage
+逻辑行提取阶段。将标准化 Markdown 转换为有界的、带来源感知的行流，
+并附带下游处理所需的元数据。
+"""
+
 from __future__ import annotations
 
 import json
@@ -12,7 +21,9 @@ from typing import Any, Callable, Iterator
 from .stage_errors import StageCancelled, StageError
 
 
+# Schema version for lines output format / 行输出格式的 schema 版本
 LINES_SCHEMA_VERSION = 2
+# Interval for writing checkpoints during processing / 处理过程中写入检查点的间隔
 CHECKPOINT_INTERVAL = 200
 
 
@@ -23,7 +34,10 @@ def run_lines_stage(
     progress: Callable[[int, int | None, str, str], None],
     stage_key: str = '',
 ) -> dict[str, Any]:
-    """Expand the normalized Markdown into a bounded, source-aware line stream."""
+    """
+    Expand the normalized Markdown into a bounded, source-aware line stream.
+    将标准化 Markdown 展开为有界的、带来源感知的行流。
+    """
     parse_dir = Path(input_path)
     output = Path(output_dir)
     markdown_path = parse_dir / 'document.md'
@@ -124,13 +138,20 @@ def run_lines_stage(
 
 
 def normalize_text(value: str) -> str:
+    """
+    Normalize Unicode text by applying NFKC normalization and removing control characters.
+    通过应用 NFKC 标准化和移除控制字符来标准化 Unicode 文本。
+    """
     value = unicodedata.normalize('NFKC', value)
     value = ''.join(character for character in value if character not in '\x00\x0b\x0c\x85')
     return ' '.join(value.replace('\u200b', '').split())
 
 
 def track_markdown_fence(value: str, active_fence: str | None) -> tuple[bool, bool, str | None]:
-    """Track fenced code so later stages do not treat code comments as headings."""
+    """
+    Track fenced code blocks so later stages do not treat code comments as headings.
+    跟踪围栏代码块，以便后续阶段不会将代码注释误认为标题。
+    """
     match = re.match(r'^ {0,3}(`{3,}|~{3,})(.*)$', value)
     if match is None:
         return False, active_fence is not None, active_fence
@@ -145,6 +166,11 @@ def track_markdown_fence(value: str, active_fence: str | None) -> tuple[bool, bo
 
 
 class BlockCursor:
+    """
+    Cursor for matching logical lines to their source blocks.
+    用于将逻辑行匹配到其源块的游标。
+    """
+
     def __init__(self, path: Path) -> None:
         self.stream = path.open('r', encoding='utf-8', errors='replace')
         self.block: dict[str, Any] | None = None
@@ -152,6 +178,10 @@ class BlockCursor:
         self.part_index = 0
 
     def resolve(self, normalized_line: str) -> dict[str, Any] | None:
+        """
+        Resolve source block reference for a normalized line.
+        解析标准化行的源块引用。
+        """
         if not normalized_line:
             return None
         for _ in range(32):
@@ -175,6 +205,10 @@ class BlockCursor:
         return self._source_ref(self.block)
 
     def _advance(self) -> bool:
+        """
+        Read next block from the blocks JSONL file.
+        从 blocks JSONL 文件读取下一个块。
+        """
         line = self.stream.readline()
         if not line:
             self.block = None
@@ -195,6 +229,10 @@ class BlockCursor:
 
     @staticmethod
     def _source_ref(block: dict[str, Any] | None) -> dict[str, Any] | None:
+        """
+        Extract source reference metadata from a block.
+        从块中提取源引用元数据。
+        """
         if not block:
             return None
         source = block.get('source') if isinstance(block.get('source'), dict) else {}
@@ -206,16 +244,24 @@ class BlockCursor:
         }
 
     def close(self) -> None:
+        """Close the underlying stream. / 关闭底层流。"""
         self.stream.close()
 
 
 class LineLayoutCursor:
-    """Optional parser metadata for blank lines removed from the preview artifact."""
+    """
+    Optional parser metadata for blank lines removed from the preview artifact.
+    用于预览工件中移除的空行的可选解析器元数据。
+    """
 
     def __init__(self, path: Path) -> None:
         self.stream = path.open('r', encoding='utf-8', errors='replace') if path.is_file() else None
 
     def resolve(self, line_no: int) -> dict[str, bool]:
+        """
+        Resolve blank-before metadata for a given line number.
+        解析给定行号的 blank-before 元数据。
+        """
         if self.stream is None:
             return {'blankBefore': False}
         for raw_line in self.stream:
@@ -231,21 +277,28 @@ class LineLayoutCursor:
         return {'blankBefore': False}
 
     def close(self) -> None:
+        """Close the underlying stream. / 关闭底层流。"""
         if self.stream is not None:
             self.stream.close()
 
 
 def _count_lines(path: Path) -> int:
+    """Count total lines in a file. / 统计文件总行数。"""
     with path.open('r', encoding='utf-8', errors='replace') as stream:
         return sum(1 for _ in stream)
 
 
 def _count_blank_lines(path: Path) -> int:
+    """Count blank lines in a JSONL file. / 统计 JSONL 文件中的空行数。"""
     with path.open('r', encoding='utf-8', errors='replace') as stream:
         return sum(1 for value in stream if not json.loads(value).get('normalizedText'))
 
 
 def _read_checkpoint(path: Path, stage_key: str) -> dict[str, Any] | None:
+    """
+    Read checkpoint state for resumable processing.
+    读取检查点状态以支持可恢复处理。
+    """
     try:
         value = json.loads(path.read_text(encoding='utf-8'))
         if not isinstance(value, dict) or value.get('stageKey') != stage_key or value.get('complete'):
@@ -256,6 +309,10 @@ def _read_checkpoint(path: Path, stage_key: str) -> dict[str, Any] | None:
 
 
 def _write_checkpoint(path: Path, stage_key: str, last_line_no: int, records: int, complete: bool) -> None:
+    """
+    Write checkpoint state for resumable processing.
+    写入检查点状态以支持可恢复处理。
+    """
     _write_json(path, {
         'schemaVersion': LINES_SCHEMA_VERSION,
         'stage': 'lines',
@@ -268,11 +325,16 @@ def _write_checkpoint(path: Path, stage_key: str, last_line_no: int, records: in
 
 
 def _write_json(path: Path, value: dict[str, Any]) -> None:
+    """
+    Atomic JSON file write using temporary file + rename.
+    使用临时文件 + 重命名的原子 JSON 文件写入。
+    """
     temporary = path.with_name(f'.{path.name}.tmp')
     temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding='utf-8')
     temporary.replace(path)
 
 
 def _raise_if_cancelled(cancel_event: Event) -> None:
+    """Raise StageCancelled if cancel event is set. / 如果取消事件已设置则抛出 StageCancelled。"""
     if cancel_event.is_set():
         raise StageCancelled()

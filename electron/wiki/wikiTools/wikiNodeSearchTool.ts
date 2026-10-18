@@ -1,17 +1,28 @@
-import { mergeKnowledgeBaseRetrievals, retrieveKnowledgeBaseEvidence } from '../../knowledge/knowledgeBaseRag';
-import type { ReActTool, ReActToolExecution } from '../../knowledge/reactAgent/toolRegistry';
-import { compactObservationText, escapeXmlAttribute, escapeXmlText } from '../../knowledge/knowledgeToolContext';
-import type { KnowledgeEvidenceRecord } from '../../knowledge/knowledgeTools/knowledgeSessionState';
-import { renderKnowledgeBaseImageTransportIndex } from '../../knowledge/knowledgeBaseImageResolver';
-import type { WikiToolContext } from '../wikiToolContext';
+/**
+ * Wiki tool for semantic hybrid retrieval (vector + keyword) within the current node's subtree.
+ * 在当前节点子树内做语义混合检索（向量 + 关键词）的 Wiki 工具。
+ */
+
+import { mergeKnowledgeBaseRetrievals, retrieveKnowledgeBaseEvidence } from '../../knowledge/knowledgeBaseRag.ts';
+import type { ReActTool, ReActToolExecution } from '../../knowledge/reactAgent/toolRegistry.ts';
+import { compactObservationText, escapeXmlAttribute, escapeXmlText } from '../../knowledge/tools/knowledgeToolContext.ts';
+import type { KnowledgeEvidenceRecord } from '../../knowledge/tools/knowledgeTools/knowledgeSessionState.ts';
+import { renderKnowledgeBaseImageTransportIndex } from '../../knowledge/knowledgeBaseImageResolver.ts';
+import type { WikiToolContext } from '../wikiToolContext.ts';
 import {
   WIKI_NODE_SEARCH_MAX_QUERIES,
   WIKI_NODE_SEARCH_MERGED_TOP_K,
   WIKI_NODE_SEARCH_PER_QUERY_TOP_K,
-} from '../wikiNodeBudget';
+} from '../wikiNodeBudget.ts';
 
 /**
- * wiki_node_search（方案 §4.3）：在当前节点子树内做混合检索（向量 + 关键词、RRF、
+ * wiki_node_search tool (plan §4.3): performs hybrid retrieval (vector + keyword, RRF, optional
+ * rerank, MMR) within the current node's subtree, reusing the knowledge-base
+ * retrieveKnowledgeBaseEvidence pipeline and only adding documentIds=[documentId] and
+ * sectionNodeIds=subtree headingId set as scope parameters, while disabling local expansion,
+ * graph one-hop expansion and small-document direct-load to prevent out-of-subtree evidence.
+ *
+ * wiki_node_search 工具（方案 §4.3）：在当前节点子树内做混合检索（向量 + 关键词、RRF、
  * 可选 rerank、MMR），完整复用知识库 retrieveKnowledgeBaseEvidence 管道，仅叠加
  * documentIds=[documentId] 与 sectionNodeIds=子树 headingId 集合两个作用域参数，
  * 并关闭本地扩写、图通道一跳扩展与小文档直载，杜绝子树外证据混入。
@@ -41,6 +52,7 @@ export const wikiNodeSearchTool: ReActTool<WikiToolContext> = {
   execute: async (args, ctx) => runWikiNodeSearch(args, ctx),
 };
 
+/** Execute the wiki_node_search tool: run multi-path retrieval, merge results, register evidence and format XML. / 执行 wiki_node_search 工具：运行多路检索、合并结果、登记证据并格式化 XML 输出。 */
 async function runWikiNodeSearch(args: Record<string, unknown>, ctx: WikiToolContext): Promise<ReActToolExecution> {
   const queries = (Array.isArray(args.queries) ? args.queries : [])
     .filter((item): item is string => typeof item === 'string')

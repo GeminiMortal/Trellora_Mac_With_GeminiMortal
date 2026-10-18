@@ -1,4 +1,12 @@
-/** 文档、编辑和 Wiki 界面的辅助文案。 */
+/**
+ * Long-form English translation dictionary for document, editor, and Wiki UI strings.
+ * 文档、编辑器与 Wiki 界面的英文长文案翻译字典。
+ */
+
+/**
+ * Maps Chinese UI detail strings to their English translations.
+ * 将中文界面长文案映射为英文翻译。
+ */
 export const englishDetails: Record<string, string> = {
   '点击编辑公式': 'Click to edit formula',
   '保存 AI 回复为笔记': 'Save AI reply as a note',

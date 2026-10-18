@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import type { IndexedNote, NoteIndex } from '../noteIndex';
+import type { IndexedNote, NoteIndex } from '../note/noteIndex';
 import { createCurrentNoteSnapshotFromIndexedNote, type CurrentNoteSnapshot } from './currentNoteSnapshot';
 
 export const LIBRARY_NOTE_SNAPSHOT_SCHEMA_VERSION = 1 as const;

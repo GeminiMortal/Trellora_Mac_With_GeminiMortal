@@ -1,14 +1,14 @@
-import { getAppLanguage, localizeOptions, t, useI18n } from '../../i18n';
+import { getAppLanguage, localizeOptions, t, useI18n } from '../../i18n/index.ts';
 import { ActionIcon, Alert, Badge, Button, Checkbox, Divider, Group, Paper, ScrollArea, Select, Stack, Text, Textarea, TextInput, Tooltip } from '@mantine/core';
 import { Check, Copy, FileText, LoaderCircle, Play, Settings2, Sparkles, Square, X } from 'lucide-react';
 import { useState } from 'react';
 import type { SelectionExpansionSettings } from '../../electron';
-import { primarySelectionEditQualityIssue, selectionEditQualityIssueLabel } from '../../../electron/knowledge/selectionEditQuality';
-import type { SelectionExpansionDraftSession } from '../../editor/selectionExpansion';
-import { copyPlainText } from '../../utils/clipboard';
-import ExpansionReceipt from '../selection-edit/ExpansionReceipt';
-import MarkdownContent from '../MarkdownContent';
-import { resolveExpansionTarget } from '../../../shared/selectionExpansionPolicy';
+import { primarySelectionEditQualityIssue, selectionEditQualityIssueLabel } from '../../../electron/knowledge/selection/selectionEditQuality.ts';
+import type { SelectionExpansionDraftSession } from '../../editor/behavior/selectionExpansion.ts';
+import { copyPlainText } from '../../utils/editor/clipboard.ts';
+import ExpansionReceipt from '../selection-edit/ExpansionReceipt.tsx';
+import MarkdownContent from '../markdown/MarkdownContent.tsx';
+import { resolveExpansionTarget } from '../../../shared/selectionExpansionPolicy.ts';
 
 interface SelectionExpansionWorkspaceProps {
   session: SelectionExpansionDraftSession;

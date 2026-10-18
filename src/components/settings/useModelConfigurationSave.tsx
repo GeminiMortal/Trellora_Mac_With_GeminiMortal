@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Group, Modal, Paper, ScrollArea, Stack, Text } from '@mantine/core';
 import { AlertTriangle } from 'lucide-react';
-import type { ModelConfigurationChange, ModelConfigurationSaveResult } from '../../../shared/modelConfiguration';
-import { t, useI18n } from '../../i18n';
+import type { ModelConfigurationChange, ModelConfigurationSaveResult } from '../../../shared/modelConfiguration.ts';
+import { t, useI18n } from '../../i18n/index.ts';
 
 type Confirmation = Extract<ModelConfigurationSaveResult, { status: 'confirmation-required' }>;
 

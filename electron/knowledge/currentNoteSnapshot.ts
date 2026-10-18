@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import type { IndexedNote } from '../noteIndex';
+import type { IndexedNote } from '../note/noteIndex';
 import { estimateTokenCount } from './tokenEstimator';
 import { buildCurrentNoteStructure, type CurrentNoteEvidenceBlock, type CurrentNoteHeadingRange, type CurrentNoteHeadingSource } from './currentNoteStructure';
 
@@ -21,6 +21,7 @@ export interface CurrentNoteSnapshot {
   headings: CurrentNoteHeadingRange[];
   blocks: CurrentNoteEvidenceBlock[];
   createdAt: string;
+  fileKind?: 'markdown' | 'text' | 'code';
 }
 
 export interface CurrentNoteSnapshotInput {
@@ -33,6 +34,7 @@ export interface CurrentNoteSnapshotInput {
   revision: number;
   indexVersion?: string;
   createdAt?: string;
+  fileKind?: 'markdown' | 'text' | 'code';
 }
 
 /** Returns the immutable source block owned by this snapshot. */
@@ -56,6 +58,7 @@ export function createCurrentNoteSnapshot(input: CurrentNoteSnapshotInput): Curr
     markdown: input.markdown,
     contentHash: calculatedHash,
     headings: input.headings,
+    fileKind: input.fileKind,
   });
   const libraryId = `library-${sha256(normalizePath(libraryPath)).slice(0, 24)}`;
   const indexVersion = input.indexVersion ?? CURRENT_NOTE_INDEX_VERSION;
@@ -75,6 +78,7 @@ export function createCurrentNoteSnapshot(input: CurrentNoteSnapshotInput): Curr
     headings: structure.headings,
     blocks: structure.blocks,
     createdAt: input.createdAt ?? new Date().toISOString(),
+    fileKind: input.fileKind,
   };
 }
 

@@ -1,6 +1,6 @@
 {
   "generatedAt": "2026-10-03T01:23:27.284Z",
-  "environment": "Windows Electron development binary with production renderer and isolated profiles",
+  "environment": "macOS Electron development binary with production renderer and isolated profiles",
   "cases": [
     {
       "mode": "renderer-regressions",

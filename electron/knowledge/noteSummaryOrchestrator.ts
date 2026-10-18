@@ -248,6 +248,11 @@ export function parseNoteSummaryModelOutput(value: unknown): NoteSummaryModelOut
 }
 
 export function buildNoteSummarySections(snapshot: CurrentNoteSnapshot): NoteSection[] {
+  // 代码文件：按固定行数切分 section，而非按标题切分
+  if (snapshot.fileKind === 'code') {
+    return buildCodeSummarySections(snapshot);
+  }
+
   const starts = [...new Set([1, ...snapshot.headings.map((heading) => heading.lineFrom)])].sort((left, right) => left - right);
   const baseSections: Array<Omit<NoteSection, 'sectionId' | 'sectionHash'> & { identity: string }> = [];
   for (let index = 0; index < starts.length; index += 1) {
@@ -267,6 +272,32 @@ export function buildNoteSummarySections(snapshot: CurrentNoteSnapshot): NoteSec
     });
   }
   return baseSections.flatMap(({ identity, ...section }) => splitSection(snapshot, section, identity));
+}
+
+/** 代码文件按固定行数切分 section */
+function buildCodeSummarySections(snapshot: CurrentNoteSnapshot): NoteSection[] {
+  const LINES_PER_SECTION = 200;
+  const sections: NoteSection[] = [];
+  let lineFrom = 1;
+  let partIndex = 0;
+  while (lineFrom <= snapshot.lineCount) {
+    const lineTo = Math.min(lineFrom + LINES_PER_SECTION - 1, snapshot.lineCount);
+    const text = readMarkdownLineRange(snapshot.markdown, snapshot.lineOffsets, lineFrom, lineTo);
+    if (text.trim()) {
+      const sectionId = `code-part-${partIndex + 1}`;
+      sections.push({
+        sectionId,
+        sectionHash: sha256(`code ${text}`),
+        headingPath: [`代码段 ${partIndex + 1}`],
+        lineFrom,
+        lineTo,
+        text,
+      });
+      partIndex += 1;
+    }
+    lineFrom = lineTo + 1;
+  }
+  return sections;
 }
 
 class SummaryRunBudgetStopError extends Error {

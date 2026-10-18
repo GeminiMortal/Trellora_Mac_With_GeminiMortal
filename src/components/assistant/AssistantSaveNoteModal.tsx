@@ -3,10 +3,10 @@ import { Alert, Button, Group, Loader, Modal, Select, Stack, Text, TextInput } f
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown } from '@codemirror/lang-markdown';
 import { EditorView } from '@codemirror/view';
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import type { LibrarySummary } from '../../electron';
-import { normalizeAssistantNoteTitle, type AssistantNoteSource, type CreateAssistantNoteResult } from '../../../shared/assistantNote';
-import MarkdownContent from '../MarkdownContent';
+import { normalizeAssistantNoteTitle, type AssistantNoteSource, type CreateAssistantNoteResult } from '../../../shared/assistantNote.ts';
+import MarkdownContent from '../markdown/MarkdownContent.tsx';
 import './AssistantSaveNoteModal.css';
 
 interface AssistantSaveNoteModalProps {

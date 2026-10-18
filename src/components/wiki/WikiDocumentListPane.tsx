@@ -1,10 +1,10 @@
-import { getAppLanguage, t, useI18n } from '../../i18n';
+import { getAppLanguage, t, useI18n } from '../../i18n/index.ts';
 import { ActionIcon, Alert, Badge, Group, Loader, ScrollArea, Stack, Text, TextInput, ThemeIcon, Tooltip, UnstyledButton } from '@mantine/core';
 import { AlertCircle, FileText, RefreshCw, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { MaterialsLibrarySummary } from '../../electron';
-import { getMaterialsIconOption } from '../../utils/materialsIcons';
-import type { WikiLibraryDocument } from '../../wiki/wikiElectronDataSource';
+import { getMaterialsIconOption } from '../../utils/pipeline/materialsIcons.ts';
+import type { WikiLibraryDocument } from './data/wikiElectronDataSource.ts';
 
 interface WikiDocumentListPaneProps {
   library: MaterialsLibrarySummary;

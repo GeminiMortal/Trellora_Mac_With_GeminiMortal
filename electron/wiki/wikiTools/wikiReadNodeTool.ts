@@ -1,11 +1,24 @@
-import type { ReActTool, ReActToolExecution } from '../../knowledge/reactAgent/toolRegistry';
-import { compactObservationText, escapeXmlAttribute, escapeXmlText } from '../../knowledge/knowledgeToolContext';
-import type { WikiToolContext } from '../wikiToolContext';
-import { findWikiNode, formatWikiNodePath, getWikiNodeBreadcrumb, isWikiNodeDescendantOf } from '../wikiNodeScope';
-import { WIKI_NODE_READ_WINDOW_CHARS } from '../wikiNodeBudget';
-import { renderKnowledgeBaseImageTransportIndex } from '../../knowledge/knowledgeBaseImageResolver';
+/**
+ * Wiki tool for deep-reading node markdown by character window, with evidence registration and pagination.
+ * 按字符窗深读节点 markdown 的 Wiki 工具，含证据登记与分页。
+ */
+
+import type { ReActTool, ReActToolExecution } from '../../knowledge/reactAgent/toolRegistry.ts';
+import { compactObservationText, escapeXmlAttribute, escapeXmlText } from '../../knowledge/tools/knowledgeToolContext.ts';
+import type { WikiToolContext } from '../wikiToolContext.ts';
+import { findWikiNode, formatWikiNodePath, getWikiNodeBreadcrumb, isWikiNodeDescendantOf } from '../wikiNodeScope.ts';
+import { WIKI_NODE_READ_WINDOW_CHARS } from '../wikiNodeBudget.ts';
+import { renderKnowledgeBaseImageTransportIndex } from '../../knowledge/knowledgeBaseImageResolver.ts';
 
 /**
+ * wiki_read_node tool (plan §4.3): deep-reads node markdown (default: current node; also allows
+ * child nodes and cross-section authorized nodes from document search).
+ *
+ * The node markdown is already projected into memory by readWikiDocumentOutline (outlineNodes).
+ * This tool slices it by character window (≤ WIKI_NODE_READ_WINDOW_CHARS per window) and, when
+ * the node is longer, annotates the next window offset for pagination. Read windows are registered
+ * as evidence with citation numbers; re-reading the same window is detected and noted.
+ *
  * wiki_read_node（方案 §4.3）：深读节点 markdown（默认当前节点，允许其子节点）。
  *
  * 节点 markdown 已由 readWikiDocumentOutline 投影到内存（outlineNodes），本工具直接
@@ -30,6 +43,7 @@ export const wikiReadNodeTool: ReActTool<WikiToolContext> = {
   execute: async (args, ctx) => runWikiReadNode(args, ctx),
 };
 
+/** Execute wiki_read_node: validate scope, slice window, register evidence and format XML output. / 执行 wiki_read_node：校验范围、切片窗口、登记证据并格式化 XML 输出。 */
 async function runWikiReadNode(args: Record<string, unknown>, ctx: WikiToolContext): Promise<ReActToolExecution> {
   const requestedId = typeof args.node_id === 'string' ? args.node_id.trim() : '';
   const nodeId = requestedId || ctx.nodeId;
@@ -102,6 +116,7 @@ async function runWikiReadNode(args: Record<string, unknown>, ctx: WikiToolConte
   };
 }
 
+/** Format section context string from node path and title for evidence registration. / 根据节点路径和标题格式化章节上下文字符串，用于证据登记。 */
 function toSectionContext(nodePath: string, nodeTitle: string): string {
   return nodePath && nodePath !== nodeTitle
     ? `章节路径：${nodePath.replace(/ › /gu, ' / ')}\n章节：${nodeTitle}`

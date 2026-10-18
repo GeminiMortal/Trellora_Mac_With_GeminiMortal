@@ -1,5 +1,5 @@
-import type { WebSearchProviderAdapter, WebSearchProviderConfigFieldOption, WebSearchResult, WebSearchAdapterSearchInput } from './webSearchTypes';
-import { WEB_SEARCH_TIMEOUT_MS } from './webSearchTypes';
+import type { WebSearchProviderAdapter, WebSearchProviderConfigFieldOption, WebSearchResult, WebSearchAdapterSearchInput } from './webSearchTypes.ts';
+import { WEB_SEARCH_TIMEOUT_MS } from './webSearchTypes.ts';
 
 /**
  * 智谱联网搜索适配器（联网搜索设计方案 §3.2，对标 WeKnora internal/infrastructure/web_search/zhipu.go）。
@@ -29,6 +29,7 @@ function pickOptionValue(value: string | undefined, options: WebSearchProviderCo
   return value && options.some((option) => option.value === value) ? value : fallback;
 }
 
+/** Zhipu web search provider adapter instance / 智谱联网搜索提供方适配器实例 */
 export const zhipuSearchProvider: WebSearchProviderAdapter = {
   id: 'zhipu',
   label: '智谱联网搜索',

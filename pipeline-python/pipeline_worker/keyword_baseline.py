@@ -1,3 +1,11 @@
+"""
+Module: keyword_baseline
+Baseline TF-IDF keyword extraction algorithm. Provides a simpler fallback
+when the full hybrid ranking is not available.
+模块：keyword_baseline
+基线 TF-IDF 关键词提取算法。当完整混合排序不可用时提供更简单的后备方案。
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -23,17 +31,22 @@ from .keyword_contract import (
 )
 
 
+# Built-in stopwords for baseline algorithm / 基线算法的内置停用词
 BASELINE_STOPWORDS = frozenset({
     '的', '了', '是', '和', '在', '与', '及', '为', '将', '从', '到', '对', '把', '由', '本', '该',
     '需要', '通过', '用于', 'the', 'and', 'for', 'with', 'from', 'that', 'this', 'are', 'is', 'to',
 })
+# ASCII token pattern / ASCII token 模式
 ASCII_TOKEN = re.compile(r'[A-Za-z][A-Za-z0-9]*(?:[._+#/-][A-Za-z0-9]+)*')
+# Chinese character run pattern / 中文字符连续模式
 CHINESE_RUN = re.compile(r'[\u3400-\u9fff]+')
+# Noise detection pattern (repeated characters) / 噪声检测模式（重复字符）
 NOISE_RE = re.compile(r'(.)\1{3,}')
 
 
 @dataclass(frozen=True)
 class _Occurrence:
+    """Position of a candidate occurrence. / 候选出现的位置。"""
     start: int
     end: int
     sentence_index: int
@@ -41,6 +54,7 @@ class _Occurrence:
 
 @dataclass
 class _Candidate:
+    """A keyword candidate with occurrences. / 带有出现记录的关键词候选。"""
     term: str
     normalized_term: str
     kind: str

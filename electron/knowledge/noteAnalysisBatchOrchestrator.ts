@@ -54,7 +54,7 @@ export class NoteAnalysisBatchOrchestrator {
     if (current && current.policyVersion === NOTE_ANALYSIS_POLICY_VERSION && current.promptVersion === NOTE_ANALYSIS_PROMPT_VERSION && !this.executions.get(current.runId)?.controller.signal.aborted && this.executions.has(current.runId) && current.sourceHash === request.sourceHash && current.providerFingerprint === fingerprint) return current;
     if (current && this.executions.has(current.runId)) this.cancel(request.repository, current.runId);
     // 每次启动冻结清洗结果；长度重试、断点恢复不会重新清洗或换一份正文。
-    const input = { ...request.input, preparedDocument: prepareNoteAnalysisInput(request.input.markdown) };
+    const input = { ...request.input, preparedDocument: prepareNoteAnalysisInput(request.input.markdown, request.input.fileKind) };
     const full = planFullNoteAnalysis(input.markdown, input.preparedDocument);
     let limit = 12_000;
     let plans = noteAnalysisFullDocumentFits(input, full) ? [full] : planNoteAnalysisBatches(input.markdown, limit, input.preparedDocument);

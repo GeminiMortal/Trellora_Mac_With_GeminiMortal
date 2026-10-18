@@ -1,8 +1,8 @@
-import { getAppLanguage, t, useI18n } from '../../i18n';
+import { getAppLanguage, t, useI18n } from '../../i18n/index.ts';
 import { ActionIcon, Badge, Divider, Group, NavLink, ScrollArea, Stack, Text, Tooltip } from '@mantine/core';
 import { ArrowLeft, ChevronRight, Clock3, FileText, GitBranch } from 'lucide-react';
 import type { ReactNode } from 'react';
-import type { WikiDocumentSummary, WikiMapNode } from '../../wiki/wikiTypes';
+import type { WikiDocumentSummary, WikiMapNode } from './data/wikiTypes.ts';
 
 interface WikiOutlinePaneProps {
   document: WikiDocumentSummary;

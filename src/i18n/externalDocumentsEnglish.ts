@@ -1,3 +1,12 @@
+/**
+ * English translation map for external (standalone) document UI copy.
+ * 独立外部文档界面文案的英文翻译映射。
+ */
+
+/**
+ * Maps Chinese external-document strings to English translations.
+ * 将独立外部文档的中文文案映射为英文翻译。
+ */
 export const externalDocumentsEnglish: Record<string, string> = {
   '待打开文件': 'Pending files', '没有待打开文件。': 'No pending files.',
   '跨文件 Wiki 链接加入笔记库后使用。': 'Add this document to a library to use cross-file Wiki links.',

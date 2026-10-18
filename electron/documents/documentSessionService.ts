@@ -1,18 +1,26 @@
+/**
+ * External document session service: manages open, edit, save, save-as, join-to-library and close lifecycle for files outside the library.
+ * 外部文档会话服务：管理库外文件的打开、编辑、保存、另存、加入笔记库和关闭生命周期。
+ */
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
-import type { DocumentSnapshot, DocumentOpenRequest, DocumentOpenResult, DocumentEncoding, DocumentDraftRequest, DocumentDraftResult, DocumentSaveRequest, DocumentSaveResult, DocumentCloseRequest, DocumentCloseResult, DocumentJoinRequest, DocumentJoinResult, DocumentDiskVersion } from '../../shared/documentSession';
-import { EXTERNAL_TEXT_MAX_BYTES, EXTERNAL_MARKDOWN_RENDER_MAX_BYTES } from '../../shared/documentSession';
-import { getFileTypeInfo } from '../fileTypes';
-import { resolveRealAncestors } from '../pathGuards';
-import { atomicByteWrite, byteHash } from '../atomicTextWrite';
-import { decodeDocument, encodeDocument, normalizeDocumentText, DocumentError } from './textCodec';
-import { hasDocumentLocalReferences } from '../../shared/documentResources';
-import { ExternalRecoveryStore, type RecoveryRecord } from './externalRecoveryStore';
-import { DocumentResourceService, type ResourcePublication } from './documentResourceService';
-import { rewriteDocumentReferences } from '../../shared/documentResourceManifest';
+import type { DocumentSnapshot, DocumentOpenRequest, DocumentOpenResult, DocumentEncoding, DocumentDraftRequest, DocumentDraftResult, DocumentSaveRequest, DocumentSaveResult, DocumentCloseRequest, DocumentCloseResult, DocumentJoinRequest, DocumentJoinResult, DocumentDiskVersion } from '../../shared/documentSession.ts';
+import { EXTERNAL_TEXT_MAX_BYTES, EXTERNAL_MARKDOWN_RENDER_MAX_BYTES } from '../../shared/documentSession.ts';
+import { getFileTypeInfo } from '../files/fileTypes.ts';
+import { resolveRealAncestors } from '../files/pathGuards.ts';
+import { atomicByteWrite, byteHash } from '../atomicTextWrite.ts';
+import { decodeDocument, encodeDocument, normalizeDocumentText, DocumentError } from './textCodec.ts';
+import { hasDocumentLocalReferences } from '../../shared/documentResources.ts';
+import { ExternalRecoveryStore, type RecoveryRecord } from './externalRecoveryStore.ts';
+import { DocumentResourceService, type ResourcePublication } from './documentResourceService.ts';
+import { rewriteDocumentReferences } from '../../shared/documentResourceManifest.ts';
 
 interface Session { sender: number; snapshot: DocumentSnapshot; savedContent: string; requests: Map<string, { fingerprint: string; task: Promise<unknown> }>; transfers: Map<string, { revision: number; path: string; hash: string }>; busy: number; recoveryId: string; aliases?: Record<string, string> }
+/**
+ * Configuration options for the external document session service.
+ * 外部文档会话服务的配置选项。
+ */
 export interface DocumentSessionServiceOptions {
   recoveryRoot: string;
   libraries: () => string[];
@@ -23,13 +31,19 @@ export interface DocumentSessionServiceOptions {
 }
 const inside = (candidate: string, root: string) => { const relative = path.relative(root, candidate); return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative)); };
 const diskVersion = (bytes: Buffer, mtimeMs: number): DocumentDiskVersion => ({ diskHash: byteHash(bytes), byteLength: bytes.length, mtimeMs });
-/** 另存后，迟到的旧草稿引用也必须直接映射到当前目录。 */
+/**
+ * After a save-as, late-arriving old draft references must still resolve to the current directory.
+ * 另存后，迟到的旧草稿引用也必须直接映射到当前目录。
+ */
 function mergeReferenceAliases(previous: Record<string, string> | undefined, next: Record<string, string>): Record<string, string> {
   const decode = (value: string) => { try { return decodeURIComponent(value); } catch { return value; } };
   return { ...Object.fromEntries(Object.entries(previous ?? {}).map(([key, value]) => [key, Object.entries(next).find(([href]) => decode(href) === decode(value))?.[1] ?? value])), ...next };
 }
 
-/** 只管理外部会话；已登记库路由回现有保存链，所有写入绑定真实文件与窗口。 */
+/**
+ * Only manages external sessions; registered-library documents are routed back to the existing save chain, and all writes are bound to a real file and window.
+ * 只管理外部会话；已登记库路由回现有保存链，所有写入绑定真实文件与窗口。
+ */
 export class DocumentSessionService {
   readonly recovery: ExternalRecoveryStore;
   readonly resources: DocumentResourceService;
@@ -37,6 +51,12 @@ export class DocumentSessionService {
   private pending = new Map<string, { sender: number; path: string }>();
   private files = new Map<string, Promise<unknown>>();
   private closed = new Map<string, number>();
+  /**
+   * Creates the external document session service with recovery store and resource service.
+   * 创建外部文档会话服务，初始化恢复存储和资源服务。
+   *
+   * @param options - Service configuration including recovery root, library list, protected roots and lifecycle callbacks / 服务配置，含恢复根目录、库列表、受保护根目录与生命周期回调
+   */
   constructor(private readonly options: DocumentSessionServiceOptions) {
     this.recovery = new ExternalRecoveryStore(options.recoveryRoot);
     this.resources = new DocumentResourceService({ privateRoot: path.join(options.recoveryRoot, 'draft-assets'), context: id => this.sessions.get(id)?.snapshot, protectedRoots: options.protectedRoots });
@@ -50,6 +70,14 @@ export class DocumentSessionService {
     const library = this.options.libraries().find(root => inside(real, resolveRealAncestors(path.resolve(root))));
     return { real, library };
   }
+  /**
+   * Enqueues a file for opening, returning a request id that must be passed to openRequest.
+   * 将文件加入打开队列，返回必须传给 openRequest 的请求标识。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @param filePath - Absolute file path to open / 要打开的绝对文件路径
+   * @returns Open request with request id and display path / 含请求标识与显示路径的打开请求
+   */
   async enqueue(sender: number, filePath: string): Promise<DocumentOpenRequest> {
     const { real } = this.classify(filePath);
     const stat = await fs.stat(real);
@@ -61,10 +89,27 @@ export class DocumentSessionService {
     const requestId = randomUUID(); this.pending.set(requestId, { sender, path: real });
     return { requestId, displayPath: real };
   }
+  /**
+   * Lists all pending open requests for a sender.
+   * 列出指定发送方的所有待处理打开请求。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @returns Pending open requests / 待处理的打开请求
+   */
   listRequests(sender: number): DocumentOpenRequest[] { return [...this.pending].filter(([, r]) => r.sender === sender).map(([requestId, r]) => ({ requestId, displayPath: r.path })); }
+  /**
+   * Removes a pending open request after the renderer has consumed it.
+   * 渲染进程消费后移除待处理的打开请求。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @param id - Request id to finish / 要结束的请求标识
+   */
   finishRequest(sender: number, id: string): void { if (this.pending.get(id)?.sender !== sender) throw new DocumentError('DOCUMENT_SESSION_INVALID', '打开请求已失效。'); this.pending.delete(id); }
 
-  /** 读取最多上限加一字节，并复核命名目标身份，避免增长文件导致无界 readFile。 */
+  /**
+   * Reads at most the max size plus one byte and re-verifies the named target identity to avoid unbounded readFile on growing files.
+   * 读取最多上限加一字节，并复核命名目标身份，避免增长文件导致无界 readFile。
+   */
   private async read(filePath: string): Promise<{ bytes: Buffer; version: DocumentDiskVersion }> {
     for (let attempt = 0; attempt < 3; attempt++) {
       const real = this.classify(filePath).real;
@@ -92,11 +137,21 @@ export class DocumentSessionService {
     }
     throw new DocumentError('DOCUMENT_CONFLICT', '文件正在被其他程序修改，请稍后重新打开。', true);
   }
-  private capabilities(content: string, kind: 'markdown' | 'text', writable = true) {
-    const local = kind === 'markdown' && hasDocumentLocalReferences(content), render = Buffer.byteLength(content) <= EXTERNAL_MARKDOWN_RENDER_MAX_BYTES;
-    return { canEdit: true, canSaveInPlace: writable, canSaveAs: true, canJoinLibrary: true, canUseWysiwyg: kind === 'markdown' && !local && render, canPreviewMarkdown: kind === 'markdown' && render, canUseDocumentAi: true, canUseLibraryFeatures: false as const, canWriteLocalAssets: kind === 'markdown' };
+  private capabilities(content: string, kind: 'markdown' | 'text' | 'code', writable = true) {
+    const isMarkdown = kind === 'markdown';
+    const local = isMarkdown && hasDocumentLocalReferences(content), render = Buffer.byteLength(content) <= EXTERNAL_MARKDOWN_RENDER_MAX_BYTES;
+    return { canEdit: true, canSaveInPlace: writable, canSaveAs: true, canJoinLibrary: true, canUseWysiwyg: isMarkdown && !local && render, canPreviewMarkdown: isMarkdown && render, canUseDocumentAi: true, canUseLibraryFeatures: false as const, canWriteLocalAssets: isMarkdown };
   }
   private clone(session: Session): DocumentSnapshot { return structuredClone(session.snapshot); }
+  /**
+   * Completes the open request by reading the file, detecting encoding, and creating a session.
+   * 完成打开请求：读取文件、检测编码并创建会话。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @param id - Pending request id / 待处理请求标识
+   * @param encoding - Explicit encoding choice when auto-detect fails / 自动检测失败时的显式编码选择
+   * @returns Open result: encoding-required, library redirect, or opened snapshot / 打开结果：需选择编码、库重定向或已打开的快照
+   */
   async openRequest(sender: number, id: string, encoding?: DocumentEncoding): Promise<DocumentOpenResult> {
     const request = this.pending.get(id);
     if (!request || request.sender !== sender) throw new DocumentError('DOCUMENT_SESSION_INVALID', '打开请求已失效，请重新选择文件。');
@@ -124,16 +179,73 @@ export class DocumentSessionService {
     if (!session || session.sender !== sender) throw new DocumentError('DOCUMENT_SESSION_INVALID', '文档编辑会话已失效，请重新打开。');
     return session;
   }
+  /**
+   * Returns the display path for a session.
+   * 返回会话的显示路径。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @param id - Session id / 会话标识
+   * @returns Display path / 显示路径
+   */
   displayPath(sender: number, id: string): string { return this.session(sender, id).snapshot.displayPath; }
+  /**
+   * Returns a cloned snapshot of the session.
+   * 返回会话的克隆快照。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @param id - Session id / 会话标识
+   * @returns Cloned document snapshot / 克隆的文档快照
+   */
   snapshot(sender: number, id: string): DocumentSnapshot { return this.clone(this.session(sender, id)); }
+  /**
+   * Previews local resource references in the current document content.
+   * 预览当前文档内容中的本地资源引用。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @param id - Session id / 会话标识
+   * @returns Preview with authorized URLs, issues and draft revision / 含已授权 URL、问题与草稿版本的预览
+   */
   previewResources(sender: number, id: string) { this.session(sender, id); return this.resources.preview(id); }
+  /**
+   * Authorizes a directory root for local resource access in this session.
+   * 为本会话授权目录根以访问本地资源。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @param id - Session id / 会话标识
+   * @param root - Directory path to authorize / 要授权的目录路径
+   */
   grantResourceRoot(sender: number, id: string, root: string): void { this.session(sender, id); this.resources.grantRoot(id, root); }
+  /**
+   * Opens a local link referenced in the document, enqueuing the target file for editing.
+   * 打开文档中引用的本地链接，将目标文件加入编辑队列。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @param id - Session id / 会话标识
+   * @param href - Link href from the document / 文档中的链接 href
+   * @returns Open request for the linked file / 链接文件的打开请求
+   */
   openResourceLink(sender: number, id: string, href: string) { this.session(sender, id); return this.resources.openLink(id, href).then(file => this.enqueue(sender, file)); }
+  /**
+   * Adds a draft image to a markdown document session (from bytes or a local path).
+   * 向 Markdown 文档会话添加草稿图片（从字节或本地路径）。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @param id - Session id / 会话标识
+   * @param input - Image bytes with extension, or source path / 带扩展名的图片字节或源路径
+   * @returns Draft image reference and absolute path / 草稿图片引用与绝对路径
+   */
   async addDraftImage(sender: number, id: string, input: { bytes?: Uint8Array; extension?: string; sourcePath?: string }) {
     const session = this.session(sender, id); if (session.snapshot.fileKind !== 'markdown') throw new DocumentError('DOCUMENT_TYPE_INVALID', '纯文本文件不能插入图片。');
     const image = input.sourcePath ? await this.resources.imageFromPath(id, input.sourcePath) : await this.resources.addImage(id, input.bytes!, input.extension!);
     await this.recovery.write(this.record(session)); return { ...image, absolutePath: image.markdownPath };
   }
+  /**
+   * Returns whether the sender has any active document sessions.
+   * 返回发送方是否有活跃的文档会话。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @returns Whether at least one session exists / 是否存在至少一个会话
+   */
   hasActive(sender: number): boolean { return [...this.sessions.values()].some(session => session.sender === sender); }
   private record(session: Session): RecoveryRecord {
     const s = session.snapshot;
@@ -146,11 +258,22 @@ export class DocumentSessionService {
   private validateDraft(request: DocumentDraftRequest): void {
     if (!request || typeof request.documentSessionId !== 'string' || !Number.isSafeInteger(request.draftRevision) || request.draftRevision < 0 || typeof request.content !== 'string' || request.content.length > EXTERNAL_TEXT_MAX_BYTES || Buffer.byteLength(request.content) > EXTERNAL_TEXT_MAX_BYTES * 3 || normalizeDocumentText(request.content) !== request.content) throw new DocumentError('DOCUMENT_REQUEST_INVALID', '文档草稿参数无效。');
   }
-  /** 草稿先完成主进程版本校验；私有恢复缓存不可写不能阻止用户提交原件。 */
+  /**
+   * The draft is first validated against the main-process version; a degraded private-recovery cache must not block user submissions of the original.
+   * 草稿先完成主进程版本校验；私有恢复缓存不可写不能阻止用户提交原件。
+   */
   private async persistRecovery(session: Session): Promise<DocumentDraftResult> {
     try { await this.recovery.write(this.record(session)); return { recoveryState: 'current' }; }
     catch { return { recoveryState: 'degraded', recoveryMessage: '恢复缓存暂不可用，修改仍可手动保存或另存。' }; }
   }
+  /**
+   * Updates the in-memory draft content for a session and persists the recovery record.
+   * 更新会话的内存草稿内容并持久化恢复记录。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @param request - Draft update with content and revision / 含内容与版本的草稿更新
+   * @returns Recovery state and optional degraded message / 恢复状态与可选的降级消息
+   */
   updateDraft(sender: number, request: DocumentDraftRequest): Promise<DocumentDraftResult> {
     this.validateDraft(request); const session = this.session(sender, request.documentSessionId);
     return this.queue(`session:${request.documentSessionId}`, async () => {
@@ -184,6 +307,14 @@ export class DocumentSessionService {
     const missing = e.code === 'ENOENT', conflict = missing || ['DOCUMENT_CONFLICT', 'NOTE_VERSION_CONFLICT'].includes(e.code ?? '');
     return { status: conflict ? 'conflict' : 'failed', requestId: request.requestId, documentSessionId: request.documentSessionId, code: missing ? 'DOCUMENT_MISSING' : e.code ?? 'DOCUMENT_SAVE_FAILED', message: missing ? '原文件已被删除，草稿已保留，请另存为。' : e.message ?? '文档保存失败，草稿已保留。', retryable: e.retryable === true || ['EACCES', 'EPERM', 'EBUSY'].includes(e.code ?? '') };
   }
+  /**
+   * Saves the current draft back to the original file with disk-hash conflict detection.
+   * 将当前草稿保存回原文件，带磁盘哈希冲突检测。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @param request - Save request with draft content, revision and expected disk hash / 含草稿内容、版本与预期磁盘哈希的保存请求
+   * @returns Save result with updated snapshot and recovery message / 含更新快照与恢复消息的保存结果
+   */
   save(sender: number, request: DocumentSaveRequest): Promise<DocumentSaveResult> {
     const session = this.session(sender, request?.documentSessionId);
     const copied = structuredClone(request);
@@ -216,6 +347,7 @@ export class DocumentSessionService {
           }
           session.savedContent = publication?.content ?? copied.content; session.snapshot.diskVersion = version; session.snapshot.persistedRevision = copied.draftRevision; session.snapshot.format = format;
           if (publication) { session.aliases = mergeReferenceAliases(session.aliases, publication.replacements); session.snapshot.content = rewriteDocumentReferences(session.snapshot.content, publication.replacements); }
+          // Only the frozen request's revision is confirmed; newer drafts produced by continued input are still kept in the private recovery record.
           // 只确认冻结请求的版本；继续输入产生的较新草稿仍保留在私有恢复记录。
           const recovery = await this.queue(`session:${copied.documentSessionId}`, () => this.persistRecovery(session));
           return { status: unchanged ? 'unchanged' : 'committed', requestId: copied.requestId, documentSessionId: copied.documentSessionId, committedDraftRevision: copied.draftRevision, snapshot: this.clone(session), committedContent: session.savedContent, referenceReplacements: publication?.replacements, recoveryMessage: [recovery.recoveryMessage, backupWarning].filter(Boolean).join('\n') || undefined, index: { kind: 'not-applicable' } };
@@ -223,6 +355,16 @@ export class DocumentSessionService {
       } catch (error) { return this.failure(copied, error); }
     });
   }
+  /**
+   * Saves the current draft to a new or different target file.
+   * 将当前草稿保存到新的或不同的目标文件。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @param request - Save request / 保存请求
+   * @param selectedPath - User-selected target path / 用户选择的目标路径
+   * @param expectedTargetHash - Expected hash of the existing target (null if new file) / 现有目标的预期哈希（新文件时为 null）
+   * @returns Save result / 保存结果
+   */
   async saveAs(sender: number, request: DocumentSaveRequest, selectedPath: string, expectedTargetHash: string | null): Promise<DocumentSaveResult> {
     const session = this.session(sender, request.documentSessionId), copied = structuredClone(request);
     const classified = this.classify(selectedPath);
@@ -266,12 +408,32 @@ export class DocumentSessionService {
       } catch (error) { if (!committed) await publication?.rollback(); return this.failure(copied, error); }
     });
   }
+  /**
+   * Returns the disk hash of a target file for save-as conflict detection (null if not found).
+   * 返回目标文件的磁盘哈希，用于另存冲突检测（未找到时为 null）。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @param sessionId - Session id / 会话标识
+   * @param target - Absolute target file path / 绝对目标文件路径
+   * @returns SHA-256 hash or null / SHA-256 哈希或 null
+   */
   async targetHash(sender: number, sessionId: string, target: string): Promise<string | null> {
     this.session(sender, sessionId);
     const classified = this.classify(target);
     if (classified.library) throw new DocumentError('DOCUMENT_LIBRARY_TARGET', '目标属于笔记库，请使用“加入笔记库”。');
     try { return (await this.read(classified.real)).version.diskHash; } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; }
   }
+  /**
+   * Re-reads the file from disk, replacing the current session content (requires a clean or discarded draft first).
+   * 从磁盘重新读取文件，替换当前会话内容（需先保存或放弃当前草稿）。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @param id - Session id / 会话标识
+   * @param revision - Expected current draft revision / 预期的当前草稿版本
+   * @param encoding - Explicit encoding choice when auto-detect fails / 自动检测失败时的显式编码选择
+   * @param discard - Whether to discard unsaved changes / 是否放弃未保存的更改
+   * @returns Updated snapshot / 更新后的快照
+   */
   async reopen(sender: number, id: string, revision: number, encoding?: DocumentEncoding, discard = false): Promise<DocumentSnapshot> {
     const session = this.session(sender, id);
     if (session.busy || session.snapshot.draftRevision !== revision || (!discard && session.snapshot.content !== session.savedContent)) throw new DocumentError('DOCUMENT_BUSY', '请先保存或放弃当前草稿，再重新读取文件。');
@@ -281,6 +443,14 @@ export class DocumentSessionService {
     session.snapshot.capabilities = this.capabilities(decoded.content, session.snapshot.fileKind);
     return this.clone(session);
   }
+  /**
+   * Joins the external document into a registered library, copying resources if applicable.
+   * 将外部文档加入已注册的库，如适用则复制资源。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @param request - Join request with library path and draft revision / 含库路径与草稿版本的加入请求
+   * @returns Join result with library path and transfer token / 含库路径与转移令牌的加入结果
+   */
   async join(sender: number, request: DocumentJoinRequest): Promise<DocumentJoinResult> {
     const session = this.session(sender, request.documentSessionId);
     const copied = structuredClone(request);
@@ -294,6 +464,14 @@ export class DocumentSessionService {
       return { ...result, libraryPath: copied.libraryPath, draftRevision: copied.draftRevision, transferToken };
     });
   }
+  /**
+   * Closes a document session after validating the close reason and pending state.
+   * 校验关闭原因和待处理状态后关闭文档会话。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @param request - Close request with reason and draft revision / 含原因与草稿版本的关闭请求
+   * @returns Close result with optional recovery message / 含可选恢复消息的关闭结果
+   */
   async close(sender: number, request: DocumentCloseRequest): Promise<DocumentCloseResult> {
     if (this.closed.get(request.documentSessionId) === sender) return { closed: true };
     const session = this.session(sender, request.documentSessionId);
@@ -311,6 +489,14 @@ export class DocumentSessionService {
       return { closed: true, ...(cleaned ? {} : { recoveryMessage: '文件会话已关闭，但旧恢复缓存未能清理。该旧草稿可能仍会在重启后的恢复列表中出现。' }) };
     });
   }
+  /**
+   * Restores a saved recovery record into a new editing session.
+   * 将已保存的恢复记录恢复为新的编辑会话。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @param recoveryId - Recovery record identifier / 恢复记录标识
+   * @returns Snapshot of the restored session / 恢复会话的快照
+   */
   async restore(sender: number, recoveryId: string): Promise<DocumentSnapshot> {
     if ([...this.sessions.values()].some(session => session.recoveryId === recoveryId && session.busy)) throw new DocumentError('DOCUMENT_BUSY', '原会话的保存仍在结束，请稍后恢复草稿。');
     const record = await this.recovery.read(recoveryId);
@@ -320,17 +506,39 @@ export class DocumentSessionService {
     this.options.claimPath?.(classified.real);
     const id = randomUUID(), kind = getFileTypeInfo(record.displayPath)!.kind;
     const snapshot: DocumentSnapshot = { documentSessionId: id, source: { kind: 'external' }, displayPath: classified.real, fileKind: kind, content: record.content, format: record.format, diskVersion: record.diskVersion, draftRevision: record.draftRevision + 1, persistedRevision: -1, capabilities: this.capabilities(record.content, kind) };
+    // Keep the disk hash from recovery time; a changed or missing original can only be explicitly saved-as, never auto-overwritten.
     // 保持恢复时的磁盘 hash；已变化或缺失的原文件只能显式另存，不能自动覆盖。
     const session: Session = { sender, snapshot, savedContent: '\u0000', requests: new Map(), transfers: new Map(), busy: 0, recoveryId: id };
     this.resources.adopt(id, record.draftAssets ?? []);
     await this.recovery.write(this.record(session)); await this.recovery.terminate(record, 'transferred'); this.sessions.set(id, session); return this.clone(session);
   }
+  /**
+   * Returns whether the sender has any dirty or busy sessions that block operations like backup.
+   * 返回发送方是否有脏或忙的会话（会阻塞备份等操作）。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   * @returns Whether dirty or busy sessions exist / 是否存在脏或忙的会话
+   */
   hasDirty(sender: number): boolean { return [...this.sessions.values()].some(s => s.sender === sender && (s.snapshot.content !== s.savedContent || s.busy > 0)); }
+  /**
+   * Waits until all queued file operations and session tasks have settled.
+   * 等待所有排队的文件操作和会话任务完成。
+   */
   async drain(): Promise<void> { while (this.files.size || [...this.sessions.values()].some(s => s.busy)) { await Promise.allSettled([...this.files.values(), ...[...this.sessions.values()].flatMap(s => [...s.requests.values()].map(r => r.task))]); } }
+  /**
+   * Releases all sessions belonging to a sender (called on window close).
+   * 释放属于某发送方的所有会话（窗口关闭时调用）。
+   *
+   * @param sender - WebContents sender id / WebContents sender id
+   */
   release(sender: number): void { for (const [id, s] of this.sessions) if (s.sender === sender && !s.busy) { this.sessions.delete(id); this.options.onReleased?.(id); void this.resources.release(id, true); } for (const [id, r] of this.pending) if (r.sender === sender) this.pending.delete(id); }
-  /** 渲染进程重载时只释放捕获的旧会话，保留恢复记录及新渲染进程的会话。 */
+  /**
+   * When the renderer reloads, only captured old sessions are detached; recovery records and new-renderer sessions are preserved.
+   * 渲染进程重载时只释放捕获的旧会话，保留恢复记录及新渲染进程的会话。
+   */
   async detach(sender: number): Promise<void> {
     const abandoned = [...this.sessions].filter(([, session]) => session.sender === sender);
+    // After a WebContents reload, undelivered requests continue to show; cleanup happens on window destroy via release.
     // 同一 WebContents 重载后继续显示未处理请求；窗口销毁时由 release 清理。
     await Promise.allSettled(abandoned.flatMap(([, session]) => [...session.requests.values()].map(request => request.task)));
     await Promise.allSettled([...this.files.values()]);

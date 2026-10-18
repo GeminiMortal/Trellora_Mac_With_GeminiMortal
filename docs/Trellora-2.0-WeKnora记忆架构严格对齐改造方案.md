@@ -1271,7 +1271,7 @@ prompt 只能选择旧或新之一，绝不双投影
 
 22. **追加、提案与确认明确分离。** 2026-10-04 用户批准 [三种保存方式对照与优化实施方案](./Trellora-长期记忆三种保存方式对照与优化实施方案.md) 并要求开始开发，按 WK-M3 → WK-M4 → WK-M8 逐阶段通过完成门。topic/包含关系不授予覆盖权限，独立新增可并存，替换/撤销必须绑定精确目标及主进程语义快照；后台语义 update/delete 均先 pending，确认前旧 active 保留。schema v11 分开 active/pending 唯一约束，增加同 scope 目标、不可变对照快照、动作和保护元数据；确认、拒绝、编辑、删除、容量维护原子执行，撤销提案只读且不能变为 active 事实。旧来源/正文/ID/替代链不重写，不猜旧 pending 目标，不自动复活 superseded。保护不豁免原配额归档/过期；pending 不计 active 配额。明确保存保留无模型路径和 2/6 rune 规则，歧义允许待审，回执区分保存/待审/关闭/失败及实际条目状态。新提炼 v2 仅使用可信新用户证据和展示的 active 目标，整段原子提交；旧协议/未完成审查界面以技术暂停保留来源及预算，旧确认接口不执行高级提案。整理保护独立于 origin=manual，受保护内容先预览确认。此项不改变 5/3/4 条目枚举、两种模式或现有数值；实施状态和新证据分阶段记录，不沿用旧完成报告。
 
-第 1～20 项 2026-10-03 修复依据用户批准的 [长期记忆自动提炼与整理修复实施方案](./Trellora-长期记忆自动提炼与整理修复实施方案.md)，不改变其他公开枚举、默认值和阈值。第 21 项修正 Trellora 对既有脱敏阈值适用范围的误用，依据用户本次明确保存失败反馈及修复授权。第 22 项已依次通过 WK-M3、WK-M4、WK-M8 补充完成门，见 §17.12～17.14 和 [本次优化验收记录](./verification/长期记忆三种保存方式优化验收记录.md)；不据此将其他记忆域阶段或干净 Windows 升级验收标为完成。
+第 1～20 项 2026-10-03 修复依据用户批准的 [长期记忆自动提炼与整理修复实施方案](./Trellora-长期记忆自动提炼与整理修复实施方案.md)，不改变其他公开枚举、默认值和阈值。第 21 项修正 Trellora 对既有脱敏阈值适用范围的误用，依据用户本次明确保存失败反馈及修复授权。第 22 项已依次通过 WK-M3、WK-M4、WK-M8 补充完成门，见 §17.12～17.14 和 [本次优化验收记录](./verification/长期记忆三种保存方式优化验收记录.md)；不据此将其他记忆域阶段或干净 macOS 升级验收标为完成。
 
 23. **记忆管理按页读取。** 2026-10-04 用户授权为长期记忆页面增加 Mantine 分页及前后端分页，归 WK-M8 管理 UI 补充阶段。保留原游标接口、管理 API 默认 50/最大 200、提炼候选 200/主题候选 40 和所有记忆生命周期合同；新增独立页码接口，SQL 按可信 workspace/principal 过滤后执行 COUNT 与 LIMIT/OFFSET。界面各页签默认每页 10 条，只加载当前页签；筛选重置首页、刷新保留页码、删除最后一页自动回退。全局待确认数量由主进程统计，不能使用本页数量冒充；迟到的旧页响应不得覆盖新页。完成门包含单次返回上限、稳定排序、过滤总数、跨作用域隔离、旧游标兼容和真实 Electron 翻页/刷新/删除/切换交互。
 
@@ -1391,7 +1391,7 @@ WK-M4 增加稳定失败类别：格式/证据校验、模型不可用、超时�
 
 WK-M8 禁止后台语义合并，人工方案确认仍校验精确来源指纹。聊天卡片读取当前条目状态，避免已删除/已替代条目继续显示旧成功回执；失败显示真实类别；整理跳过明确显示“本次未合并”。常见模型保存承诺在交付、canonical 回答及显示/复制/保存笔记时规范为应用回执说明，代码、引用、示例不改写。有限文本规范化不声称能识别所有自然语言承诺；持久状态始终以程序回执为准。
 
-本次验收证据：[记忆维护检查](./verification/memory-maintenance.json)、[Electron 审查与失败显示](./verification/memory-proposal-ui.json)。既有历史验收条目只作各阶段当时的记录，不代表旧自动生效策略仍有效；新包、真实模型语义质量和干净 Windows 验收仍需独立完成门。
+本次验收证据：[记忆维护检查](./verification/memory-maintenance.json)、[Electron 审查与失败显示](./verification/memory-proposal-ui.json)。既有历史验收条目只作各阶段当时的记录，不代表旧自动生效策略仍有效；新包、真实模型语义质量和干净 macOS 验收仍需独立完成门。
 
 同日 WK-M8 界面补充：移除旧有效条目的“整理需确认”文案；“待确认”仅承载尚未生效的记忆，空状态说明已有有效记忆无需再次确认及合并入口。手动“整理”生成方案后按钮显示“审查合并方案（数量）”，关闭弹窗保留方案并允许重开，不重复请求模型或触发整理冷却；跳过或确认后移除对应方案。过期或来源变化的提交错误显示在合并弹窗内，可重新整理。该入口不改变原记忆状态和服务器指纹、有效期校验。
 
@@ -1403,7 +1403,7 @@ WK-M8 禁止后台语义合并，人工方案确认仍校验精确来源指纹�
 
 新增受限 `memory:get-citation-source` IPC：仅接受回答 ID 和记忆 ID，主进程从当前可信 workspace/principal 的使用快照取得原始消息 ID，再验证原始对话的归属。原始对话以纯文本弹窗展示；手工维护、来源未记录、来源删除和读取失败分别展示真实状态。删除记忆或来源对话后，已有回答的内容快照及编号继续保留。
 
-`verify:memory-citations` 覆盖编号与列表顺序独立、Markdown/代码保护、知识库与记忆混合引用、重复提交、跨主体来源拒绝、完整原话、删除及重启恢复；原召回合同和 WK-M8 lifecycle 检查通过。`verify:memory-citations-electron` 使用隔离的真实 Electron/main/preload/React/SQLite 和本地模型响应夹具，验证实际胶囊、原始对话 IPC、来源删除、完整退出重启、深浅主题及窄窗口。证据见 [Electron 验收数据](./verification/memory-citations-electron.json)。TypeScript、全仓 lint、Electron/Vite 构建通过；lint 仅保留既有打包产物的 10 个 warning。本次未执行真实模型生成或重新发布安装包，不改变其他阶段及干净 Windows 升级的完成状态。
+`verify:memory-citations` 覆盖编号与列表顺序独立、Markdown/代码保护、知识库与记忆混合引用、重复提交、跨主体来源拒绝、完整原话、删除及重启恢复；原召回合同和 WK-M8 lifecycle 检查通过。`verify:memory-citations-electron` 使用隔离的真实 Electron/main/preload/React/SQLite 和本地模型响应夹具，验证实际胶囊、原始对话 IPC、来源删除、完整退出重启、深浅主题及窄窗口。证据见 [Electron 验收数据](./verification/memory-citations-electron.json)。TypeScript、全仓 lint、Electron/Vite 构建通过；lint 仅保留既有打包产物的 10 个 warning。本次未执行真实模型生成或重新发布安装包，不改变其他阶段及干净 macOS 升级的完成状态。
 
 ### 17.15 记忆管理分页：WK-M8 补充完成门（2026-10-04）
 
@@ -1441,8 +1441,8 @@ v2 Prompt/Schema/解析器/preflight 已统一为 operation、targetItemId、rel
 | WK-M5 | 部分（真实召回及四入口运行验收通过） | ContextEnvelope、L4 lexical/vector/Recall、真实 1024 维 embedding、KB Agent `search_memory`、used ledger、当前与历史回答回显 | chat web Agent 与结构化 Agent 的按需读工具完整矩阵 | recall 专项、真实 embedding/provider、四入口及完整 Electron 重启通过，见 17.11 |
 | WK-M6 | 部分（代码已实施） | canonical raw turn、schema v8 档案/FTS/向量字段、durable 扫漏、混合检索、三类 Agent 动态读工具 | Electron 重启、真实 embedding/provider 与三类 Agent 端到端手工验收 | `verify:conversation-search-contract`、M2/M5/当前笔记回归、TypeScript build、变更文件 ESLint、Electron main bundle 通过 |
 | WK-M7 | 部分（代码已实施） | ReAct、artifact、真实模型窗口、provider 预算门 | Electron/真实 provider 的超时与物理溢出手工验收；current-note 结构化 route 的最终切换归 WK-M9 | `verify:wk-m7-working-memory`、固化/ReAct/窗口回归、TypeScript build 通过 |
-| WK-M8 | 部分（整理和实际状态 UI 运行验收通过） | 30/240/5、2/8/1.15、模型复核整理、有效期/编辑快照/互斥/取消、五类管理 UI、读取/提炼/回执真实状态 | 账本全链路、Windows 旧版完整升级及全域 shadow 报告 | 真实 Qwen 整理、embedding、Electron/portable 重启、实际按钮及对话回执通过，见 17.10/17.11 |
-| WK-M9 | 正式四入口切流完成（保留回滚与后续发布观察） | 四 route 单投影、发行默认 canonical、canonical turn、真实模型与 embedding、逐 route/模型实际运行状态 | Windows 旧版完整升级、更多实际场景及发布周期观察；旧表删除另立任务 | 逐入口真实 Qwen/完整重启、最终无覆盖变量四入口与零违规诊断、正式 portable 验收，见 17.11 |
+| WK-M8 | 部分（整理和实际状态 UI 运行验收通过） | 30/240/5、2/8/1.15、模型复核整理、有效期/编辑快照/互斥/取消、五类管理 UI、读取/提炼/回执真实状态 | 账本全链路、macOS 旧版完整升级及全域 shadow 报告 | 真实 Qwen 整理、embedding、Electron/portable 重启、实际按钮及对话回执通过，见 17.10/17.11 |
+| WK-M9 | 正式四入口切流完成（保留回滚与后续发布观察） | 四 route 单投影、发行默认 canonical、canonical turn、真实模型与 embedding、逐 route/模型实际运行状态 | macOS 旧版完整升级、更多实际场景及发布周期观察；旧表删除另立任务 | 逐入口真实 Qwen/完整重启、最终无覆盖变量四入口与零违规诊断、正式 portable 验收，见 17.11 |
 
 任何阶段只有“实现 + 针对性测试 + Electron/真实 provider 所需验收”全部完成后才能标记已完成。通过 TypeScript 检查不等于记忆架构完成。
 
@@ -1500,7 +1500,7 @@ v2 Prompt/Schema/解析器/preflight 已统一为 operation、targetItemId、rel
 - `ConversationSearchService` 以档案行的 `pending/ready/failed/disabled` 作为可恢复索引状态。启动和查询前只扫描 metadata 中归属完全一致的完成轮次，无归属旧轮次和其他 principal 不会被当前主体认领；后台每批最多 50 条补向量，write 10 秒、query 2 秒、cosine 0.5、候选 400，embedding 缺失或失败时回退关键词，不影响主问答。
 - 混合检索按一基 RRF `1/(60 + zeroBasedRank + 1)` 融合。工具默认 5、最大 8，关键词候选为 `limit×3`，内部消费批次为 `limit+2`；当前 session 在关键词和向量 SQL 候选阶段排除。展示 Q/A 各最多 400 Unicode code points，完整回读再次校验 owner、完成状态和替代关系。
 - 新增只读 `search_conversations(query, limit?)`，模型参数不包含 owner 或 session。知识库 Agent、chat web Agent 和 persistent current-note ReAct 仅在主进程绑定可信 scope、当前 session 且档案结构可用时动态注册；session-only、disabled、Direct 路径或索引不可用时不向模型暴露。输出包裹在 `<past_conversations>` 并声明为不可信旧原话、不是知识库证据；不可用和零匹配为不同工具结果。
-- canonical Agent history 已把 `search_conversations` 纳入 `retainRetrievalHistory=false` 的过期集合，下一轮只保留工具调用结构，不重放旧检索正文。主进程退出会停止索引服务；SQLite 使用内存临时表，避免 Windows 受限临时目录导致大 canonical turn 在 FTS/FK schema 下提交失败。
+- canonical Agent history 已把 `search_conversations` 纳入 `retainRetrievalHistory=false` 的过期集合，下一轮只保留工具调用结构，不重放旧检索正文。主进程退出会停止索引服务；SQLite 使用内存临时表，避免 macOS 受限临时目录导致大 canonical turn 在 FTS/FK schema 下提交失败。
 - 自动验证已通过：`verify:conversation-search-contract` 覆盖 v7→v8、原子档案、FTS 同步、特殊字符、当前会话排除、5/8/400、稳定排序、一基 RRF、向量-only、向量失败回退、跨 principal、完整回读、重启扫漏、无归属拒绝、历史过期和工具边界；同时通过 `verify:memory-schema-and-scope`、`verify:memory-canonical-turns`、`verify:memory-recall-contract`、`verify:current-note-react-loop`、`verify:plan-aware-prompt`、项目固定版本 TypeScript build、变更文件 ESLint（仅既有 `KnowledgePanel` hook warning）、Electron main bundle 与 `git diff --check`。
 - 尚未完成真实 embedding/provider 的超时与失败注入、Electron 完整退出/重启后的后台回填，以及知识库 Agent、chat web Agent、current-note ReAct 的端到端人工调用验收，因此 WK-M6 暂不标记为“已实施完成”；旧无归属 turn 的显式迁移继续归 WK-M8，不允许启动扫漏隐式认领。
 
@@ -1521,7 +1521,7 @@ v2 Prompt/Schema/解析器/preflight 已统一为 operation、targetItemId、rel
 - 新增 `MemoryConsolidationService`：自动/手工最短间隔 24h/1min，自动少于 6 条直接跳过，簇大小 3/8，Jaccard 阈值 .55/.30、同模型同维向量 cosine 阈值 .86/.75。规则只提名候选；永久合并必须由 temperature 0、thinking simple、max output 600 的模型明确批准，合并陈述强制单行且最多 60 code points。整理同时归档已过期条目，并把 45 天未使用的旧 task importance 降为 1；失败以稳定 skip reason 返回。
 - 新增带审计的 `MemoryMigrationService`：旧 profile 依分类/来源/状态映射到五类 L4，profile 会保留 label/value 语义，超过 300 code points 时截到硬上限并转为 pending 人工复核，rejected 只形成 tombstone；注册笔记库中的 `.menghan-meta/assistant-memory.db` 仅迁移 complete/partial/not-found 且有最终回答的轮次到 canonical QA/L3，保留 contentHash、noteId、relativePath 和原 route 元数据，pending/failed 只记 skipped audit。source fingerprint 与确定性目标 ID 令启动迁移可幂等重跑，旧摘要/checkpoint 不写入 L4。
 - 用户信息设置页已切换到 canonical 五类记忆，支持 active/pending/all 与类型筛选、添加、编辑、确认、拒绝、删除、清空、导入、导出和立即整理，并展示可晋升话题及熟悉文档；回答卡片可展开查看本答实际使用的记忆快照，历史会话恢复时也从账本重建。导出最多 20000 条，列表最多 200，导入仍经过统一脱敏、墓碑和去重写入边界。
-- `verify:wk-m8-lifecycle` 已通过，覆盖 30/240/5、亲和度 2/8/1.15、同回答幂等、停用后的数据管理、模型批准合并、手工 60 秒间隔、超长 legacy profile 人工复核，以及 rewrite/门控/真实引用/完整管理 IPC 接线；schema/write/recall/conversation/QA 回归、项目固定 TypeScript build 与变更文件 ESLint 均已通过（仅保留既有 `KnowledgePanel` hook warning）。仍需真实 chat/embedding provider、Electron 完整退出重启、当前与历史回答账本回显，以及 Windows 打包版升级人工验收，因此 WK-M8 状态保持“部分（代码已实施）”，不标记为完整完成。
+- `verify:wk-m8-lifecycle` 已通过，覆盖 30/240/5、亲和度 2/8/1.15、同回答幂等、停用后的数据管理、模型批准合并、手工 60 秒间隔、超长 legacy profile 人工复核，以及 rewrite/门控/真实引用/完整管理 IPC 接线；schema/write/recall/conversation/QA 回归、项目固定 TypeScript build 与变更文件 ESLint 均已通过（仅保留既有 `KnowledgePanel` hook warning）。仍需真实 chat/embedding provider、Electron 完整退出重启、当前与历史回答账本回显，以及 macOS 打包版升级人工验收，因此 WK-M8 状态保持“部分（代码已实施）”，不标记为完整完成。
 
 ### 17.9 WK-M9 实施证据（2026-09-09）
 
@@ -1547,7 +1547,7 @@ v2 Prompt/Schema/解析器/preflight 已统一为 operation、targetItemId、rel
 - 真实 Qwen `qwen3.7-flash` 按 chat → knowledge-base → current-note Direct → current-note ReAct 执行正式 IPC，产生 4 条已处理回执和 3 条稳定记忆；真实整理审核并合并 1 簇，有限 expiresAt 保持。完整退出重启后回执与条目 ID 不变，没有重放来源。知识库检索使用合成资料 projection fixture，不据此宣称资料解析流水线完成。
 - 正式 portable 在本机通过默认 observe 状态、提炼、整理、完整重启、explicit_only、pending 不进入记忆 Prompt、clear 后旧来源不重放及 SQLite 检查。测试使用正式 main/preload/IPC，没有注入 handler；app.asar 的 main/preload/迁移 worker 与当前构建字节一致，嵌入式 Worker 握手也通过。测试包 SHA256 为 `4d5bb01cf56d71f2b846e5fcef09c85c60f96a909ebbcf2c83e870ff950e7d54`，仅作本地验收产物，没有发布。
 - `pnpm exec tsc -b`、`pnpm lint`、Electron/renderer 构建及 `git diff --check` 通过。额外严格 Electron 依赖图检查仍有既有类型问题，具体范围记于验收记录，不能将构建成功表述为全 Electron 严格类型通过。
-- 本节记录 2026-10-03 的修复和观察阶段，彼时正式默认保持 observe。2026-10-04 的正式四入口切流及真实 embedding 证据见 §17.11；其他阶段、旧表删除和干净 Windows 虚拟机仍按各自完成门验收。
+- 本节记录 2026-10-03 的修复和观察阶段，彼时正式默认保持 observe。2026-10-04 的正式四入口切流及真实 embedding 证据见 §17.11；其他阶段、旧表删除和干净 macOS 虚拟机仍按各自完成门验收。
 
 详细实现、命令、结果文件和运行边界见[长期记忆修复验收记录](./verification/长期记忆修复验收记录.md)。
 
@@ -1559,7 +1559,7 @@ v2 Prompt/Schema/解析器/preflight 已统一为 operation、targetItemId、rel
 - 最终发行默认、不设置切流覆盖变量的真实 `qwen3.7-flash` 四入口验收通过：4 个自动处理回执，重启后条目及回执不变；实际切流诊断 7 个观测的四类违规均为 0。真实 `qwen3.7-text-embedding` 生成 5 条 1024 维向量，并实际用于召回。
 - writer、canonical turns、extraction、recall、cutover 专项及 maintenance 26 组/43 库回归通过；真实 Electron 验证按钮、principal 恢复、普通输入框发送、对话回执及 PDF 附件记忆输入。`pnpm exec tsc -b`、lint（0 errors）、Electron/Vite 构建通过。
 
-正式 portable、本机运行范围、结果 JSON、截图与已知检查边界见[长期记忆正式切流验收记录](./verification/长期记忆正式切流验收记录.md)。本节只收口本次正式切流与长期记忆修复，不代替其他阶段的完整历史搜索/按需工具、干净 Windows VM、旧版升级或发布周期验收。
+正式 portable、本机运行范围、结果 JSON、截图与已知检查边界见[长期记忆正式切流验收记录](./verification/长期记忆正式切流验收记录.md)。本节只收口本次正式切流与长期记忆修复，不代替其他阶段的完整历史搜索/按需工具、干净 macOS 环境、旧版升级或发布周期验收。
 
 ## 18. 验收矩阵
 
@@ -1608,7 +1608,7 @@ v2 Prompt/Schema/解析器/preflight 已统一为 operation、targetItemId、rel
 - UI 能查看、确认、拒绝、编辑、删除、清空、导出、立即整理和查看本答使用记忆；
 - 使用至少一个真实 chat model 和一个真实 embedding model 验证；
 - 完整退出并重启 Electron 后，历史、job、lease、索引和开关一致；
-- Windows 打包版验证数据库升级、sqlite-vec/native ABI 和离线 lexical 降级。
+- macOS 打包版验证数据库升级、sqlite-vec/native ABI 和离线 lexical 降级。
 
 每个脚本放在 `scripts/`、扩展名 `.mjs`，fixture 放在 `scripts/fixtures/weknora-memory/`，并在 `package.json` 暴露同名 `verify:` 命令：
 

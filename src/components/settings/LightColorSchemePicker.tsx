@@ -1,7 +1,7 @@
 import { UnstyledButton } from '@mantine/core';
 import { Check } from 'lucide-react';
-import { LIGHT_COLOR_SCHEMES, getColorScheme, type LightColorScheme } from '../../../shared/lightColorSchemes';
-import { t } from '../../i18n';
+import { LIGHT_COLOR_SCHEMES, getColorScheme, type LightColorScheme } from '../../../shared/lightColorSchemes.ts';
+import { t } from '../../i18n/index.ts';
 import './LightColorSchemePicker.css';
 
 interface Props {

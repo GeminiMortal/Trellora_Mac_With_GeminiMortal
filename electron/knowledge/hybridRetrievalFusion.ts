@@ -1,12 +1,17 @@
+/**
+ * Hybrid retrieval fusion: RRF-based scoring, parent aggregation, and rerank fusion.
+ * 混合检索融合：基于 RRF 的评分、父块聚合与 rerank 融合。
+ */
+
 import type { MaterialChunkSearchResult } from '../pipeline/materialChunkSearch';
 
-/** RRF 名次常数；FTS 名次分数也复用该常数，为全局唯一定义点（优化方案 P2-8）。 */
+/** RRF rank constant (global definition point). / RRF 名次常数（全局唯一定义点）。 */
 export const RRF_RANK_CONSTANT = 60;
-/** 词法通道排序键中关键词增强分的权重：lexicalKey = bm25RankScore + boost × keywordScore。 */
+/** Lexical channel keyword boost weight. / 词法通道关键词增强权重。 */
 export const LEXICAL_KEYWORD_BOOST = 0.25;
-/** 父块聚合中「其余命中子块 support」的权重 μ。 */
+/** Parent aggregation support weight μ. / 父块聚合支持权重 μ。 */
 export const PARENT_SUPPORT_WEIGHT = 0.2;
-/** rerank 融合中 rerank 分的权重 β。 */
+/** Rerank fusion weight β. / Rerank 融合权重 β。 */
 export const RERANK_FUSION_BETA = 0.7;
 /** rerank gating 阈值 τ：低于该值的父块被剔除出证据。 */
 export const RERANK_GATE_THRESHOLD = 0.25;

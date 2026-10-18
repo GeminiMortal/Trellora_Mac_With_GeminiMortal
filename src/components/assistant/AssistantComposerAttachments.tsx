@@ -1,10 +1,10 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import { useState } from 'react';
 import { ActionIcon, Box, Group, Image, Text, Tooltip, UnstyledButton } from '@mantine/core';
 import { FileText, X } from 'lucide-react';
 import type { AssistantAttachment } from '../../electron';
-import { AssistantImageViewer, type AssistantImageAttachment } from './AssistantImageViewer';
-import { formatAssistantAttachmentBytes } from './assistantAttachmentPresentation';
+import { AssistantImageViewer, type AssistantImageAttachment } from './AssistantImageViewer.tsx';
+import { formatAssistantAttachmentBytes } from './assistantAttachmentPresentation.ts';
 
 interface AssistantComposerAttachmentsProps {
   attachments: AssistantAttachment[];

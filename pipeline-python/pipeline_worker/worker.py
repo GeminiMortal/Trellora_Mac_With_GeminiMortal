@@ -1,3 +1,11 @@
+"""
+Module: worker
+Main NDJSON protocol worker implementation. Handles request routing,
+stage execution, cancellation, and graceful shutdown.
+模块：worker
+NDJSON 协议 Worker 主实现。处理请求路由、阶段执行、取消和优雅关闭。
+"""
+
 from __future__ import annotations
 
 import os
@@ -21,6 +29,13 @@ from .search_tokenizer import tokenize_search_query
 
 
 class Worker:
+    """
+    Main worker class that processes NDJSON requests from Electron.
+    Manages concurrent stage execution with cancellation support.
+    主 Worker 类，处理来自 Electron 的 NDJSON 请求。
+    管理带取消支持的并发阶段执行。
+    """
+
     def __init__(self) -> None:
         self.writer = ProtocolWriter()
         self.shutdown_event = threading.Event()
@@ -28,6 +43,10 @@ class Worker:
         self.active_lock = threading.Lock()
 
     def handle(self, request: dict[str, Any]) -> None:
+        """
+        Route incoming request to appropriate handler method.
+        将传入请求路由到相应的处理方法。
+        """
         request_id = str(request.get('id', ''))
         method = request.get('method')
         params = request.get('params') if isinstance(request.get('params'), dict) else {}
@@ -57,6 +76,10 @@ class Worker:
         self.error(request_id, 'UNKNOWN_METHOD', f'不支持的 Worker 方法：{method}', False)
 
     def tokenize_search(self, request_id: str, params: dict[str, Any]) -> None:
+        """
+        Tokenize search query using Jieba with dictionary and stopwords.
+        使用 Jieba 对搜索查询进行分词，支持词典和停用词。
+        """
         try:
             dictionary_terms = params.get('dictionaryTerms', [])
             stopwords = params.get('stopwords', [])
@@ -74,6 +97,12 @@ class Worker:
             self.error(request_id, code, f'Jieba 检索分词失败：{exc}', False)
 
     def start_stage(self, request_id: str, params: dict[str, Any]) -> None:
+        """
+        Start a pipeline stage execution in a separate thread.
+        Only one stage can run at a time (WORKER_BUSY if occupied).
+        在独立线程中启动流水线阶段执行。
+        同一时间只能运行一个阶段（占用时返回 WORKER_BUSY）。
+        """
         job_id = str(params.get('jobId', ''))
         if not job_id:
             self.error(request_id, 'INVALID_REQUEST', '缺少 jobId。', False)
@@ -88,6 +117,10 @@ class Worker:
             thread.start()
 
     def run_stage(self, request_id: str, job_id: str, params: dict[str, Any], cancel_event: threading.Event) -> None:
+        """
+        Execute the specified pipeline stage with progress reporting.
+        执行指定的流水线阶段并报告进度。
+        """
         try:
             stage = str(params.get('stage', ''))
             options = params.get('options') if isinstance(params.get('options'), dict) else {}
@@ -133,6 +166,8 @@ class Worker:
             elif stage == 'graph':
                 config = options.get('config') if isinstance(options.get('config'), dict) else {}
                 # entitiesDirs 走 options 而非 inputPath，必须同样启用长路径前缀，否则超过 MAX_PATH 的资料库路径会被判为不存在。
+                # entitiesDirs uses options instead of inputPath, must enable long path prefix
+                # otherwise library paths exceeding MAX_PATH will be treated as non-existent.
                 entities_dirs = [normalize_worker_path(value) for value in options.get('entitiesDirs', []) if isinstance(value, (str, Path))]
                 counts = run_graph_stage(entities_dirs, output_dir, str(options.get('graphKey', '')), config, cancel_event, progress, str(options.get('stageKey', '')))
                 artifact_manifest = str(Path(output_dir) / 'stage-manifest.json')
@@ -157,6 +192,10 @@ class Worker:
                 self.active.pop(job_id, None)
 
     def cancel(self, request_id: str, job_id: str) -> None:
+        """
+        Cancel an active stage by setting its cancel event.
+        通过设置取消事件来取消活跃的阶段。
+        """
         with self.active_lock:
             active = self.active.get(job_id)
         if active:
@@ -164,6 +203,10 @@ class Worker:
         self.writer.send({'id': request_id, 'type': 'result', 'ok': True, 'jobId': job_id, 'cancelRequested': bool(active)})
 
     def shutdown(self, request_id: str) -> None:
+        """
+        Gracefully shutdown the worker, waiting for active threads.
+        优雅关闭 Worker，等待活跃线程完成。
+        """
         self.shutdown_event.set()
         with self.active_lock:
             threads = [thread for _event, thread in self.active.values()]
@@ -172,6 +215,10 @@ class Worker:
         self.writer.send({'id': request_id, 'type': 'result', 'ok': True})
 
     def progress(self, job_id: str, stage: str, completed: int, total: int | None, unit: str, message: str) -> None:
+        """
+        Send progress event to Electron for UI updates.
+        向 Electron 发送进度事件以更新 UI。
+        """
         self.writer.send({
             'id': f'evt-{job_id}-{completed}',
             'type': 'progress',
@@ -184,6 +231,10 @@ class Worker:
         })
 
     def error(self, request_id: str, code: str, message: str, retryable: bool, diagnostic: str | None = None, job_id: str | None = None) -> None:
+        """
+        Send error response to Electron with structured error information.
+        向 Electron 发送包含结构化错误信息的错误响应。
+        """
         self.writer.send({
             'id': request_id,
             'type': 'result',
@@ -197,6 +248,11 @@ class Worker:
 
 
 def main() -> None:
+    """
+    Entry point for the Worker process. Configures UTF-8 I/O and runs the
+    request processing loop until shutdown.
+    Worker 进程入口。配置 UTF-8 I/O 并运行请求处理循环直到关闭。
+    """
     configure_stdio_utf8()
     worker = Worker()
     for request in read_requests():
@@ -206,7 +262,10 @@ def main() -> None:
 
 
 def normalize_worker_path(value: Any) -> str:
-    """Enable Win32 extended-length paths before stages append artifact names."""
+    """
+    Enable Win32 extended-length paths before stages append artifact names.
+    在阶段追加工件名称之前启用 Win32 扩展长度路径。
+    """
     raw_path = str(value or '')
     if os.name != 'nt' or not raw_path:
         return raw_path

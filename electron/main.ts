@@ -19,14 +19,14 @@ import { OnboardingService } from './onboarding/onboardingService';
 import { MaintenanceBarrier } from './backup/maintenance';
 import { WorkspaceBackupService } from './backup/workspaceBackupService';
 import { WorkspaceRestoreService } from './backup/workspaceRestoreService';
-import { WorkspaceMigrationService } from './workspaceMigrationService';
+import { WorkspaceMigrationService } from './workspace/workspaceMigrationService';
 import { mapRestoredPath, type PhysicalRestoreContext } from './backup/physicalRestore';
 import { ReleaseChecker } from './releaseCheck';
 import { clearRestorePause, isRestorePaused } from './backup/restorePause';
 import { safeBackupSettings } from './backup/snapshot';
 import type { BackupConfiguration } from '../shared/workspaceBackup';
 import { DataRootLocks } from './dataRootLocks';
-import { NoteSaveService } from './noteSaveService';
+import { NoteSaveService } from './note/noteSaveService';
 import { DocumentSessionService } from './documents/documentSessionService';
 import { OpenRequestRouter } from './documents/openRequestRouter';
 import { DOCUMENT_RESOURCE_SCHEME } from './documents/documentResourceService';
@@ -34,17 +34,17 @@ import { DocumentAiService } from './documents/documentAiService';
 import { generateAiText } from './knowledge/aiProvider';
 import type { DocumentAiRequest, DocumentAiApplyRequest } from '../shared/documentAi';
 import type { DocumentEncoding, DocumentDraftRequest, DocumentSaveRequest, DocumentSaveResult, DocumentCloseRequest, DocumentJoinRequest } from '../shared/documentSession';
-import { readNoteBackup } from './noteBackups';
-import { exportNoteFile } from './noteExport';
-import { readRemoteExportImage } from './markdownExportImages';
-import { requestExportImage } from './exportImageRequest';
+import { readNoteBackup } from './note/noteBackups';
+import { exportNoteFile } from './note/noteExport';
+import { readRemoteExportImage } from './markdown/markdownExportImages';
+import { requestExportImage } from './markdown/exportImageRequest';
 import type { NoteExportRequest } from '../shared/noteExport';
-import { NoteCloseCoordinator } from './noteCloseCoordinator';
+import { NoteCloseCoordinator } from './note/noteCloseCoordinator';
 import type { NoteMutationRequest, SaveNoteRequest, NoteCloseResponse } from '../shared/noteSave';
 import type { CreateAssistantNoteRequest, AssistantNoteSource } from '../shared/assistantNote';
-import type { MaterialsDocument } from './materialsLibrary';
-import { createAssistantNote } from './assistantNote';
-import { decodeTextBuffer } from './textFile';
+import type { MaterialsDocument } from './library/materialsLibrary';
+import { createAssistantNote } from './assistant/assistantNote';
+import { decodeTextBuffer } from './files/textFile';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   buildNoteIndex,
@@ -55,12 +55,12 @@ import {
   resolveWikiLink,
   type IndexedNote,
   type NoteIndex,
-} from './noteIndex';
+} from './note/noteIndex';
 import {
   MAX_EDITOR_IMAGE_BYTES,
   saveEditorImageToLibrary,
-} from './libraryServices';
-import { importTextFilesToLibrary } from './importFiles';
+} from './library/libraryServices';
+import { importTextFilesToLibrary } from './files/importFiles';
 import {
   createFolderInLibrary,
   moveEntryInLibrary,
@@ -69,16 +69,16 @@ import {
   restoreEntryPath,
   saveDirectoryOrder,
   type MovePosition,
-} from './libraryFileOps';
-import { createLibraryDirectory } from './libraryCreation';
-import { assertInsideDirectory, getUniquePath, sanitizeEntryName } from './pathGuards';
-import { readTextFile } from './textFile';
-import { loadTreeOrder } from './treeOrder';
+} from './library/libraryFileOps';
+import { createLibraryDirectory } from './library/libraryCreation';
+import { assertInsideDirectory, getUniquePath, sanitizeEntryName } from './files/pathGuards';
+import { readTextFile } from './files/textFile';
+import { loadTreeOrder } from './files/treeOrder';
 import {
   readEditorImageDataUrl,
   registerEditorImageProtocol,
   registerEditorImageProtocolScheme,
-} from './editorImageProtocol';
+} from './files/editorImageProtocol';
 import { getAiInsight, getFavoriteNotePaths, getNoteAnalysis, saveAiInsight, saveLearningPlan, saveOrganizationSuggestion, setFavoriteNote } from './knowledge/metaDatabase';
 import { configureAiProvider, fetchAiProviderModels, generateAiJsonWithOptions, getAiProviderConfig, getAiProviderStatus, getAiProviderStatusForConfig, getRemoteModelContextWindow, resolveAiStructuredOutputCapabilities, testAiProviderConnection, type AiJsonGenerationOptions, type AiProviderConfig } from './knowledge/aiProvider';
 import type { AiExtensionsSettings, AiGenerationApi, AiModelProfile, AiModelSettings, AiModelSettingsInput, AiProviderKind, AssistantAiOptions, DirectorySkillOverride, SkillImportResult } from './knowledge/aiTypes';
@@ -246,14 +246,14 @@ import { NoteAnalysisBatchRepository } from './knowledge/noteAnalysisBatchReposi
 import { NoteAnalysisBatchOrchestrator } from './knowledge/noteAnalysisBatchOrchestrator';
 import { noteAnalysisProviderFingerprint, type NoteAnalysisRunInput } from './knowledge/noteAnalysisBatchPrompt';
 import type { NoteAnalysisRunDetail } from './knowledge/noteAnalysisTypes';
-import { validateSystemWorkspaceDirectory, validateWorkspaceDirectory } from './workspaceService';
+import { validateSystemWorkspaceDirectory, validateWorkspaceDirectory } from './workspace/workspaceService';
 import { KnowledgeIndexCoordinator } from './knowledge/indexCoordinator';
 import { createKeywordSearchOutcome, type KeywordSearchOutcome, type SearchCandidate } from './knowledge/keywordSearch';
 import { buildLexicalMatchTrace, lexicalMatchPriority, rejectsNumericVersionMismatch, type LexicalMatchTrace } from './knowledge/lexicalMatchPolicy';
 import { createNoteLexicalIndex, searchNoteLexically, toNoteSearchDocument, type NoteLexicalIndex } from './knowledge/noteLexicalIndex';
 import { tokenizeCurrentNoteText } from './knowledge/currentNoteStructure';
-import { getLibraryUiState, migrateLibraryUiStatePath, pruneLibraryUiState, saveLibraryUiState, type LibraryUiStatePatch } from './libraryUiState';
-import { activateRegisteredLibrary, listRegisteredLibraries, registerAndActivateLibrary, removeRegisteredLibrary, summarizeRegisteredLibraries } from './libraryRegistry';
+import { getLibraryUiState, migrateLibraryUiStatePath, pruneLibraryUiState, saveLibraryUiState, type LibraryUiStatePatch } from './library/libraryUiState';
+import { activateRegisteredLibrary, listRegisteredLibraries, registerAndActivateLibrary, removeRegisteredLibrary, summarizeRegisteredLibraries } from './library/libraryRegistry';
 import {
   activateMaterialsLibrary,
   createMaterialsLibraryDirectory,
@@ -279,8 +279,8 @@ import {
   syncMaterialsFromNoteLibrary,
   syncNoteToMaterialsLibraries,
   upgradeRegisteredLibraryToMaterials,
-} from './materialsLibrary';
-import { readMineruApiKey, readParsingConfig, saveParsingConfig } from './parsingConfig';
+} from './library/materialsLibrary';
+import { readMineruApiKey, readParsingConfig, saveParsingConfig } from './ai/parsingConfig';
 import { MaterialsLibraryWatcher } from './pipeline/materialsLibraryWatcher';
 import { readWebSearchConfig, readWebSearchRuntimeConfig, saveWebSearchConfig, type WebSearchConfigPatch } from './websearch/webSearchConfig';
 import { listWebSearchProviders, resolveWebSearchProvider } from './websearch/webSearchProviders';
@@ -314,7 +314,7 @@ import {
   type WikiDocumentOutline,
   type WikiSiblingOrderRequest,
   type WikiSiblingOrderResult,
-} from './wikiOutline';
+} from './wiki/wikiOutline';
 import { lockMaterialEmbeddingProfile, readMaterialEmbeddingProfile, testMaterialEmbeddingCandidate } from './pipeline/materialEmbeddingProfile';
 import { MaterialVectorGenerationService } from './pipeline/materialVectorGenerationService';
 import { createMaterialEmbeddingAdapter as createProfileEmbeddingAdapter } from './pipeline/materialEmbeddingAdapters';
@@ -330,6 +330,7 @@ import { readLibraryPipelineLlmBinding, resolveLibraryPipelineLlmConfig, saveLib
 import type { LibraryChunkingConfig, LibraryGraphEnhancementConfig, MineruRuntimeConfig, PipelineAmbiguityConfig, PipelineArtifactPreview, PipelineDocumentStatus, PipelineKeywordPreview, PipelineStageId, PipelineStructureConfig } from './pipeline/types';
 
 // CJS Imports (Downgraded electron-store to 8.1.0 to support this)
+// CJS 导入（降级 electron-store 至 8.1.0 以支持此方式）
 const Store = require('electron-store');
 
 registerEditorImageProtocolScheme();
@@ -467,7 +468,8 @@ const maintenanceBarrier = new MaintenanceBarrier({
 function registerAppHandler(channel: string, handler: Parameters<typeof ipcMain.handle>[1]): void {
   ipcMain.handle(channel, (event, ...args) => {
     const flushing = maintenanceBarrier.phase === 'preparing' && ['notes:save', 'notes:mutate', 'documents:update-draft'].includes(channel);
-    if (workspaceMigrationService?.busy && !channel.startsWith('workspace-migration:') && !flushing) throw new Error('正在迁移数据，请等待迁移结束。');
+    const isTerminalChannel = channel.startsWith('terminal:');
+    if (workspaceMigrationService?.busy && !channel.startsWith('workspace-migration:') && !flushing && !isTerminalChannel) throw new Error('正在迁移数据，请等待迁移结束。');
     if (workspaceMigrationService?.recoveryPending && !workspaceMigrationService.busy
       && !channel.startsWith('workspace-migration:') && !migrationRecoveryReadChannels.has(channel)) {
       throw new Error('请先继续迁移或选择继续使用原位置。');
@@ -475,7 +477,7 @@ function registerAppHandler(channel: string, handler: Parameters<typeof ipcMain.
     return maintenanceBarrier.invoke(channel, () => handler(event, ...args));
   });
 }
-const migrationRecoveryReadChannels = new Set(['ping', 'get-app-preferences', 'get-workspace-path', 'get-library-path', 'list-libraries', 'list-materials-libraries', 'onboarding:get', 'get-ai-provider-config', 'get-ai-model-settings', 'get-model-hub', 'get-assistant-ai-options', 'get-ai-extensions-settings', 'get-parsing-config', 'get-ai-status', 'selection-expansion:get-settings', 'selection-expansion:get-capabilities']);
+const migrationRecoveryReadChannels = new Set(['ping', 'get-app-preferences', 'get-workspace-path', 'get-library-path', 'list-libraries', 'list-materials-libraries', 'onboarding:get', 'get-ai-provider-config', 'get-ai-model-settings', 'get-model-hub', 'get-assistant-ai-options', 'get-ai-extensions-settings', 'get-parsing-config', 'get-ai-status', 'selection-expansion:get-settings', 'selection-expansion:get-capabilities', 'terminal:create', 'terminal:resize', 'terminal:kill', 'terminal:list-shells', 'terminal:get-default-shell']);
 
 const getWindowIconPath = () => {
   return app.isPackaged
@@ -932,7 +934,27 @@ const createWindow = () => {
   });
   configureMainWindowExternalNavigation(mainWindow);
   const startupWindow = mainWindow;
-  startupWindow.once('ready-to-show', () => startupWindow.show());
+  startupWindow.once('ready-to-show', () => {
+    startupWindow.show();
+    // Ensure the app is activated on macOS — without this, show() may not
+    // bring the window to the foreground when launched from the terminal.
+    if (process.platform === 'darwin') {
+      app.show();
+      app.focus();
+    }
+    startupWindow.focus();
+  });
+
+  // Fallback: if ready-to-show never fires within 8 seconds, force-show the window.
+  // This prevents the app from appearing "dead" if the renderer takes too long or
+  // if the ready-to-show event is missed for any reason.
+  setTimeout(() => {
+    if (startupWindow && !startupWindow.isDestroyed() && !startupWindow.isVisible()) {
+      startupWindow.show();
+      if (process.platform === 'darwin') { app.show(); app.focus(); }
+      startupWindow.focus();
+    }
+  }, 8000);
 
   // `pnpm dev` starts the unpackaged Electron binary without injecting
   // NODE_ENV. Use the packaging boundary as the default source of truth so
@@ -5005,6 +5027,8 @@ app.on('before-quit', (event) => {
     const deadline = Date.now() + 10_000;
     while ([...memoryExtractionServices.values(), ...memoryConsolidationServices.values(), ...conversationSearchServices.values()].some(service => service.maintenanceBusy) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 25));
     qaMemoryDatabase.closeAll(); assistantMemoryDatabase.closeAll();
+    scheduleReminderService?.dispose(); scheduleService?.close();
+    terminalService?.dispose();
   })().catch(() => appLogger.record('warn', 'startup', 'SHUTDOWN_FAILED')).finally(() => { shutdownComplete = true; app.quit(); });
 });
 
@@ -5215,6 +5239,433 @@ registerAppHandler('backup:choose-target', async () => { if (!mainWindow) return
 const releaseChecker = new ReleaseChecker({ repositoryUrl: APP_INFO.repositoryUrl, version: APP_INFO.version });
 registerAppHandler('release:check', () => releaseChecker.check());
 registerAppHandler('ping', () => 'pong');
+
+// ── Schedule / Calendar ──────────────────────────────────────────────────────
+// 日程 / 日历
+
+import type { ScheduleRangeQuery, ScheduleCreateRequest, ScheduleUpdateRequest, ScheduleDeleteRequest, ScheduleOccurrenceOverrideRequest, ScheduleChangedEvent, TodoStatus, CourseTimeSettings, ScheduleImportPreviewResult, ScheduleImportCommitRequest, ScheduleImportCommitResult } from '../shared/schedule.ts';
+import { ScheduleService } from './schedule/scheduleService';
+import { ScheduleReminderService } from './schedule/scheduleReminderService';
+import { ScheduleImportService } from './schedule/import/scheduleImportService';
+
+let scheduleService: ScheduleService | undefined;
+let scheduleReminderService: ScheduleReminderService | undefined;
+let scheduleImportService: ScheduleImportService | undefined;
+
+import { TerminalService } from './terminal/terminalService.ts';
+let terminalService: TerminalService | undefined;
+
+function getOrCreateScheduleService(): ScheduleService {
+  if (scheduleService) return scheduleService;
+  scheduleService = new ScheduleService({
+    workspacePath: getConfiguredWorkspacePath,
+    onChanged: (event: ScheduleChangedEvent) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('schedule:changed', event); },
+    onRemindersInvalidated: () => { scheduleReminderService?.rebuild(); },
+  });
+  return scheduleService;
+}
+
+function getOrCreateScheduleReminderService(): ScheduleReminderService {
+  if (scheduleReminderService) return scheduleReminderService;
+  scheduleReminderService = new ScheduleReminderService({
+    scheduleService: getOrCreateScheduleService(),
+    getMainWindow: () => mainWindow,
+    getWorkspacePath: getConfiguredWorkspacePath,
+  });
+  return scheduleReminderService;
+}
+
+function getOrCreateScheduleImportService(): ScheduleImportService {
+  if (scheduleImportService) return scheduleImportService;
+  scheduleImportService = new ScheduleImportService({
+    getDatabase: () => (getOrCreateScheduleService() as any).database,
+  });
+  return scheduleImportService;
+}
+
+registerAppHandler('schedule:list-occurrences', (event, query: ScheduleRangeQuery) => {
+  assertInternalRenderer(event);
+  return getOrCreateScheduleService().listOccurrences(query);
+});
+registerAppHandler('schedule:create-item', (event, req: ScheduleCreateRequest) => {
+  assertInternalRenderer(event);
+  return getOrCreateScheduleService().createItem(req);
+});
+registerAppHandler('schedule:update-item', (event, req: ScheduleUpdateRequest) => {
+  assertInternalRenderer(event);
+  return getOrCreateScheduleService().updateItem(req);
+});
+registerAppHandler('schedule:delete-item', (event, req: ScheduleDeleteRequest) => {
+  assertInternalRenderer(event);
+  return getOrCreateScheduleService().deleteItem(req);
+});
+registerAppHandler('schedule:update-occurrence', (event, req: ScheduleOccurrenceOverrideRequest) => {
+  assertInternalRenderer(event);
+  return getOrCreateScheduleService().applyOccurrenceOverride(req);
+});
+registerAppHandler('schedule:set-todo-status', (event, id: string, status: TodoStatus) => {
+  assertInternalRenderer(event);
+  return getOrCreateScheduleService().setTodoStatus(id, status);
+});
+registerAppHandler('schedule:list-categories', (event) => {
+  assertInternalRenderer(event);
+  return getOrCreateScheduleService().listCategories();
+});
+registerAppHandler('schedule:upsert-category', (event, name: string, color: string) => {
+  assertInternalRenderer(event);
+  return getOrCreateScheduleService().upsertCategory(name, color);
+});
+registerAppHandler('schedule:delete-category', (event, name: string) => {
+  assertInternalRenderer(event);
+  return getOrCreateScheduleService().deleteCategory(name);
+});
+registerAppHandler('schedule:get-course-times', (event) => {
+  assertInternalRenderer(event);
+  return getOrCreateScheduleService().getCourseTimes();
+});
+registerAppHandler('schedule:set-course-times', (event, settings: CourseTimeSettings) => {
+  assertInternalRenderer(event);
+  return getOrCreateScheduleService().setCourseTimes(settings);
+});
+registerAppHandler('schedule:get-import-batches', (event) => {
+  assertInternalRenderer(event);
+  return getOrCreateScheduleService().listImportBatches();
+});
+registerAppHandler('schedule:revert-import', (event, batchId: string) => {
+  assertInternalRenderer(event);
+  return getOrCreateScheduleService().revertImport(batchId);
+});
+registerAppHandler('schedule:import-preview-csv', async (event, filePath: string) => {
+  assertInternalRenderer(event);
+  return getOrCreateScheduleImportService().previewCsv(filePath);
+});
+registerAppHandler('schedule:import-preview-excel', async (event, filePath: string) => {
+  assertInternalRenderer(event);
+  return getOrCreateScheduleImportService().previewExcel(filePath);
+});
+registerAppHandler('schedule:import-commit', (event, req: ScheduleImportCommitRequest) => {
+  assertInternalRenderer(event);
+  const result = getOrCreateScheduleImportService().commit(req);
+  // Notify renderer of changes
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('schedule:changed', { reason: 'import' });
+  }
+  getOrCreateScheduleReminderService().rebuild();
+  return result;
+});
+registerAppHandler('schedule:import-pick-file', async (event, kind: 'csv' | 'excel' | 'image') => {
+  assertInternalRenderer(event);
+  if (!mainWindow) return null;
+  const filters: Record<string, Electron.FileFilter[]> = {
+    csv: [{ name: 'CSV', extensions: ['csv', 'tsv'] }],
+    excel: [{ name: 'Excel', extensions: ['xlsx'] }],
+    image: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+  };
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: filters[kind] ?? [],
+  });
+  return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0];
+});
+
+registerAppHandler('schedule:import-preview-url', async (event, url: string) => {
+  assertInternalRenderer(event);
+  const { fetchWebPage } = await import('./websearch/webFetchClient.ts');
+  const { parseUrlWithAi } = await import('./schedule/import/scheduleAiParser.ts');
+  const { generateAiJsonWithOptions } = await import('./knowledge/aiProvider.ts');
+  const { resolveActiveAiProviderConfig } = await import('./knowledge/aiSettings.ts');
+
+  try {
+    const abortController = new AbortController();
+    const outcome = await fetchWebPage({ url, signal: abortController.signal });
+    if (outcome.empty) {
+      return { status: 'failed', code: 'PAGE_EMPTY', message: '网页内容为空或无法提取。' };
+    }
+
+    const providerConfig = resolveActiveAiProviderConfig(store);
+    const result = await parseUrlWithAi(url, outcome.text, {
+      generateJson: (opts) => generateAiJsonWithOptions({ ...opts, store }),
+      resolveProviderConfig: () => providerConfig,
+      signal: abortController.signal,
+    });
+    return result;
+  } catch (error) {
+    return { status: 'failed', code: 'FETCH_FAILED', message: `网页获取失败: ${(error as Error).message}` };
+  }
+});
+
+// Open browser window for login-based schedule extraction
+registerAppHandler('schedule:import-open-browser', async (event, url: string) => {
+  assertInternalRenderer(event);
+  const { parseUrlWithAi } = await import('./schedule/import/scheduleAiParser.ts');
+  const { generateAiJsonWithOptions } = await import('./knowledge/aiProvider.ts');
+  const { resolveActiveAiProviderConfig } = await import('./knowledge/aiSettings.ts');
+
+  return new Promise((resolve) => {
+    let resolved = false;
+    const safeResolve = (value: unknown) => { if (!resolved) { resolved = true; resolve(value); } };
+
+    const browserWin = new BrowserWindow({
+      width: 1100,
+      height: 750,
+      title: '登录并提取课表',
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+      parent: BrowserWindow.fromWebContents(event.sender) ?? undefined,
+      modal: true,
+    });
+
+    // Inject navigation toolbar + extraction button
+    const injectToolbar = () => {
+      browserWin.webContents.executeJavaScript(`
+        (function() {
+          if (document.getElementById('__trellora_toolbar')) return;
+
+          // Toolbar container
+          const toolbar = document.createElement('div');
+          toolbar.id = '__trellora_toolbar';
+          toolbar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;height:42px;background:#1e1e2e;display:flex;align-items:center;padding:0 8px;gap:4px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 1px 4px rgba(0,0,0,0.3);-webkit-app-region:drag;';
+
+          const btnStyle = 'background:transparent;border:none;color:#cdd6f4;font-size:16px;cursor:pointer;padding:4px 10px;border-radius:4px;-webkit-app-region:no-drag;display:flex;align-items:center;justify-content:center;';
+          const btnHover = 'this.style.background=\'#313244\'';
+          const btnLeave = 'this.style.background=\'transparent\'';
+
+          // Back button
+          const back = document.createElement('button');
+          back.textContent = '←';
+          back.title = '后退';
+          back.style.cssText = btnStyle;
+          back.onmouseenter = new Function(btnHover);
+          back.onmouseleave = new Function(btnLeave);
+          back.onclick = () => { try { window.history.back(); } catch {} };
+
+          // Forward button
+          const fwd = document.createElement('button');
+          fwd.textContent = '→';
+          fwd.title = '前进';
+          fwd.style.cssText = btnStyle;
+          fwd.onmouseenter = new Function(btnHover);
+          fwd.onmouseleave = new Function(btnLeave);
+          fwd.onclick = () => { try { window.history.forward(); } catch {} };
+
+          // Refresh button
+          const refresh = document.createElement('button');
+          refresh.textContent = '↻';
+          refresh.title = '刷新';
+          refresh.style.cssText = btnStyle;
+          refresh.onmouseenter = new Function(btnHover);
+          refresh.onmouseleave = new Function(btnLeave);
+          refresh.onclick = () => location.reload();
+
+          // URL input
+          const urlInput = document.createElement('input');
+          urlInput.id = '__trellora_url_input';
+          urlInput.type = 'text';
+          urlInput.value = location.href;
+          urlInput.style.cssText = 'flex:1;height:28px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;padding:0 10px;font-size:13px;outline:none;-webkit-app-region:no-drag;';
+          urlInput.onfocus = () => { urlInput.style.borderColor='#89b4fa'; urlInput.select(); };
+          urlInput.onblur = () => { urlInput.style.borderColor='#45475a'; };
+          urlInput.onkeydown = (e) => { if (e.key==='Enter') { let u=urlInput.value.trim(); if(u && !u.startsWith('http')) u='https://'+u; location.href=u; }};
+
+          // Loading indicator
+          const loader = document.createElement('div');
+          loader.id = '__trellora_loader';
+          loader.style.cssText = 'display:none;width:18px;height:18px;border:2px solid #45475a;border-top-color:#89b4fa;border-radius:50%;animation:__trellora_spin 0.6s linear infinite;';
+          const style = document.createElement('style');
+          style.textContent = '@keyframes __trellora_spin{to{transform:rotate(360deg)}}';
+          document.head.appendChild(style);
+
+          // Close button
+          const closeBtn = document.createElement('button');
+          closeBtn.textContent = '✕';
+          closeBtn.title = '关闭';
+          closeBtn.style.cssText = btnStyle + 'color:#f38ba8;font-size:18px;margin-left:4px;';
+          closeBtn.onmouseenter = () => { closeBtn.style.background='#45475a'; };
+          closeBtn.onmouseleave = () => { closeBtn.style.background='transparent'; };
+          closeBtn.onclick = () => { window.__trellora_close = true; };
+
+          toolbar.appendChild(back);
+          toolbar.appendChild(fwd);
+          toolbar.appendChild(refresh);
+          toolbar.appendChild(urlInput);
+          toolbar.appendChild(loader);
+          toolbar.appendChild(closeBtn);
+          document.documentElement.prepend(toolbar);
+
+          // Push page content down
+          document.body.style.marginTop = '42px';
+
+          // Extract button (floating, animated)
+          if (!document.getElementById('__trellora_extract_btn')) {
+            const btn = document.createElement('button');
+            btn.id = '__trellora_extract_btn';
+            btn.innerHTML = '📋 <span>提取课表</span>';
+            btn.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:2147483646;padding:14px 28px;background:linear-gradient(135deg,#16a34a,#22c55e);color:white;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 4px 16px rgba(22,163,74,0.4);transition:all 0.2s;font-family:-apple-system,BlinkMacSystemFont,sans-serif;';
+            btn.onmouseenter = () => { btn.style.transform='scale(1.05)'; btn.style.boxShadow='0 6px 20px rgba(22,163,74,0.5)'; };
+            btn.onmouseleave = () => { btn.style.transform='scale(1)'; btn.style.boxShadow='0 4px 16px rgba(22,163,74,0.4)'; };
+            btn.onclick = () => {
+              btn.innerHTML = '⏳ <span>提取中...</span>';
+              btn.disabled = true;
+              btn.style.background='#6b7280';
+              window.__trellora_extract_html = document.documentElement.outerHTML;
+              window.__trellora_extract_title = document.title;
+              window.__trellora_extract_done = true;
+            };
+            document.body.appendChild(btn);
+          }
+        })();
+      `).catch(() => {});
+    };
+
+    // Update URL bar and loader on navigation
+    browserWin.webContents.on('did-navigate', () => {
+      browserWin.webContents.executeJavaScript(`
+        var u=document.getElementById('__trellora_url_input'); if(u) u.value=location.href;
+      `).catch(() => {});
+    });
+    browserWin.webContents.on('did-navigate-in-page', () => {
+      browserWin.webContents.executeJavaScript(`
+        var u=document.getElementById('__trellora_url_input'); if(u) u.value=location.href;
+      `).catch(() => {});
+    });
+    browserWin.webContents.on('did-start-loading', () => {
+      browserWin.webContents.executeJavaScript(`
+        var l=document.getElementById('__trellora_loader'); if(l) l.style.display='block';
+      `).catch(() => {});
+    });
+    browserWin.webContents.on('did-stop-loading', () => {
+      browserWin.webContents.executeJavaScript(`
+        var l=document.getElementById('__trellora_loader'); if(l) l.style.display='none';
+      `).catch(() => {});
+    });
+
+    // Inject toolbar after each page load
+    browserWin.webContents.on('did-finish-load', injectToolbar);
+    browserWin.webContents.on('did-fail-load', (_ev, errorCode, errorDesc) => {
+      if (errorCode === -3) return; // ABORTED (navigation)
+      browserWin.webContents.executeJavaScript(`
+        if (!document.getElementById('__trellora_error')) {
+          document.body.innerHTML = '';
+          const div = document.createElement('div');
+          div.id = '__trellora_error';
+          div.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#cdd6f4;background:#1e1e2e;';
+          div.innerHTML = '<div style="font-size:48px;margin-bottom:16px;">🌐</div><div style="font-size:18px;font-weight:600;margin-bottom:8px;">页面加载失败</div><div style="font-size:14px;color:#a6adc8;margin-bottom:24px;">${errorDesc.replace(/'/g, "\\'")}</div><button onclick="location.reload()" style="padding:10px 24px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">重新加载</button>';
+          document.body.appendChild(div);
+          document.body.style.marginTop = '0';
+        }
+      `).catch(() => {});
+    });
+
+    // Poll for extraction completion and close signal
+    const pollInterval = setInterval(async () => {
+      try {
+        // Check close button
+        const shouldClose = await browserWin.webContents.executeJavaScript('window.__trellora_close === true');
+        if (shouldClose) {
+          clearInterval(pollInterval);
+          browserWin.close();
+          safeResolve({ status: 'failed', code: 'USER_CANCELLED', message: '用户关闭了窗口。' });
+          return;
+        }
+
+        // Check extraction
+        const done = await browserWin.webContents.executeJavaScript('window.__trellora_extract_done === true');
+        if (done) {
+          clearInterval(pollInterval);
+          const html = await browserWin.webContents.executeJavaScript('window.__trellora_extract_html || ""');
+          const title = await browserWin.webContents.executeJavaScript('window.__trellora_extract_title || ""');
+          const pageUrl = browserWin.webContents.getURL();
+
+          browserWin.close();
+
+          if (!html || html.length < 100) {
+            safeResolve({ status: 'failed', code: 'PAGE_EMPTY', message: '页面内容为空。' });
+            return;
+          }
+
+          // Parse with AI
+          try {
+            const providerConfig = resolveActiveAiProviderConfig(store);
+            const result = await parseUrlWithAi(pageUrl, html, {
+              generateJson: (opts) => generateAiJsonWithOptions({ ...opts, store }),
+              resolveProviderConfig: () => providerConfig,
+            });
+            safeResolve(result);
+          } catch (err) {
+            safeResolve({ status: 'failed', code: 'AI_FAILED', message: `AI 解析失败: ${(err as Error).message}` });
+          }
+        }
+      } catch {
+        // Window might be closed
+      }
+    }, 500);
+
+    browserWin.on('closed', () => {
+      clearInterval(pollInterval);
+      safeResolve({ status: 'failed', code: 'USER_CANCELLED', message: '用户关闭了窗口。' });
+    });
+
+    browserWin.loadURL(url);
+  });
+});
+
+registerAppHandler('schedule:import-preview-image', async (event, filePath: string) => {
+  assertInternalRenderer(event);
+  const { parseImageWithAi } = await import('./schedule/import/scheduleAiParser.ts');
+  const { generateAiJsonWithOptions } = await import('./knowledge/aiProvider.ts');
+  const { resolveActiveAiProviderConfig } = await import('./knowledge/aiSettings.ts');
+
+  try {
+    const providerConfig = resolveActiveAiProviderConfig(store);
+    const abortController = new AbortController();
+    const result = await parseImageWithAi(filePath, {
+      generateJson: (opts) => generateAiJsonWithOptions({ ...opts, store }),
+      resolveProviderConfig: () => providerConfig,
+      signal: abortController.signal,
+    });
+    return result;
+  } catch (error) {
+    return { status: 'failed', code: 'AI_FAILED', message: `图片解析失败: ${(error as Error).message}` };
+  }
+});
+
+// ── Terminal Service ──────────────────────────────────────────────────────────
+function getOrCreateTerminalService(): TerminalService {
+  if (terminalService) return terminalService;
+  terminalService = new TerminalService({ getWorkspacePath: getConfiguredWorkspacePath });
+  return terminalService;
+}
+
+registerAppHandler('terminal:create', (event, options?: { cwd?: string; cols?: number; rows?: number; title?: string }) => {
+  assertInternalRenderer(event);
+  return getOrCreateTerminalService().create(event.sender, options);
+});
+registerAppHandler('terminal:resize', (event, id: string, cols: number, rows: number) => {
+  assertInternalRenderer(event);
+  getOrCreateTerminalService().resize(id, cols, rows);
+});
+registerAppHandler('terminal:kill', (event, id: string) => {
+  assertInternalRenderer(event);
+  getOrCreateTerminalService().kill(id);
+});
+registerAppHandler('terminal:list-shells', (event) => {
+  assertInternalRenderer(event);
+  return getOrCreateTerminalService().detectAvailableShells();
+});
+registerAppHandler('terminal:get-default-shell', (event) => {
+  assertInternalRenderer(event);
+  return getOrCreateTerminalService().resolveShell();
+});
+// terminal:write uses ipcMain.on (fire-and-forget) to bypass maintenanceBarrier
+// for keystroke latency — deliberately skips the barrier, checks migration busy state directly
+ipcMain.on('terminal:write', (event, id: string, data: string) => {
+  assertInternalRenderer(event);
+  if (workspaceMigrationService?.busy) return;
+  getOrCreateTerminalService().write(id, data);
+});
+
 ipcMain.on('external-web-navigation', handleExternalWebNavigation);
 registerAppHandler('editor:read-clipboard-content', (event: IpcMainInvokeEvent) => {
   assertInternalRenderer(event);
@@ -6437,7 +6888,7 @@ registerAppHandler('get-ai-status', async () => getAiProviderStatus());
 
 registerAppHandler('get-parsing-config', () => readParsingConfig(store));
 registerAppHandler('save-parsing-config', (_event, config: unknown) => {
-  const patch = (config && typeof config === 'object' ? config : {}) as Partial<import('./parsingConfig').ParsingConfig> & { mineruApiKey?: string | null };
+  const patch = (config && typeof config === 'object' ? config : {}) as Partial<import('./ai/parsingConfig').ParsingConfig> & { mineruApiKey?: string | null };
   const saved = saveParsingConfig(store, patch);
   void pipelineOrchestrator?.enqueuePendingAll(listMaterialsLibraries(store).map((library) => library.path)).catch((error) => logToWindow(`[PIPELINE] 配置变更后重新入队失败：${error instanceof Error ? error.message : String(error)}`));
   return saved;
@@ -7602,13 +8053,13 @@ function startNoteAnalysis(filePath: string, selectedModel?: string): NoteAnalys
   const safePath = assertInsideDirectory(filePath, repository.libraryPath);
   if (!noteIndex) refreshLibraryIndex();
   const note = noteIndex?.notesByPath[path.resolve(safePath)];
-  if (!note || note.kind !== 'markdown') throw new Error('请先选择一篇可编辑的Markdown笔记。');
+  if (!note || (note.kind !== 'markdown' && note.kind !== 'code')) throw new Error('请先选择一篇可编辑的Markdown或代码笔记。');
   const markdown = readTextFile(safePath);
   const config = { ...getNoteAnalysisConfig(), model: selectedModel?.trim() || getAiProviderConfig().model };
   if (!config.model) throw new Error('请先在模型设置中选择可用模型。');
   if (config.kind !== 'ollama' && (!config.remoteContentConsent || !config.apiKey)) throw new Error('请先配置可用的远程模型及内容发送确认。');
   const { apiKey: _secret, ...safeConfig } = config;
-  const input: NoteAnalysisRunInput = { markdown, title: note.title, currentTags: note.tags, libraryTags: getLibraryTagVocabulary(), config: JSON.parse(JSON.stringify(safeConfig)) };
+  const input: NoteAnalysisRunInput = { markdown, title: note.title, currentTags: note.tags, libraryTags: getLibraryTagVocabulary(), config: JSON.parse(JSON.stringify(safeConfig)), fileKind: note.kind };
   const sourceHash = getNoteAnalysisSourceHash(markdown);
   return noteAnalysisOrchestrator.start({ repository, notePath: safePath, sourceHash, input, config, isSourceCurrent: () => isNoteAnalysisSourceCurrent(repository.libraryPath, safePath, sourceHash), onProgress: (progress) => { if (!mainWindow?.webContents.isDestroyed()) mainWindow?.webContents.send('note-analysis-progress', progress); } });
 }
@@ -7806,11 +8257,31 @@ registerAppHandler('create-file', async (_event: IpcMainInvokeEvent, fileName?: 
   if (!fs.existsSync(parentDirectory) || !fs.statSync(parentDirectory).isDirectory()) return null;
 
   // Use provided name or generate timestamp-based name
-  const baseName = sanitizeEntryName(fileName?.trim() || 'Untitled');
-  const filePath = getUniquePath(parentDirectory, `${baseName}.md`);
+  const rawName = fileName?.trim() || 'Untitled';
+  const sanitizedName = sanitizeEntryName(rawName);
+  // If the name already has an extension, use it as-is; otherwise create without extension
+  const hasExtension = path.extname(sanitizedName).length > 0;
+  const finalName = hasExtension ? sanitizedName : sanitizedName;
+  const filePath = getUniquePath(parentDirectory, finalName);
 
-  // Create file with default content
-  const defaultContent = `# ${baseName}\n\nStart writing here...`;
+  // Create file with default content based on file type
+  const ext = path.extname(filePath).toLowerCase();
+  const baseForContent = hasExtension ? sanitizedName.replace(/\.[^.]+$/, '') : sanitizedName;
+  let defaultContent = '';
+  if (ext === '.md' || ext === '.markdown') {
+    defaultContent = `# ${baseForContent}\n\nStart writing here...`;
+  } else if (ext === '.json') {
+    defaultContent = `{\n  \n}`;
+  } else if (ext === '.xml' || ext === '.html' || ext === '.htm') {
+    defaultContent = '';
+  } else if (ext === '.yaml' || ext === '.yml') {
+    defaultContent = '';
+  } else if (ext === '.csv' || ext === '.tsv') {
+    defaultContent = '';
+  } else {
+    defaultContent = '';
+  }
+
   await noteSaveService.structure(libraryPath, () => indexCoordinator.mutate(async () => {
     await fs.promises.writeFile(filePath, defaultContent, { encoding: 'utf8', flag: 'wx' });
     return { value: filePath, changes: [{ kind: 'add', path: filePath }] };

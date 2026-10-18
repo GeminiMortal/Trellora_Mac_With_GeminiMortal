@@ -1,4 +1,4 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { useMediaQuery } from '@mantine/hooks';
 import {
@@ -16,9 +16,9 @@ import {
   Tooltip,
 } from '@mantine/core';
 import { Copy, RotateCcw, Sparkles, X } from 'lucide-react';
-import ExpansionReceipt from './ExpansionReceipt';
-import MarkdownContent from '../MarkdownContent';
-import type { SelectionContextReceipt, SelectionEditQualityReceipt } from '../../../electron/knowledge/selectionEditTypes';
+import ExpansionReceipt from './ExpansionReceipt.tsx';
+import MarkdownContent from '../markdown/MarkdownContent.tsx';
+import type { SelectionContextReceipt, SelectionEditQualityReceipt } from '../../../electron/knowledge/selection/selectionEditTypes.ts';
 
 interface SelectionEditSuggestionProps {
   position: CSSProperties;

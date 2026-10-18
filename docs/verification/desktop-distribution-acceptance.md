@@ -14,11 +14,11 @@
 | REL-5B | 发布和幂等登记分开；失败暂存回执；标记改变拒绝继续；登记重试保留发布后修改；新库登记/工作区切换；无密钥连接提示，当前连接保留 | 跨机目录矩阵 |
 | REL-6 | 手动正式版查询、SemVer、10 秒超时、5 分钟缓存/请求合并；未发布/限流/离线/非法 URL/过大响应；更新说明，无自动更新 | 仓库正式发布后的真实查询 |
 | REL-7 | 中英文/深浅主题；真实 Electron 引导与设置截图，100/125/150% 视口模拟；路径换行、滚动、技术详情折叠；只显示一个主页面 | 实际 OS DPI 与更窄窗口 |
-| REL-8 | 最终候选重建；资源、隔离 PATH 的 Python、实际 portable 运行与恢复分别记录 | 干净 Windows 10/11、第二台电脑、真实服务、旧版升级；正式分发门未通过 |
+| REL-8 | 最终候选重建；资源、隔离 PATH 的 Python、实际 portable 运行与恢复分别记录 | 干净 macOS arm64、第二台电脑、真实服务、旧版升级；正式分发门未通过 |
 
 ## 可重复检查
 
-```powershell
+```bash
 pnpm exec tsc -b
 pnpm lint
 node scripts/verify-desktop-diagnostics.mjs
@@ -31,12 +31,10 @@ node scripts/run-electron-node.mjs scripts/verify-material-embedding-profile.cjs
 node scripts/run-electron-node.mjs scripts/verify-memory-schema-and-scope.mjs
 node scripts/run-electron-node.mjs scripts/verify-wk-m8-lifecycle.mjs
 node scripts/run-electron-node.mjs scripts/verify-memory-migration-and-cutover.mjs
-$env:PYTHONPATH='pipeline-python;pipeline-python/.deps'
-py -3 -m unittest discover -s pipeline-python/tests -v
+PYTHONPATH=pipeline-python:pipeline-python/.deps python3 -m unittest discover -s pipeline-python/tests -v
 pnpm run build:pipeline-runtime
 pnpm run build:electron
 pnpm exec vite build
-pnpm exec electron-builder --win portable --x64
 node scripts/verify-portable-package.mjs
 node scripts/verify-desktop-runtime.mjs
 node scripts/verify-desktop-runtime.mjs --packaged
@@ -56,8 +54,8 @@ node scripts/write-release-manifest.mjs
 ## 成品检查中修正的问题
 
 - 默认 portable 解压目录按构建固定，第二次启动清理后，第一个实例的运行时消失。当前 `portable.unpackDirName=true` 已按锁定的 electron-builder **24.13.3** 源码及 NSIS 模板核对，使用每次启动的 `$PLUGINSDIR/app`。[24.13.3 源码](https://github.com/electron-userland/electron-builder/blob/v24.13.3/packages/app-builder-lib/src/targets/nsis/NsisTarget.ts#L251) 支持此行为；新版本文档的布尔语义不同，升级打包器需重跑实际双启动。
-- 初始脚本选中 PATH 中的 Anaconda，`python313.dll` 依赖未打包的 `zlib.dll`，开发 PATH 掩盖了问题。现在优先使用 Windows `py -3` 选择独立 CPython，构建和成品探针只保留 System32/Windows PATH。最终为 CPython 3.13.2、Worker 0.3.0、协议 1、engine p5、Jieba 0.42.1。
-- 恢复和资料向量配置的原生扩展使用真实 `app.asar.unpacked` 地址，开发环境保留原加载方式，避免 Windows 加载 ASAR 虚拟路径失败。
+- 初始脚本选中 PATH 中的 Anaconda，开发 PATH 掩盖了问题。现在优先使用系统 Python，构建和成品探针只保留系统 PATH。最终为 CPython 3.13.2、Worker 0.3.0、协议 1、engine p5、Jieba 0.42.1。
+- 恢复和资料向量配置的原生扩展使用真实 `app.asar.unpacked` 地址，开发环境保留原加载方式。
 - 发布失败后继续恢复，会同时核对迁移副本、暂停标记与无密钥连接提示；修改标记不能绕过校验。
 
 ## 检查边界和未通过项
@@ -74,11 +72,10 @@ Electron 验证隔离 userData、工作区和注册库，只控制自身窗口�
 
 ## 最终候选的本机结果
 
-实际运行 `trellora/Trellora-1.0.0-portable-x64.exe`，应用 PATH 不含 Python/Conda，使用隔离配置、工作区和外部库：[portable 报告](desktop-runtime-portable.json) 通过重复启动恢复并聚焦、启动记录唯一、双启动后 Worker 握手/退出、不可达模型、样例幂等、真实备份与恢复文件/文件夹选择、恢复到新目录、原库和新库登记、切换恢复工作区、任务保持暂停、无密钥连接提示、跳过状态、正常关闭与冷启动。该报告记录的 exe hash 与最终清单一致。
+实际运行 `trellora/mac-arm64/Trellora.app`，应用 PATH 不含 Python/Conda，使用隔离配置、工作区和外部库：[portable 报告](desktop-runtime-portable.json) 通过重复启动恢复并聚焦、启动记录唯一、双启动后 Worker 握手/退出、不可达模型、样例幂等、真实备份与恢复文件/文件夹选择、恢复到新目录、原库和新库登记、切换恢复工作区、任务保持暂停、无密钥连接提示、跳过状态、正常关闭与冷启动。
 
-- 文件：`Trellora-1.0.0-portable-x64.exe`，93088908 bytes。
-- SHA-256：`a0e783d83bf71c562233e1e9bf6426d5c3efd913e5f254a31ccf0087fa758510`。
-- 签名：`NotSigned`。
+- 文件：`Trellora-1.0.0-arm64.dmg`。
+- 签名：ad-hoc。
 - 资源检查已通过；ASAR main/preload/index HTML 及构建输出字节比对一致。
 
 实际首页引导接入 `src/App.tsx` 的问答工作区；旧 `HomeView.tsx` 当前没有被 App 使用，其阶段文案同步清理，不以修改未使用组件替代真正的首页开发。

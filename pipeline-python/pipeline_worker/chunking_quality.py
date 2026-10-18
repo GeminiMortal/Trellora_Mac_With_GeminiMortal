@@ -1,4 +1,11 @@
-"""Deterministic document quality assessment and recommended Child plan."""
+"""
+Module: chunking_quality
+Deterministic document quality assessment and recommended Child plan.
+Evaluates document structure quality to recommend optimal chunking strategies.
+模块：chunking_quality
+确定性文档质量评估和推荐子块方案。
+评估文档结构质量以推荐最优切块策略。
+"""
 
 from __future__ import annotations
 
@@ -8,10 +15,15 @@ from typing import Any, Iterable
 from .chunking_models import SourceBlock, clean_text
 
 
+# Schema version for quality assessment output / 质量评估输出的 schema 版本
 QUALITY_SCHEMA_VERSION = 1
 
 
 def assess_quality(blocks: Iterable[SourceBlock]) -> dict[str, Any]:
+    """
+    Assess document quality based on structure, noise, and text characteristics.
+    基于结构、噪声和文本特征评估文档质量。
+    """
     values = list(blocks)
     total_blocks = len(values)
     non_empty = [block for block in values if clean_text(block.text)]

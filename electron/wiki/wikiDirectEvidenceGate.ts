@@ -1,12 +1,28 @@
-import type { WikiActionKind } from './wikiQuickActions';
+/**
+ * Conservative lexical evidence gate for zero-search Wiki answers.
+ * 面向零检索 Wiki 终答的保守词法证据门控。
+ */
 
+import type { WikiActionKind } from './wikiQuickActions.ts';
+
+/**
+ * Result of the direct-evidence assessment for a candidate zero-search answer.
+ * 直载证据评估结果，用于判断候选零检索终答是否可接受。
+ */
 export interface WikiDirectEvidenceAssessment {
+  /** Whether the action/question must be grounded in evidence / 该动作/问题是否必须有证据支撑 */
   requiresEvidence: boolean;
+  /** Whether the question is an overview/summary request / 问题是否为总览/总结类请求 */
   overviewRequest: boolean;
+  /** Whether the loaded node text likely supports the answer / 直载节点正文是否可能支撑该回答 */
   likelySupported: boolean;
+  /** Whether the candidate answer cites reference [0] / 候选终答是否标注了引用号 [0] */
   directCitationPresent: boolean;
+  /** Whether the answer may end without any tool search / 是否允许不调用任何检索工具即收束 */
   acceptWithoutSearch: boolean;
+  /** Distinctive terms extracted from the question / 从问题中提取的显著词项 */
   queryTerms: string[];
+  /** Subset of queryTerms found in the loaded node / 在直载节点中命中的 queryTerms 子集 */
   matchedTerms: string[];
 }
 
@@ -33,6 +49,11 @@ const GENERIC_TERMS = new Set([
  * A conservative lexical gate for zero-search Wiki answers. It does not judge
  * semantic correctness; it only prevents a model from citing [0] when none of
  * the question's distinctive wording is present in the directly loaded node.
+ * 面向零检索 Wiki 终答的保守词法门控。它不判断语义正确性，只防止模型在直载
+ * 节点中不含问题任何显著措辞时仍引用 [0]。
+ *
+ * @param input - Question, loaded node markdown, candidate answer and action kind / 问题、直载节点正文、候选终答与快捷动作类型
+ * @returns Evidence flags plus extracted and matched query terms / 证据标志位以及提取、命中的查询词项
  */
 export function assessWikiDirectEvidence(input: {
   question: string;
@@ -52,6 +73,8 @@ export function assessWikiDirectEvidence(input: {
   // The source may say “原始文件” while the user asks about “原始文档”. A
   // broad match across several Chinese bigrams is strong enough for the direct
   // node, even when no single four-character phrase is identical.
+  // 原文可能写“原始文件”而用户问“原始文档”。多个中文二字词的宽泛命中对直载
+  // 节点已足够，即使没有任何单一四字短语完全一致。
   const broadChineseCoverage = matchedChineseBigrams.length >= 4
     && matchedChineseBigrams.length / Math.max(1, chineseBigramTerms.length) >= 0.35;
   const likelySupported = input.actionKind !== 'free'
@@ -69,12 +92,15 @@ export function assessWikiDirectEvidence(input: {
     // Wiki factual/content requests are Agentic RAG tasks: direct node content
     // may support the answer, but it no longer bypasses the first evidence-tool
     // round. Pure non-factual conversation remains eligible for zero-tool exit.
+    // Wiki 事实/内容类请求属于 Agentic RAG 任务：直载节点正文可以支撑回答，
+    // 但不再豁免首轮证据工具调用。纯非事实寒暄仍可零工具收束。
     acceptWithoutSearch: !requiresEvidence,
     queryTerms,
     matchedTerms,
   };
 }
 
+/** Extract distinctive terms after stripping question fillers; Chinese tokens yield four-grams and bigrams. / 去除提问填充词后提取显著词项；中文词条再展开为四字词与二字词。 */
 function extractDistinctiveTerms(value: string): string[] {
   let normalized = normalizeEvidenceText(value);
   for (const filler of QUESTION_FILLERS) normalized = normalized.replaceAll(normalizeEvidenceText(filler), ' ');
@@ -86,6 +112,8 @@ function extractDistinctiveTerms(value: string): string[] {
       // `exactCoreMatch` branch below unreachable for the most common Chinese
       // questions and rejected answers even when a distinctive four-character
       // phrase (for example “原始文档”) was present in the loaded node.
+      // 过去长中文从句只被切成二字词，导致下方 `exactCoreMatch` 分支对最常见的
+      // 中文问题永远不可达，即使直载节点中已有显著四字短语（如“原始文档”）也会误拒。
       for (let index = 0; index < token.length - 3; index += 1) {
         const fourGram = token.slice(index, index + 4);
         if (!GENERIC_TERMS.has(fourGram)) terms.push(fourGram);

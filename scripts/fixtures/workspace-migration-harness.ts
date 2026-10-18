@@ -3,13 +3,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { WorkspaceMigrationService } from '../../electron/workspaceMigrationService';
-import { QaMemoryDatabase } from '../../electron/knowledge/qaMemoryDatabase';
-import { MemoryWriteService } from '../../electron/knowledge/memory/memoryWriteService';
-import { MemoryScopeResolver } from '../../electron/knowledge/memory/memoryScope';
+import { QaMemoryDatabase } from '../../electron/knowledge/qa/qaMemoryDatabase.ts';
+import { MemoryWriteService } from '../../electron/knowledge/memory/memoryWriteService.ts';
+import { MemoryScopeResolver } from '../../electron/knowledge/memory/memoryScope.ts';
 import { mapRestoredPath } from '../../electron/backup/physicalRestore';
 import { MaintenanceBarrier } from '../../electron/backup/maintenance';
 import { DataRootLocks } from '../../electron/dataRootLocks';
-import { KnowledgeProjectionDatabase } from '../../electron/knowledge/metaDatabase';
+import { KnowledgeProjectionDatabase } from '../../electron/knowledge/metaDatabase.ts';
 import { ensureMaterialsMeta } from '../../electron/materialsLibrary';
 
 const [mode, root] = process.argv.slice(2);

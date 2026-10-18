@@ -1,3 +1,12 @@
+/**
+ * English translation strings for the desktop application UI.
+ * 桌面应用界面的英文翻译文案。
+ */
+
+/**
+ * Chinese-to-English translation map for desktop UI strings.
+ * 桌面界面文案的中英翻译映射。
+ */
 export const desktopEnglish: Record<string, string> = {
   '打开独立文件': 'Open external file', '选择只读资源目录': 'Choose read-only resource directory',
   '首次使用引导': 'First use guide',

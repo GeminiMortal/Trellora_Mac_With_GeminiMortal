@@ -1,14 +1,26 @@
+/**
+ * Backup archive reading, validation and verification: manifest parsing, path safety and byte-level integrity checking.
+ * 备份归档读取、校验与验证：清单解析、路径安全和字节级完整性检查。
+ */
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { Transform, Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import * as yauzl from 'yauzl';
-import type { BackupManifest } from '../../shared/workspaceBackup';
-import { assertInsideDirectory } from '../pathGuards';
+import type { BackupManifest } from '../../shared/workspaceBackup.ts';
+import { assertInsideDirectory } from '../files/pathGuards.ts';
 
+/** Hard limits for backup archive validation / 备份归档校验的硬性限制 */
 export const BACKUP_LIMITS = { entries: 50_002, expandedBytes: 256 * 1024 ** 3, manifestBytes: 16 * 1024 ** 2, settingsBytes: 1024 ** 2 };
 
+/**
+ * Validates a POSIX archive path for safety and Windows-incompatible characters.
+ * 校验归档中的 POSIX 路径安全性与 Windows 不兼容字符。
+ *
+ * @param value - Archive relative path / 归档相对路径
+ * @returns The validated path / 校验通过的路径
+ */
 export function validArchivePath(value: string): string {
   if (!value || value.length > 1024 || value.includes('\\') || value.includes(':') || value.startsWith('/') || value.endsWith('/') || value.split('/').some(part => !part || part === '.' || part === '..' || Array.from(part).some(char => char.charCodeAt(0) < 32) || /[<>"|?*]/u.test(part) || /[. ]$/u.test(part) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(part))) throw new Error('备份包含有不安全或不兼容 Windows 的文件路径。');
   return value;
@@ -46,6 +58,13 @@ async function readSmall(zip: yauzl.ZipFile, entry: yauzl.Entry, limit: number, 
   try { for await (const chunk of stream) { signal.throwIfAborted(); size += chunk.length; if (size > limit) throw new Error('备份元数据展开大小超过上限。'); chunks.push(chunk); } } finally { stream.destroy(); }
   return Buffer.concat(chunks);
 }
+/**
+ * Deeply validates a parsed backup manifest, checking schema, path safety, directory structure, file uniqueness and registration integrity.
+ * 深度校验已解析的备份清单，检查 schema、路径安全、目录结构、文件唯一性和注册关系完整性。
+ *
+ * @param value - Parsed JSON value to validate / 待校验的已解析 JSON 值
+ * @returns The validated manifest / 校验通过的清单
+ */
 export function validateManifest(value: unknown): BackupManifest {
   const m = value as BackupManifest;
   if (!m || m.schemaVersion !== 1) throw new Error('备份格式版本不兼容，请使用支持该版本的 Trellora。');
@@ -65,12 +84,30 @@ export function validateManifest(value: unknown): BackupManifest {
   for (const r of m.registrations) { if (!roots.has(r.rootId) || !['note', 'materials'].includes(r.kind) || typeof r.relativePath !== 'string' || typeof r.alias !== 'string' || (r.sourcePath !== undefined && (typeof r.sourcePath !== 'string' || !path.isAbsolute(r.sourcePath)))) throw new Error('备份注册关系无效。'); if (r.relativePath) validArchivePath(r.relativePath); }
   return m;
 }
+/**
+ * Reads and validates the manifest.json entry from a backup zip archive.
+ * 从备份 zip 归档中读取并校验 manifest.json 条目。
+ *
+ * @param file - Path to the backup zip file / 备份 zip 文件路径
+ * @param signal - Abort signal for the read operation / 读取操作的中止信号
+ * @returns The validated backup manifest / 校验通过的备份清单
+ */
 export async function readBackupManifest(file: string, signal: AbortSignal): Promise<BackupManifest> {
   let manifest: BackupManifest | undefined;
   await visitArchive(file, signal, async (zip, entry) => { if (entry.fileName === 'manifest.json') manifest = validateManifest(JSON.parse((await readSmall(zip, entry, BACKUP_LIMITS.manifestBytes, signal)).toString('utf8'))); });
   if (!manifest) throw new Error('备份包缺少 manifest.json。'); return manifest;
 }
-/** Checks metadata and real expanded bytes before publication; destination is always controlled staging. */
+/**
+ * Checks metadata and real expanded bytes before publication; destination is always controlled staging.
+ * 在发布前检查元数据和真实解压字节数；目标目录始终为受控暂存区。
+ *
+ * @param file - Path to the backup zip file / 备份 zip 文件路径
+ * @param manifest - Expected manifest / 预期清单
+ * @param signal - Abort signal for the operation / 操作的中止信号
+ * @param destination - Optional staging directory to extract files into / 可选的文件解压暂存目录
+ * @param progress - Optional progress callback / 可选的进度回调
+ * @returns The validated settings object / 校验通过的设置对象
+ */
 export async function verifyBackupArchive(file: string, manifest: BackupManifest, signal: AbortSignal, destination?: string, progress?: (completed: number, total: number) => void): Promise<Record<string, unknown>> {
   if (destination) {
     for (const root of manifest.roots) await fs.promises.mkdir(assertInsideDirectory(path.join(destination, 'roots', root.id), destination), { recursive: true });

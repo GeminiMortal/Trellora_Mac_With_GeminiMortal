@@ -1,7 +1,13 @@
+/**
+ * Summary run budget: tracks model calls, wall time, and token budgets for summary generation.
+ * 摘要运行预算：跟踪摘要生成的模型调用、墙钟时间和 token 预算。
+ */
+
 import { estimateTokenCount } from './tokenEstimator';
 import { ModelCallBudgetGate, type ModelCallTicket } from './modelCallBudget';
 import { PromptBudgetScheduler, type PromptBudgetPlan } from './currentNoteContextBudget';
 
+/** Default budget limits for a summary run. / 摘要运行的默认预算限制。 */
 export const DEFAULT_SUMMARY_RUN_BUDGET = Object.freeze({
   maxModelCalls: 8,
   maxWallTimeMs: 60_000,
@@ -9,6 +15,7 @@ export const DEFAULT_SUMMARY_RUN_BUDGET = Object.freeze({
   maxOutputTokens: 32_768,
 });
 
+/** Options for creating a summary run budget. / 创建摘要运行预算的选项。 */
 export interface SummaryRunBudgetOptions {
   maxModelCalls?: number;
   maxWallTimeMs?: number;
@@ -17,6 +24,7 @@ export interface SummaryRunBudgetOptions {
   startedAt?: number;
 }
 
+/** Input for preflight budget check before summary generation. / 摘要生成前的预检预算输入。 */
 export interface SummaryRunPreflightInput {
   uncachedSectionCount: number;
   maxDigestAttempts: number;
@@ -25,6 +33,7 @@ export interface SummaryRunPreflightInput {
   estimatedOutputTokens: number;
 }
 
+/** Result of the preflight budget check. / 预检预算的结果。 */
 export interface SummaryRunPreflightResult {
   ok: boolean;
   worstCaseModelCalls: number;
@@ -33,11 +42,13 @@ export interface SummaryRunPreflightResult {
   reason?: 'model-budget' | 'token-budget' | 'wall-time';
 }
 
+/** A prepared model call with ticket and budget plan. / 含票据和预算计划的已准备模型调用。 */
 export interface SummaryRunPreparedCall {
   ticket: ModelCallTicket;
   plan: PromptBudgetPlan;
 }
 
+/** Checkpoint state for resumable summary generation. / 可恢复摘要生成的检查点状态。 */
 export interface SummaryRunCheckpoint {
   schemaVersion: 1;
   mode: 'summary-quick' | 'summary-complete';
@@ -59,6 +70,7 @@ export interface SummaryRunCheckpoint {
   reduceCompletedItems?: SummaryRunCheckpoint['reduceItems'];
 }
 
+/** Budget tracker for a summary run with model call gating and token accounting. / 摘要运行的预算跟踪器，含模型调用门控与 token 计量。 */
 export class SummaryRunBudget {
   readonly gate: ModelCallBudgetGate;
   readonly maxInputTokens: number;

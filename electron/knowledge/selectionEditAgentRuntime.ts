@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { findMaterialsDocument, listMaterialsDocuments } from '../materialsLibrary';
+import { findMaterialsDocument, listMaterialsDocuments } from '../library/materialsLibrary';
 import { readMaterialParentWindow, searchMaterialChunks } from '../pipeline/materialChunkSearch';
 import { fetchWebPage, parsePublicWebUrl } from '../websearch/webFetchClient';
 import { getAiProviderConfig } from './aiProvider';

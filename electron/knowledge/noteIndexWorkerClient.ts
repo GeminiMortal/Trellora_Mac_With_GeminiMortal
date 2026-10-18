@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
-import type { IndexedNote, NoteIndex } from '../noteIndex';
+import type { IndexedNote, NoteIndex } from '../note/noteIndex';
 
 /** One reusable local parser worker; failed requests are retried by the coordinator. */
 export class NoteIndexWorkerClient {

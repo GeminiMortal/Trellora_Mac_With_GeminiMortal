@@ -1,10 +1,10 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import { useState } from 'react';
 import { Box, Group, Image, Text, UnstyledButton } from '@mantine/core';
 import { FileText } from 'lucide-react';
 import type { AssistantAttachment } from '../../electron';
-import { AssistantImageViewer, type AssistantImageAttachment } from './AssistantImageViewer';
-import { formatAssistantAttachmentBytes } from './assistantAttachmentPresentation';
+import { AssistantImageViewer, type AssistantImageAttachment } from './AssistantImageViewer.tsx';
+import { formatAssistantAttachmentBytes } from './assistantAttachmentPresentation.ts';
 
 /**
  * 已发送用户消息的短期附件投影：附件只保留在当前渲染会话中，不进入文字历史或本地记忆。

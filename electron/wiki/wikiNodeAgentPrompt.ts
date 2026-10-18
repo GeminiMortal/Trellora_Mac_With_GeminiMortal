@@ -1,39 +1,75 @@
 /**
+ * System prompts, runtime context and node direct-inject blocks for the Wiki node ReAct agent (spec §4.5 / §3.3).
  * Wiki 节点 ReAct Agent 的系统提示词、运行时上下文与节点直载块（方案 §4.5 / §3.3）。
  *
+ * Structurally aligned with the knowledge-base agent prompts, but scope discipline is narrowed to
+ * "current chapter and its subchapters", and an `<action_contract>` hard output-format constraint is injected
+ * per actionKind; everything is delimited with XML tags.
  * 结构对齐知识库 Agent 提示词，但把作用域纪律收敛到"当前章节及其子章节"，
  * 并按 actionKind 注入 `<action_contract>` 输出格式硬约束；全部以 XML 标签分隔。
  */
 
-import type { AssistantConversationMessage } from '../knowledge/assistantTurnTypes';
-import { buildWikiActionContract, type WikiActionKind, type WikiSummaryPolicy } from './wikiQuickActions';
-import { WIKI_NODE_DIRECT_HEAD_CHARS, WIKI_NODE_DIRECT_INJECT_CHARS, WIKI_NODE_DIRECT_TAIL_CHARS } from './wikiNodeBudget';
-import { WIKI_MAX_RETRIEVAL_CYCLES, type WikiScopeDecisionReason, type WikiScopeMode } from './wikiScopePolicy';
+import type { AssistantConversationMessage } from '../knowledge/assistant/assistantTurnTypes.ts';
+import { buildWikiActionContract, type WikiActionKind, type WikiSummaryPolicy } from './wikiQuickActions.ts';
+import { WIKI_NODE_DIRECT_HEAD_CHARS, WIKI_NODE_DIRECT_INJECT_CHARS, WIKI_NODE_DIRECT_TAIL_CHARS } from './wikiNodeBudget.ts';
+import { WIKI_MAX_RETRIEVAL_CYCLES, type WikiScopeDecisionReason, type WikiScopeMode } from './wikiScopePolicy.ts';
 
+/**
+ * Capability flags that shape which retrieval tools the agent prompt advertises.
+ * 影响提示词中检索能力声明的能力开关。
+ */
 export interface WikiAgentCapabilities {
-  /** 向量索引是否可用；不可用时 wiki_node_search 退化为关键词召回，提示词同步说明。 */
+  /**
+   * Whether the vector index is available; when unavailable wiki_node_search degrades to keyword recall and the prompt says so.
+   * 向量索引是否可用；不可用时 wiki_node_search 退化为关键词召回，提示词同步说明。
+   */
   semanticSearch: boolean;
   keywordSearch: boolean;
-  /** wiki_grep_node 字面精确检索（编号/配置项/原文措辞）；基于内存 markdown，始终可用。 */
+  /**
+   * wiki_grep_node literal exact search (ids/config entries/original wording); based on in-memory markdown, always available.
+   * wiki_grep_node 字面精确检索（编号/配置项/原文措辞）；基于内存 markdown，始终可用。
+   */
   literalSearch: boolean;
-  /** wiki_read_node 深读始终可用。 */
+  /** wiki_read_node deep reading is always available. / wiki_read_node 深读始终可用。 */
   deepRead: boolean;
-  /** 跨章节检索（wiki_search_document，P3）；未注册时提示词不引导调用。 */
+  /**
+   * Cross-chapter search (wiki_search_document, P3); when unregistered the prompt does not guide the model to call it.
+   * 跨章节检索（wiki_search_document，P3）；未注册时提示词不引导调用。
+   */
   documentSearch: boolean;
 }
 
-/** 节点直载结果：注入本轮用户消息的 `<node_content>` 块与是否全文直载标记。 */
+/**
+ * Node direct-inject result: the `<node_content>` block injected into this turn's user message plus a full-inject flag.
+ * 节点直载结果：注入本轮用户消息的 `<node_content>` 块与是否全文直载标记。
+ */
 export interface WikiNodeContentBlock {
+  /** Rendered `<node_content>` XML block text. / 渲染好的 `<node_content>` XML 块文本。 */
   text: string;
-  /** true = 全文直载（引用标记 [0]）；false = 头尾截断，必须走工具补全。 */
+  /**
+   * true = full-text inject (citation marker [0]); false = head/tail truncation, tools must fill the gap.
+   * true = 全文直载（引用标记 [0]）；false = 头尾截断，必须走工具补全。
+   */
   full: boolean;
-  /** 直载块实际字符数（截断后）。 */
+  /** Actual character count of the injected block (after truncation). / 直载块实际字符数（截断后）。 */
   chars: number;
-  /** 节点 markdown 原始总字符数。 */
+  /** Original total character count of the node markdown. / 节点 markdown 原始总字符数。 */
   totalChars: number;
 }
 
-/** Progressive 硬规则（方案 §4.5）+ 工作流 + 引用纪律 + 动作契约。 */
+/**
+ * Build the ReAct system prompt: progressive hard rules (spec §4.5) + workflow + citation discipline + action contract.
+ * Progressive 硬规则（方案 §4.5）+ 工作流 + 引用纪律 + 动作契约。
+ *
+ * @param input.documentName - Document name shown in the role block / 角色块中展示的文档名
+ * @param input.nodeTitle - Current chapter title / 当前章节标题
+ * @param input.nodePath - Breadcrumb path of the current chapter / 当前章节面包屑路径
+ * @param input.capabilities - Capability flags that shape tool guidance / 影响工具引导的能力开关
+ * @param input.actionKind - Quick action kind driving the output contract / 驱动输出契约的快捷动作类型
+ * @param input.scopeMode - Scope discipline mode for this turn / 本轮作用域纪律模式
+ * @param input.summaryPolicy - Optional summary policy for summarize actions / 总结动作的可选总结策略
+ * @returns System prompt text / 系统提示词文本
+ */
 export function buildWikiNodeAgentSystemPrompt(input: {
   documentName: string;
   nodeTitle: string;
@@ -81,9 +117,22 @@ ${capabilityBlock}
 }
 
 /**
+ * Build the fixed-pipeline prompt used when native tool calling is unavailable or the ReAct engine fails (spec §4.6).
+ * The caller has already run one node-subtree retrieval before sending the model request, so this prompt forbids
+ * further tool requests and only allows an evidence-constrained streaming answer from the direct-injected node
+ * content and that retrieval result.
  * 原生工具调用不可用或 ReAct 引擎异常时的固定流水线提示词（方案 §4.6）。
  * 调用方已在发送模型请求前完成一次节点子树检索，因此这里禁止模型继续请求工具，
  * 只允许使用直载节点内容与该次检索结果完成有证据约束的流式回答。
+ *
+ * @param input.documentName - Document name / 文档名
+ * @param input.nodeTitle - Current chapter title / 当前章节标题
+ * @param input.nodePath - Breadcrumb path of the chapter / 章节面包屑路径
+ * @param input.actionKind - Quick action kind driving the output contract / 驱动输出契约的快捷动作类型
+ * @param input.summaryPolicy - Optional summary policy for summarize actions / 总结动作的可选总结策略
+ * @param input.retrievalCycles - Controlled retrieval rounds already executed (defaults to 1) / 已执行的受控检索次数（默认 1）
+ * @param input.documentSearchUsed - Whether retrieval already covered other chapters / 检索是否已覆盖本文其他章节
+ * @returns Fallback system prompt text / 回退系统提示词文本
  */
 export function buildWikiNodeFallbackSystemPrompt(input: {
   documentName: string;
@@ -120,8 +169,23 @@ export function buildWikiNodeFallbackSystemPrompt(input: {
 }
 
 /**
+ * Build the `<runtime_context>` injection (spec §4.5): prefixed to this turn's user message so the model knows the
+ * current chapter path, subchapter list, body size and available capabilities before deciding its retrieval
+ * strategy; it is not hard-coded into the system prompt.
  * `<runtime_context>` 注入（方案 §4.5）：随本轮用户消息前置，让模型在决定检索策略前
  * 就知道当前章节路径、子章节清单、正文规模与可用能力；不写死在系统提示词里。
+ *
+ * @param input.documentName - Document name / 文档名
+ * @param input.nodeTitle - Current chapter title / 当前章节标题
+ * @param input.nodePath - Breadcrumb path of the chapter / 章节面包屑路径
+ * @param input.childTitles - Direct subchapter titles / 直接子章节标题列表
+ * @param input.nodeChars - Character count of the node markdown / 节点 markdown 字符数
+ * @param input.truncated - Whether the direct inject was truncated / 直载是否被截断
+ * @param input.capabilities - Capability flags included in the node line / 节点行中声明的能力开关
+ * @param input.scopeMode - Scope discipline mode / 作用域纪律模式
+ * @param input.scopeReason - Scope decision reason echoed in the header / 头部回显的作用域决策原因
+ * @param input.now - Optional clock override for the date line / 日期行的可选时钟覆盖
+ * @returns `<wiki_context>` XML block / `<wiki_context>` XML 块
  */
 export function buildWikiRuntimeContext(input: {
   documentName: string;
@@ -156,8 +220,20 @@ export function buildWikiRuntimeContext(input: {
 }
 
 /**
- * 当前问题必须是用户消息里的第一个语义块，避免模型先被章节模板带偏。
+ * Build the user message blocks. The current question must be the first semantic block in the user message so the
+ * model is not biased by the chapter template first. resolved_question only serves retrieval and coreference
+ * resolution; it does not replace the user's real question.
+ * 组装用户消息块。当前问题必须是用户消息里的第一个语义块，避免模型先被章节模板带偏。
  * resolved_question 只服务于检索与指代消解，不替换用户的真实提问。
+ *
+ * @param input.userQuestion - Original user question / 用户原始问题
+ * @param input.resolvedQuestion - Question after coreference resolution / 指代消解后的问题
+ * @param input.wikiContext - `<wiki_context>` block from buildWikiRuntimeContext / buildWikiRuntimeContext 生成的 `<wiki_context>` 块
+ * @param input.nodeContent - `<node_content>` block from buildWikiNodeContentBlock / buildWikiNodeContentBlock 生成的 `<node_content>` 块
+ * @param input.conversation - Optional conversation history marked non-evidence / 可选对话历史（标记为非证据）
+ * @param input.attachmentContext - Optional attachment context block / 可选附件上下文块
+ * @param input.fallbackSearchResults - Optional pre-run retrieval results for the fallback path / 回退路径的可选预检索结果
+ * @returns Assembled user message text / 组装后的用户消息文本
  */
 export function buildWikiAgentQuestion(input: {
   userQuestion: string;
@@ -189,9 +265,15 @@ export function buildWikiAgentQuestion(input: {
 }
 
 /**
+ * Build the node content direct-inject block (spec §3.3):
+ * - markdown ≤ 6,000 chars: full text injected as `<node_content>` with agreed citation marker [0];
+ * - > 6,000 chars: inject head 4,000 + tail 1,000 with a truncation notice, forcing tools to fill the gap.
  * 节点内容直载块（方案 §3.3）：
  * - markdown ≤ 6,000 字符：全文以 `<node_content>` 注入，约定引用标记 [0]；
  * - > 6,000 字符：注入头部 4,000 + 尾部 1,000 并标注截断，强制走工具补全。
+ *
+ * @param markdown - Node markdown source / 节点 markdown 原文
+ * @returns Direct-inject block text with full flag and size counters / 直载块文本与全文标记、字符计数
  */
 export function buildWikiNodeContentBlock(markdown: string): WikiNodeContentBlock {
   const totalChars = markdown.length;
@@ -228,6 +310,7 @@ export function buildWikiNodeContentBlock(markdown: string): WikiNodeContentBloc
   };
 }
 
+/** Build the scope-discipline rule sentence for the hard-rules block. / 生成硬性规则块中的作用域纪律规则句。 */
 function buildWikiScopeRule(scopeMode: WikiScopeMode, documentSearchAvailable: boolean): string {
   if (scopeMode === 'node-locked') {
     return '只允许在当前章节及其子章节内查找和作答，不得扩大到兄弟章节或全文。';
@@ -242,6 +325,7 @@ function buildWikiScopeRule(scopeMode: WikiScopeMode, documentSearchAvailable: b
     : '当前节点已经覆盖整篇文档，可在该范围内检索；不得搜索其他文档。';
 }
 
+/** Escape XML text nodes so injected content cannot break the tag structure. / 转义 XML 文本节点，防止注入内容破坏标签结构。 */
 function escapeXmlText(value: string): string {
   return value
     .replace(/&/gu, '&amp;')
@@ -249,6 +333,7 @@ function escapeXmlText(value: string): string {
     .replace(/>/gu, '&gt;');
 }
 
+/** Escape XML attribute values (text escaping plus quote escaping). / 转义 XML 属性值（文本转义再加引号转义）。 */
 function escapeXmlAttribute(value: string): string {
   return escapeXmlText(value).replace(/"/gu, '&quot;').replace(/'/gu, '&apos;');
 }

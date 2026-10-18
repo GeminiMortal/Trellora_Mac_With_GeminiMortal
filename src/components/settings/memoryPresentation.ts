@@ -1,5 +1,5 @@
-import { t } from '../../i18n';
-import type { MemoryItemRecord } from '../../../electron/knowledge/memory/memoryTypes';
+import { t } from '../../i18n/index.ts';
+import type { MemoryItemRecord } from '../../../electron/knowledge/memory/memoryTypes.ts';
 
 export function reviewReasonLabel(reason: MemoryItemRecord['reviewReason']): string {
   return reason ? t(({ INFERRED_FACT: '自动提炼，需确认', TARGET_REPLACEMENT: '更正已有记忆', TARGET_RETIREMENT: '撤销已有记忆',

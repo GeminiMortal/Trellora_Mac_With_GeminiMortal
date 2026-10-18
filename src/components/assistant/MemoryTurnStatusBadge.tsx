@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { t, useI18n } from '../../i18n';
-import type { MemorySaveReceipt, MemoryTurnStatus } from '../../../electron/knowledge/memory/memoryTypes';
-import { memoryFailureMessage } from '../../../shared/memoryFailure';
+import { t, useI18n } from '../../i18n/index.ts';
+import type { MemorySaveReceipt, MemoryTurnStatus } from '../../../electron/knowledge/memory/memoryTypes.ts';
+import { memoryFailureMessage } from '../../../shared/memoryFailure.ts';
 
 /** Actual per-turn state, independently projected from recall usage and the original explicit-save receipt. */
 export default function MemoryTurnStatusBadge({ turnId, settled, receipt }: { turnId: string; settled: boolean; receipt?: MemorySaveReceipt }) {

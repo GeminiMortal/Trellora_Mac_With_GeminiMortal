@@ -1,7 +1,13 @@
+/**
+ * Bundled skill definitions and workspace synchronization.
+ * 内置技能定义与工作区同步。
+ */
+
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
+/** Map of bundled skill directory names to their display names. / 内置技能目录名到显示名的映射。 */
 export const bundledSkillNames: Readonly<Record<string, string>> = {
   'builtin-knowledge': 'builtin-knowledge',
   'builtin-learning': 'builtin-learning',
@@ -10,7 +16,13 @@ export const bundledSkillNames: Readonly<Record<string, string>> = {
   'generate-study-doc': '学习文档生成',
 };
 
-/** 只补齐缺失的内置技能；保留用户编辑、模板和启停登记。 */
+/**
+ * Ensure all bundled skills exist in the workspace, copying missing ones atomically.
+ * 只补齐缺失的内置技能；保留用户编辑、模板和启停登记。
+ *
+ * @param workspacePath - Root path of the workspace / 工作区根路径
+ * @param bundleRoot - Path to the bundled skill source directory / 内置技能源目录路径
+ */
 export function ensureBundledSkills(workspacePath: string, bundleRoot: string): void {
   const root = path.join(path.resolve(workspacePath), 'AI-Skill');
   fs.mkdirSync(root, { recursive: true });
@@ -29,7 +41,14 @@ export function ensureBundledSkills(workspacePath: string, bundleRoot: string): 
   }
 }
 
-/** 来源标签只匹配应用发布的目录及技能名。 */
+/**
+ * Check whether a skill path belongs to a bundled skill.
+ * 检查技能路径是否属于内置技能。
+ *
+ * @param basePath - Skill directory path / 技能目录路径
+ * @param name - Skill display name / 技能显示名
+ * @returns True if bundled / 若为内置技能则返回 true
+ */
 export function isBundledSkill(basePath: string, name: string): boolean {
   return bundledSkillNames[path.basename(basePath)] === name;
 }

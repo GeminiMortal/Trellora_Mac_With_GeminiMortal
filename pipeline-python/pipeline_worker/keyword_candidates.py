@@ -1,3 +1,12 @@
+"""
+Module: keyword_candidates
+Keyword candidate generation from text chunks. Extracts n-gram candidates,
+filters stopwords and noise, and tracks occurrences with positions.
+模块：keyword_candidates
+从文本切块生成关键词候选。提取 n-gram 候选，过滤停用词和噪声，
+并跟踪带有位置的出现记录。
+"""
+
 from __future__ import annotations
 
 import re
@@ -14,21 +23,36 @@ from .keyword_tokenizer import (
 )
 
 
+# Maximum candidates per chunk / 每块最大候选数
 MAX_CANDIDATES_PER_CHUNK = 1_024
+# Default maximum candidates / 默认最大候选数
 DEFAULT_MAX_CANDIDATES = 256
+# Maximum stopwords to load / 最大加载停用词数
 MAX_STOPWORDS = 10_000
+# Maximum text characters for processing / 处理的最大文本字符数
 MAX_TEXT_CHARACTERS = 200_000
+# Maximum n-gram size / 最大 n-gram 大小
 MAX_NGRAM = 3
+# Maximum search tokens per chunk / 每块最大搜索 token 数
 MAX_SEARCH_TOKENS_PER_CHUNK = 8_192
+# Maximum characters per search token / 每个搜索 token 的最大字符数
 MAX_SEARCH_TOKEN_CHARACTERS = 128
+# Pure number pattern / 纯数字模式
 PURE_NUMBER_RE = re.compile(r'^\d+(?:[./-]\d+)*$')
+# Pure ordinal pattern (e.g., 第1页, 第3章) / 纯序号模式（如 第1页、第3章）
 PURE_ORDINAL_RE = re.compile(r'^(?:第\s*)?\d+(?:页|章|节|条)?$')
+# Repeated character detection / 重复字符检测
 REPEATED_CHARACTER_RE = re.compile(r'(.)\1{3,}')
+# Chinese-only character pattern / 纯中文字符模式
 CHINESE_ONLY_RE = re.compile(r'^[\u3400-\u9fff]+$')
 
 
 @dataclass(frozen=True)
 class CandidateOccurrence:
+    """
+    Position of a keyword candidate occurrence in text.
+    关键词候选在文本中的出现位置。
+    """
     start: int
     end: int
     sentence_index: int
@@ -36,6 +60,10 @@ class CandidateOccurrence:
 
 @dataclass
 class KeywordCandidate:
+    """
+    A keyword candidate with its occurrences and metadata.
+    带有出现记录和元数据的关键词候选。
+    """
     term: str
     normalized_term: str
     kind: str
@@ -45,6 +73,10 @@ class KeywordCandidate:
 
 @dataclass(frozen=True)
 class CandidateGenerationResult:
+    """
+    Result of keyword candidate generation with capping information.
+    关键词候选生成结果，包含截断信息。
+    """
     candidates: tuple[KeywordCandidate, ...]
     candidate_count_before_cap: int
     candidate_capped: bool

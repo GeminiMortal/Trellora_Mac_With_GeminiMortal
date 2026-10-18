@@ -1,4 +1,4 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import { Tooltip } from '@mantine/core';
 import './AssistantConversationNav.css';

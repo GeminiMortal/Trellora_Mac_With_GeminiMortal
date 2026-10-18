@@ -1,17 +1,17 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import { ActionIcon, Alert, Badge, Button, Group, Menu, ScrollArea, Stack, Text, Textarea, Tooltip } from '@mantine/core';
 import { Check, ChevronDown, CircleAlert, LocateFixed, Paperclip, Route, Search, Send, Sparkles, Square, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AssistantAiOptions, AssistantAttachment, AssistantThinkingMode } from '../../electron';
-import MarkdownContent from '../MarkdownContent';
-import { AssistantThinkingTrace, AssistantToolTrace } from '../KnowledgePanel';
-import { AssistantComposerAttachments } from '../assistant/AssistantComposerAttachments';
-import { AssistantMessageAttachments } from '../assistant/AssistantMessageAttachments';
-import { useAssistantAttachments } from '../assistant/useAssistantAttachments';
-import { WIKI_QUICK_ACTIONS, type WikiActionKind } from '../../../electron/wiki/wikiQuickActions';
-import type { WikiGenerationJob, WikiMapNode, WikiNodeAiRequestOptions, WikiNodeAiState, WikiNodeCitation, WikiRetrievalState } from '../../wiki/wikiTypes';
-import type { ResolvedTheme } from '../../utils/theme';
-import WikiGenerationProgress from './WikiGenerationProgress';
+import MarkdownContent from '../markdown/MarkdownContent.tsx';
+import { AssistantThinkingTrace, AssistantToolTrace } from '../knowledge/KnowledgePanel.tsx';
+import { AssistantComposerAttachments } from '../assistant/AssistantComposerAttachments.tsx';
+import { AssistantMessageAttachments } from '../assistant/AssistantMessageAttachments.tsx';
+import { useAssistantAttachments } from '../assistant/useAssistantAttachments.ts';
+import { WIKI_QUICK_ACTIONS, type WikiActionKind } from '../../../electron/wiki/wikiQuickActions.ts';
+import type { WikiGenerationJob, WikiMapNode, WikiNodeAiRequestOptions, WikiNodeAiState, WikiNodeCitation, WikiRetrievalState } from './data/wikiTypes.ts';
+import type { ResolvedTheme } from '../../utils/ui/theme.ts';
+import WikiGenerationProgress from './WikiGenerationProgress.tsx';
 
 interface WikiAssistantTabProps {
   node: WikiMapNode;

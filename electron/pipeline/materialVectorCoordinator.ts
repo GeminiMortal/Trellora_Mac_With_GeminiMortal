@@ -1,22 +1,37 @@
+/**
+ * Module: materialVectorCoordinator
+ * Material document vector embedding coordinator. Manages embedding jobs,
+ * batch processing, retry logic, and SQLite vector storage.
+ * 模块：materialVectorCoordinator
+ * 资料文档向量嵌入协调器。管理嵌入任务、批处理、重试逻辑和 SQLite 向量存储。
+ */
+
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import { getLibraryMetaDirectory } from '../treeOrder';
-import { ensureMaterialChunkSearchSchema } from './materialChunkSearch';
-import { ensureMaterialEmbeddingProfileSchema, lockMaterialEmbeddingProfile, readMaterialEmbeddingProfileFromDatabase } from './materialEmbeddingProfile';
-import type { MaterialEmbeddingAdapter } from './materialEmbeddingAdapters';
-import { getActiveMaterialVectorTable } from './materialVectorGenerationStore';
+import { getLibraryMetaDirectory } from '../files/treeOrder.ts';
+import { ensureMaterialChunkSearchSchema } from './materialChunkSearch.ts';
+import { ensureMaterialEmbeddingProfileSchema, lockMaterialEmbeddingProfile, readMaterialEmbeddingProfileFromDatabase } from './materialEmbeddingProfile.ts';
+import type { MaterialEmbeddingAdapter } from './materialEmbeddingAdapters.ts';
+import { getActiveMaterialVectorTable } from './materialVectorGenerationStore.ts';
 import {
   MaterialEmbeddingAdapterError,
   MaterialEmbeddingProfileError,
   type MaterialEmbeddingProfile,
-} from './materialEmbeddingTypes';
+} from './materialEmbeddingTypes.ts';
 
+// SQLite table name for embedding jobs / 嵌入任务的 SQLite 表名
 const jobsTableName = 'material_embedding_jobs';
+// SQLite table name for chunk embedding state / 切块嵌入状态的 SQLite 表名
 const stateTableName = 'material_chunk_embedding_state';
+// SQLite table name for vector metadata / 向量元数据的 SQLite 表名
 const vectorMetaTableName = 'material_chunk_vector_meta';
 
+/**
+ * Lifecycle states of a vector embedding job.
+ * 向量嵌入任务的生命周期状态。
+ */
 export type MaterialVectorJobState =
   | 'QUEUED'
   | 'RUNNING'
@@ -26,26 +41,48 @@ export type MaterialVectorJobState =
   | 'FAILED'
   | 'SUCCEEDED';
 
+/**
+ * Options for the material vector coordinator.
+ * 资料向量协调器的选项。
+ */
 export interface MaterialVectorCoordinatorOptions {
+  /** Library root path / 资料库根路径 */
   libraryPath: string;
+  /** Single document ID / 单个文档 ID */
   documentId?: string;
+  /** Multiple document IDs / 多个文档 ID */
   documentIds?: string[];
+  /** Embedding adapter for vector generation / 用于向量生成的嵌入适配器 */
   adapter: MaterialEmbeddingAdapter;
+  /** Embedding profile configuration / 嵌入配置文件 */
   profile?: MaterialEmbeddingProfile;
+  /** Batch size for embedding calls / 嵌入调用的批次大小 */
   batchSize?: number;
+  /** Maximum characters per batch / 每批次最大字符数 */
   maxBatchCharacters?: number;
+  /** Request timeout in milliseconds / 请求超时（毫秒） */
   timeoutMs?: number;
+  /** Maximum retry attempts / 最大重试次数 */
   maxAttempts?: number;
+  /** Initial backoff delay in milliseconds / 初始退避延迟（毫秒） */
   initialBackoffMs?: number;
+  /** Maximum backoff delay in milliseconds / 最大退避延迟（毫秒） */
   maxBackoffMs?: number;
+  /** Job lease duration in milliseconds / 任务租约时长（毫秒） */
   leaseMs?: number;
+  /** Abort signal for cancellation / 用于取消的中止信号 */
   signal?: AbortSignal;
+  /** Cancel check function / 取消检查函数 */
   shouldCancel?: () => boolean;
+  /** Progress callback / 进度回调 */
   onProgress?: (report: MaterialVectorJobReport) => void;
+  /** Sleep function (injectable for testing) / 睡眠函数（可注入用于测试） */
   sleep?: (milliseconds: number) => Promise<void>;
+  /** Random function (injectable for testing) / 随机函数（可注入用于测试） */
   random?: () => number;
+  /** Now function (injectable for testing) / 当前时间函数（可注入用于测试） */
   now?: () => Date;
-  /** 仅用于验证数据库写入失败时事务不会留下半批数据。 */
+  /** Hook for verifying database write failures don't leave partial batches. / 验证数据库写入失败不会留下半批数据的钩子。 */
   beforeBatchCommit?: (input: { rowIds: number[]; vectors: number[][] }) => void | Promise<void>;
 }
 
@@ -80,8 +117,8 @@ export interface MaterialVectorCoordinatorSchemaOptions {
 }
 
 export { ensureMaterialChunkSearchSchema, ensureMaterialEmbeddingProfileSchema, lockMaterialEmbeddingProfile, readMaterialEmbeddingProfileFromDatabase, MaterialEmbeddingAdapterError };
-export type { MaterialEmbeddingAdapter } from './materialEmbeddingAdapters';
-export { getActiveMaterialVectorTable } from './materialVectorGenerationStore';
+export type { MaterialEmbeddingAdapter } from './materialEmbeddingAdapters.ts';
+export { getActiveMaterialVectorTable } from './materialVectorGenerationStore.ts';
 
 export function isMaterialVectorProjectionCurrent(input: {
   libraryPath: string;

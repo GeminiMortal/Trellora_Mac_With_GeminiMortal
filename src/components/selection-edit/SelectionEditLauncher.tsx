@@ -1,4 +1,4 @@
-import { getAppLanguage, t, useI18n } from '../../i18n';
+import { getAppLanguage, t, useI18n } from '../../i18n/index.ts';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { useMediaQuery } from '@mantine/hooks';
 import {

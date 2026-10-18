@@ -1,7 +1,7 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import { Menu, Text } from '@mantine/core';
 import { BookmarkPlus, ChevronDown, Crosshair, FileSearch, FolderPlus, MessageSquareText, Pencil, Sparkles, Trash2, UnfoldVertical, Copy } from 'lucide-react';
-import type { WikiMapNode } from '../../wiki/wikiTypes';
+import type { WikiMapNode } from './data/wikiTypes.ts';
 
 interface WikiNodeContextMenuProps {
   node: WikiMapNode | null;

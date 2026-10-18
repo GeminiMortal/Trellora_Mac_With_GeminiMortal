@@ -1,9 +1,13 @@
-import { createMaterialEmbeddingRequestSignal } from '../pipeline/materialEmbeddingTypes';
-import { NO_SOURCE_ID, OLLAMA_SOURCE_ID, readModelHub, resolveProviderCredentials, type HubStore } from './modelHub';
+/**
+ * Rerank adapters: provider-agnostic reranking with timeout and fallback.
+ * Rerank 适配器：提供商无关的 reranking，带超时和降级。
+ */
 
-/** rerank 请求超时：失败即降级，绝不阻塞回答生成。 */
+import { createMaterialEmbeddingRequestSignal } from '../pipeline/materialEmbeddingTypes';
+
+/** Rerank request timeout (ms); failure degrades gracefully. / Rerank 请求超时（毫秒）；失败即降级。 */
 export const RERANK_TIMEOUT_MS = 8_000;
-/** rerank 单文档字符上限；超长父块走锚点窗口裁剪。 */
+/** Max chars per rerank document; long chunks use anchor window trimming. / Rerank 单文档字符上限。 */
 export const RERANK_DOCUMENT_MAX_CHARS = 6_000;
 const DASHSCOPE_RERANK_URL = 'https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank';
 

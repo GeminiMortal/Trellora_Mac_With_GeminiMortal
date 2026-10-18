@@ -1,8 +1,21 @@
-import { generateAiJson } from '../knowledge/aiProvider';
-import type { AiProviderConfig } from '../knowledge/aiTypes';
-import { isStructuredOutputContractError } from '../knowledge/structuredOutputContract';
+/**
+ * Structured LLM micro-call for proposing child node splits from section content (plan §5).
+ * 基于章节内容调用结构化 LLM 小任务以提案子节点拆分（方案 §5）。
+ */
+
+import { generateAiJson } from '../knowledge/ai/aiProvider.ts';
+import type { AiProviderConfig } from '../knowledge/ai/aiTypes.ts';
+import { isStructuredOutputContractError } from '../knowledge/plan/structuredOutputContract.ts';
 
 /**
+ * "Split into child nodes" structured micro-call (plan §5): after the final answer, extract a
+ * list of independently viable child nodes `{title, summary}` from the section text and the
+ * assistant's split suggestion. The summary becomes the derived node's markdown.
+ *
+ * Same structure as `followUpSuggestions.ts`: strict-schema validation failure falls back to
+ * lenient parsing; cancellation is re-thrown; all other failures throw `WikiSplitProposalError`
+ * which the caller silently swallows (draft still produced but proposedChildren=[]).
+ *
  * 「拆分为子节点」结构化小调用（方案 §5）：终答产出后，基于节点正文与助手拆分建议
  * 提炼出可独立成节的子节点清单 `{title, summary}`。概述将作为派生节点 markdown。
  *
@@ -10,19 +23,22 @@ import { isStructuredOutputContractError } from '../knowledge/structuredOutputCo
  * 其余失败抛 `WikiSplitProposalError` 由调用方静默吞掉（draft 仍产出但 proposedChildren=[]）。
  */
 
+/** Max output tokens for the split proposal call / 拆分子节点提案调用的最大输出 token 数 */
 export const WIKI_SPLIT_MAX_OUTPUT_TOKENS = 1_600;
+/** Timeout in ms for the split proposal call / 拆分子节点提案调用的超时毫秒数 */
 export const WIKI_SPLIT_TIMEOUT_MS = 12_000;
-/** 子节点数量上限（方案 §5）。 */
+/** Max child nodes per split (plan §5) / 子节点数量上限（方案 §5） */
 export const WIKI_SPLIT_MAX_COUNT = 5;
-/** 子节点标题字符上限。 */
+/** Max chars per child node title / 子节点标题字符上限 */
 export const WIKI_SPLIT_TITLE_MAX_CHARS = 20;
-/** 子节点概述字符上限。 */
+/** Max chars per child node summary / 子节点概述字符上限 */
 export const WIKI_SPLIT_SUMMARY_MAX_CHARS = 400;
-/** 终答头部注入字符数。 */
+/** Chars injected from the final answer head / 终答头部注入字符数 */
 const WIKI_SPLIT_ANSWER_HEAD_CHARS = 800;
-/** 节点正文头部注入字符数。 */
+/** Chars injected from the node markdown head / 节点正文头部注入字符数 */
 const WIKI_SPLIT_NODE_HEAD_CHARS = 4_000;
 
+/** Proposed child node from the split analysis / 拆分分析产出的建议子节点 */
 export interface WikiSplitChild {
   title: string;
   summary: string;
@@ -75,6 +91,14 @@ const WIKI_SPLIT_JSON_SCHEMA = {
   },
 } as const;
 
+/**
+ * Build the prompt for the split-proposal LLM call by injecting section path, title, content
+ * and the assistant's answer into the system prompt template.
+ * 构建拆分子节点提案的 LLM 提示：将章节路径、标题、正文与助手回答注入系统提示模板。
+ *
+ * @param input - Section metadata and assistant answer / 章节元数据与助手回答
+ * @returns Formatted prompt string / 格式化后的提示字符串
+ */
 export function buildWikiSplitProposalPrompt(input: {
   nodeTitle: string;
   nodePath: string;
@@ -88,7 +112,7 @@ export function buildWikiSplitProposalPrompt(input: {
     .replace('<answer>', input.answer.slice(0, WIKI_SPLIT_ANSWER_HEAD_CHARS));
 }
 
-/** 宽松提取：接受 {children:[...]} / 顶层数组，跳过非法项，标题去重，永不抛错。 */
+/** Lenient extraction: accepts {children:[...]} or a top-level array, skips invalid items, deduplicates titles, never throws. / 宽松提取：接受 {children:[...]} / 顶层数组，跳过非法项，标题去重，永不抛错。 */
 function extractChildren(value: unknown, nodeTitle: string): WikiSplitChild[] {
   let items: unknown[] | undefined;
   if (Array.isArray(value)) items = value;
@@ -116,7 +140,7 @@ function extractChildren(value: unknown, nodeTitle: string): WikiSplitChild[] {
   return result;
 }
 
-/** Schema 校验失败时的回退解析：优先对象切片，其次整体文本。 */
+/** Fallback parser when schema validation fails: try the object slice first, then the full text. / Schema 校验失败时的回退解析：优先对象切片，其次整体文本。 */
 function parseLenientJson(text: string): unknown {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
@@ -133,8 +157,11 @@ function parseLenientJson(text: string): unknown {
   throw new WikiSplitProposalError('invalid-split', '拆分子节点原始输出不是合法 JSON。');
 }
 
+/** Error thrown by the split-proposal service on failure / 拆分子节点提案服务失败时抛出的错误 */
 export class WikiSplitProposalError extends Error {
+  /** Machine-readable error code / 机器可读的错误码 */
   readonly code: string;
+  /** Raw model output when available, for diagnostics / 可用时的模型原始输出，用于诊断 */
   readonly rawOutput?: string;
 
   constructor(code: string, message: string, rawOutput?: string) {
@@ -146,8 +173,14 @@ export class WikiSplitProposalError extends Error {
 }
 
 /**
+ * Generate a split-proposal: returns ≤ 5 `{title, summary}` child nodes after validation;
+ * cancellation (AbortSignal) is re-thrown, all other failures throw `WikiSplitProposalError`
+ * for the caller to silently handle.
  * 拆分子节点提案生成服务：校验截断后返回 ≤5 个 `{title, summary}`；
  * 取消（AbortSignal）原样上抛，其余失败抛 `WikiSplitProposalError` 由调用方静默处理。
+ *
+ * @param input - Section content, model, provider config and signal / 章节内容、模型、供应商配置与信号
+ * @returns Array of proposed child nodes / 建议的子节点数组
  */
 export async function generateWikiSplitProposal(input: {
   nodeTitle: string;
@@ -183,6 +216,8 @@ export async function generateWikiSplitProposal(input: {
     });
   } catch (error) {
     if (input.signal.aborted) throw error;
+    // Schema validation failure is a best-effort scenario: fall back to lenient parsing of the raw
+    // output; all other failures are re-thrown.
     // Schema 校验失败属最佳努力场景：回退宽松解析原始输出，其余失败照常上抛。
     if (isStructuredOutputContractError(error) && error.reason === 'schema-validation' && rawOutput !== undefined) {
       value = parseLenientJson(rawOutput);

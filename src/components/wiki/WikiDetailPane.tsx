@@ -1,13 +1,13 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import { ActionIcon, Badge, Group, Tabs, Text, Tooltip } from '@mantine/core';
 import { Bot, FileText, History, SquarePen, X } from 'lucide-react';
 import { useState } from 'react';
 import type { AssistantAiOptions, AssistantAttachment, WikiAiMemory } from '../../electron';
-import type { WikiActionKind, WikiGenerationJob, WikiMapNode, WikiNodeAiRequestOptions, WikiNodeAiState } from '../../wiki/wikiTypes';
-import type { ResolvedTheme } from '../../utils/theme';
-import WikiAssistantTab from './WikiAssistantTab';
-import WikiAiMemoryDrawer from './WikiAiMemoryDrawer';
-import WikiDocumentTab from './WikiDocumentTab';
+import type { WikiActionKind, WikiGenerationJob, WikiMapNode, WikiNodeAiRequestOptions, WikiNodeAiState } from './data/wikiTypes.ts';
+import type { ResolvedTheme } from '../../utils/ui/theme.ts';
+import WikiAssistantTab from './WikiAssistantTab.tsx';
+import WikiAiMemoryDrawer from './WikiAiMemoryDrawer.tsx';
+import WikiDocumentTab from './WikiDocumentTab.tsx';
 
 export type WikiDetailTab = 'document' | 'ai';
 

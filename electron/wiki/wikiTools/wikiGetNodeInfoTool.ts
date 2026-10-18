@@ -1,11 +1,19 @@
-import type { ReActTool, ReActToolExecution } from '../../knowledge/reactAgent/toolRegistry';
-import { escapeXmlAttribute, escapeXmlText } from '../../knowledge/knowledgeToolContext';
-import type { WikiToolContext } from '../wikiToolContext';
-import { collectWikiChildNodes, findWikiNode, getWikiNodeBreadcrumb, isWikiRootNode } from '../wikiNodeScope';
-import { WIKI_NODE_DIRECT_INJECT_CHARS } from '../wikiNodeBudget';
+/**
+ * Wiki tool that returns current node metadata (breadcrumb, children, char count) without body text.
+ * 返回当前节点元数据（面包屑、子节点、字符数）但不含正文的 Wiki 工具。
+ */
+
+import type { ReActTool, ReActToolExecution } from '../../knowledge/reactAgent/toolRegistry.ts';
+import { escapeXmlAttribute, escapeXmlText } from '../../knowledge/tools/knowledgeToolContext.ts';
+import type { WikiToolContext } from '../wikiToolContext.ts';
+import { collectWikiChildNodes, findWikiNode, getWikiNodeBreadcrumb, isWikiRootNode } from '../wikiNodeScope.ts';
+import { WIKI_NODE_DIRECT_INJECT_CHARS } from '../wikiNodeBudget.ts';
 
 /**
- * wiki_get_node_info（方案 §4.3）：返回当前节点的元数据——面包屑路径、直接子节点
+ * wiki_get_node_info tool (plan §4.3): returns current node metadata — breadcrumb path, direct
+ * child titles, char count and whether the content was truncated on direct inject. Does not return
+ * body text; use wiki_read_node for that. Helps the model confirm structure and size before searching.
+ * wiki_get_node_info 工具（方案 §4.3）：返回当前节点的元数据——面包屑路径、直接子节点
  * 标题清单、正文字符数与是否已被直载截断。不返回正文；需要正文用 wiki_read_node。
  * 帮助模型在检索前确认本章节的结构与规模，并为 wiki_read_node 提供合法的子节点 id。
  */
@@ -23,6 +31,7 @@ export const wikiGetNodeInfoTool: ReActTool<WikiToolContext> = {
   execute: async (_args, ctx) => runWikiGetNodeInfo(ctx),
 };
 
+/** Build the <node_info> XML observation with metadata, children and scope status. / 构建含元数据、子节点与范围状态的 <node_info> XML 观察结果。 */
 function runWikiGetNodeInfo(ctx: WikiToolContext): ReActToolExecution {
   const node = findWikiNode(ctx.outlineNodes, ctx.nodeId);
   if (!node) {

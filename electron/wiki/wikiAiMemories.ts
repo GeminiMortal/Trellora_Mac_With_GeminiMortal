@@ -1,15 +1,20 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { assertInsideDirectory } from '../pathGuards';
-import { atomicWriteJson, safeSegment } from '../pipeline/pathLayout';
-import { getLibraryMetaDirectory } from '../treeOrder';
-import type { AssistantConversationMessage } from '../knowledge/assistantTurnTypes';
-import type { WikiDocumentOutline } from '../wikiOutline';
+import { assertInsideDirectory } from '../files/pathGuards.ts';
+import { atomicWriteJson, safeSegment } from '../pipeline/pathLayout.ts';
+import { getLibraryMetaDirectory } from '../files/treeOrder.ts';
+import type { AssistantConversationMessage } from '../knowledge/assistant/assistantTurnTypes.ts';
+import type { WikiDocumentOutline } from './wikiOutline.ts';
 
 /**
+ * Local persistence for Wiki node AI memories.
  * Wiki 节点 AI 记忆的本地持久化。
  *
+ * Each chapter can keep multiple independent, continuously updated Q&A memories written to
+ * `.menghan-meta/wiki/<docId>.ai-memories.json`. Like derived nodes it uses `contentHash` as the invalidation
+ * key, so stale context is never fed back to the model after the source material changes. Source material files
+ * are never read or modified.
  * 每个章节可保留多份独立、持续更新的问答记忆，写入
  * `.menghan-meta/wiki/<docId>.ai-memories.json`。它与派生节点一样以
  * `contentHash` 作为失效键，避免源资料变化后把旧上下文继续提供给模型。
@@ -23,6 +28,10 @@ const MAX_CONVERSATION_MESSAGES = 6;
 const MAX_CONVERSATION_MESSAGE_CHARS = 2_000;
 const MAX_CONVERSATION_TOTAL_CHARS = 4_000;
 
+/**
+ * IPC error codes for Wiki AI memory operations.
+ * Wiki AI 记忆操作的 IPC 错误码。
+ */
 export type WikiAiMemoryErrorCode =
   | 'WIKI_MEMORY_INVALID'
   | 'WIKI_MEMORY_NODE_NOT_FOUND'
@@ -31,11 +40,17 @@ export type WikiAiMemoryErrorCode =
   | 'WIKI_MEMORY_SAVE_FAILED'
   | 'WIKI_MEMORY_SOURCE_STALE';
 
+/**
+ * One persisted Wiki AI memory: an independent Q&A conversation attached to a chapter node.
+ * 一条落库的 Wiki AI 记忆：挂在章节节点上的独立问答会话。
+ */
 export interface WikiAiMemory {
   id: string;
   nodeId: string;
   title: string;
+  /** Pin state; pinned memories sort first. / 置顶状态；置顶记忆排在最前。 */
   pinned: boolean;
+  /** Stored conversation turns of this memory. / 该记忆保存的对话轮次。 */
   conversation: AssistantConversationMessage[];
   createdAt: string;
   updatedAt: string;
@@ -48,43 +63,79 @@ interface WikiAiMemoriesFile {
   memories: WikiAiMemory[];
 }
 
+/**
+ * Result listing all valid memories of the document, or a coded error.
+ * 列出文档全部有效记忆的结果，或带错误码的失败。
+ */
 export type WikiAiMemoryListResult =
   | { ok: true; memories: WikiAiMemory[] }
   | { ok: false; error: WikiAiMemoryFailure };
 
+/**
+ * Result of a single-memory create/update/rename/pin operation.
+ * 单条记忆的创建/更新/重命名/置顶操作结果。
+ */
 export type WikiAiMemoryResult =
   | { ok: true; memory: WikiAiMemory }
   | { ok: false; error: WikiAiMemoryFailure };
 
+/**
+ * Result of a memory delete operation: the deleted memory id or a coded error.
+ * 记忆删除结果：被删除记忆 id 或带错误码的失败。
+ */
 export type WikiAiMemoryDeleteResult =
   | { ok: true; deletedMemoryId: string }
   | { ok: false; error: WikiAiMemoryFailure };
 
+/**
+ * Request payload to upsert a memory's conversation after a successful node Q&A turn.
+ * 节点问答成功后写回记忆会话的 upsert 请求负载。
+ */
 export interface WikiAiMemoryUpsertRequest {
   documentId: string;
   nodeId: string;
-  /** 缺省时兼容旧数据：更新该章节最近一次记忆；新 UI 始终传入当前记忆标识。 */
+  /**
+   * When omitted, legacy data compatibility applies: the most recent memory of the chapter is updated; the new UI
+   * always passes the current memory id.
+   * 缺省时兼容旧数据：更新该章节最近一次记忆；新 UI 始终传入当前记忆标识。
+   */
   memoryId?: string;
   conversation: AssistantConversationMessage[];
 }
 
+/**
+ * Request payload to create a blank memory for a chapter.
+ * 为章节创建空白记忆的请求负载。
+ */
 export interface WikiAiMemoryCreateRequest {
   documentId: string;
   nodeId: string;
 }
 
+/**
+ * Request payload to rename a memory (content and node stay unchanged).
+ * 重命名记忆的请求负载（内容与关联章节不变）。
+ */
 export interface WikiAiMemoryRenameRequest {
   documentId: string;
   memoryId: string;
   title: string;
 }
 
+/**
+ * Request payload to pin/unpin a memory (metadata and list order only).
+ * 置顶/取消置顶记忆的请求负载（仅元数据与列表顺序）。
+ */
 export interface WikiAiMemoryPinRequest {
   documentId: string;
   memoryId: string;
   pinned: boolean;
 }
 
+/**
+ * Request payload to delete one memory.
+ * 删除单条记忆的请求负载。
+ */
 export interface WikiAiMemoryDeleteRequest {
   documentId: string;
   memoryId: string;
@@ -98,13 +149,29 @@ interface WikiAiMemoryFailure {
 
 const memoryWriteQueues = new Map<string, Promise<unknown>>();
 
-/** 读取当前文档仍有效的所有 Wiki AI 记忆，按最近更新排序。 */
+/**
+ * List all still-valid Wiki AI memories of the current document, sorted by most recent update.
+ * 读取当前文档仍有效的所有 Wiki AI 记忆，按最近更新排序。
+ *
+ * @param libraryPath - Library root path / 资料库根路径
+ * @param outline - Document outline providing documentId and contentHash / 提供 documentId 与 contentHash 的文档大纲
+ * @returns Valid memories sorted with pinned first / 有效记忆列表（置顶优先）
+ */
 export function listWikiAiMemories(libraryPath: string, outline: WikiDocumentOutline): WikiAiMemory[] {
   return readWikiAiMemories(libraryPath, outline.documentId, outline.contentHash)
     .sort(compareWikiAiMemories);
 }
 
-/** 为当前章节创建一份空白的新对话记忆，后续问答只会更新这一个条目。 */
+/**
+ * Create a blank new conversation memory for the current chapter; subsequent Q&A only updates this entry.
+ * 为当前章节创建一份空白的新对话记忆，后续问答只会更新这一个条目。
+ *
+ * @param input.libraryPath - Library root path / 资料库根路径
+ * @param input.outline - Derived-merged outline for validation / 用于校验的文档大纲
+ * @param input.request - Creation request / 创建请求
+ * @param input.now - Optional clock override for timestamps / 时间戳的可选时钟覆盖
+ * @returns Created memory or coded error / 新建记忆或带错误码的失败
+ */
 export async function createWikiAiMemory(input: {
   libraryPath: string;
   outline: WikiDocumentOutline;
@@ -115,7 +182,16 @@ export async function createWikiAiMemory(input: {
   return enqueueMemoryWrite(queueKey, () => persistCreateWikiAiMemory(input));
 }
 
-/** 将一次成功的节点问答写入当前会话记忆。 */
+/**
+ * Write one successful node Q&A turn into the current session memory.
+ * 将一次成功的节点问答写入当前会话记忆。
+ *
+ * @param input.libraryPath - Library root path / 资料库根路径
+ * @param input.outline - Document outline for validation / 用于校验的文档大纲
+ * @param input.request - Upsert request with the conversation turns / 携带对话轮次的 upsert 请求
+ * @param input.now - Optional clock override for timestamps / 时间戳的可选时钟覆盖
+ * @returns Updated/created memory or coded error / 更新或新建的记忆，或带错误码的失败
+ */
 export async function upsertWikiAiMemory(input: {
   libraryPath: string;
   outline: WikiDocumentOutline;
@@ -126,7 +202,16 @@ export async function upsertWikiAiMemory(input: {
   return enqueueMemoryWrite(queueKey, () => persistUpsertWikiAiMemory(input));
 }
 
-/** 用户自定义记忆名称；内容和关联章节保持不变。 */
+/**
+ * Rename a memory with a user-defined name; content and associated chapter stay unchanged.
+ * 用户自定义记忆名称；内容和关联章节保持不变。
+ *
+ * @param input.libraryPath - Library root path / 资料库根路径
+ * @param input.outline - Document outline for validation / 用于校验的文档大纲
+ * @param input.request - Rename request / 重命名请求
+ * @param input.now - Optional clock override for timestamps / 时间戳的可选时钟覆盖
+ * @returns Renamed memory or coded error / 重命名后的记忆或带错误码的失败
+ */
 export async function renameWikiAiMemory(input: {
   libraryPath: string;
   outline: WikiDocumentOutline;
@@ -137,7 +222,16 @@ export async function renameWikiAiMemory(input: {
   return enqueueMemoryWrite(queueKey, () => persistRenameWikiAiMemory(input));
 }
 
-/** 与主问答会话一致：置顶只调整会话元数据和列表顺序，不修改问答内容。 */
+/**
+ * Like the main Q&A session: pinning only adjusts session metadata and list order, never the Q&A content.
+ * 与主问答会话一致：置顶只调整会话元数据和列表顺序，不修改问答内容。
+ *
+ * @param input.libraryPath - Library root path / 资料库根路径
+ * @param input.outline - Document outline for validation / 用于校验的文档大纲
+ * @param input.request - Pin/unpin request / 置顶/取消置顶请求
+ * @param input.now - Optional clock override for timestamps / 时间戳的可选时钟覆盖
+ * @returns Updated memory or coded error / 更新后的记忆或带错误码的失败
+ */
 export async function setWikiAiMemoryPinned(input: {
   libraryPath: string;
   outline: WikiDocumentOutline;
@@ -148,7 +242,15 @@ export async function setWikiAiMemoryPinned(input: {
   return enqueueMemoryWrite(queueKey, () => persistSetWikiAiMemoryPinned(input));
 }
 
-/** 删除单条章节记忆，不影响 Wiki 节点、资料或其他章节的记忆。 */
+/**
+ * Delete a single chapter memory without affecting the Wiki node, materials, or other chapters' memories.
+ * 删除单条章节记忆，不影响 Wiki 节点、资料或其他章节的记忆。
+ *
+ * @param input.libraryPath - Library root path / 资料库根路径
+ * @param input.outline - Document outline for validation / 用于校验的文档大纲
+ * @param input.request - Delete request / 删除请求
+ * @returns Deleted memory id or coded error / 被删除记忆 id 或带错误码的失败
+ */
 export async function deleteWikiAiMemory(input: {
   libraryPath: string;
   outline: WikiDocumentOutline;
@@ -158,7 +260,15 @@ export async function deleteWikiAiMemory(input: {
   return enqueueMemoryWrite(queueKey, () => persistDeleteWikiAiMemory(input));
 }
 
-/** 文件缺失、损坏、超限或内容哈希变化时一律视为没有可恢复记忆。 */
+/**
+ * Missing, corrupted, oversized, or content-hash-changed files are all treated as having no recoverable memories.
+ * 文件缺失、损坏、超限或内容哈希变化时一律视为没有可恢复记忆。
+ *
+ * @param libraryPath - Library root path / 资料库根路径
+ * @param documentId - Document id / 文档 id
+ * @param contentHash - Document content hash gating validity / 控制有效性的文档内容哈希
+ * @returns Validated memories, empty when invalid / 校验后的记忆；无效时为空数组
+ */
 export function readWikiAiMemories(libraryPath: string, documentId: string, contentHash: string): WikiAiMemory[] {
   const filePath = aiMemoriesPath(libraryPath, documentId);
   try {
@@ -346,6 +456,7 @@ function persistDeleteWikiAiMemory(input: {
   return { ok: true, deletedMemoryId: request.memoryId };
 }
 
+/** Atomically write the memories file; returns a coded error payload on failure. / 原子写入记忆文件；失败返回带错误码的负载。 */
 function writeMemoriesFile(
   libraryPath: string,
   documentId: string,
@@ -366,6 +477,7 @@ function writeMemoriesFile(
   }
 }
 
+/** Validate one untrusted cache entry against shape and size limits; returns null when invalid. / 校验单条不可信缓存条目的形态与大小限制；无效返回 null。 */
 function normalizeMemory(value: unknown): WikiAiMemory | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
@@ -385,6 +497,7 @@ function normalizeMemory(value: unknown): WikiAiMemory | null {
   };
 }
 
+/** Validate a stored conversation against message-count and char budgets; returns null when over budget. / 按消息数与字符预算校验会话；超预算返回 null。 */
 function normalizeConversation(value: unknown): AssistantConversationMessage[] | null {
   if (!Array.isArray(value) || value.length > MAX_CONVERSATION_MESSAGES) return null;
   const messages: AssistantConversationMessage[] = [];
@@ -417,6 +530,7 @@ function normalizeTitle(value: unknown): string | null {
   return title && title.length <= MAX_MEMORY_TITLE_CHARS ? title : null;
 }
 
+/** Resolve the memories file path, asserted inside the library root to block path escapes. / 计算记忆文件路径，并断言位于资料库根内以拦截路径逃逸。 */
 function aiMemoriesPath(libraryPath: string, documentId: string): string {
   return assertInsideDirectory(
     path.join(getLibraryMetaDirectory(libraryPath), 'wiki', `${safeSegment(documentId)}.ai-memories.json`),
@@ -438,6 +552,7 @@ function failure(code: WikiAiMemoryErrorCode, message: string, diagnostic?: stri
   return { code, message, ...(diagnostic ? { diagnostic } : {}) };
 }
 
+/** Serialize writes per queue key so concurrent read-modify-write stays atomic across callers. / 按队列键串行化写入，使并发调用下的读-改-写保持原子。 */
 async function enqueueMemoryWrite<T>(queueKey: string, operation: () => T | Promise<T>): Promise<T> {
   const previous = memoryWriteQueues.get(queueKey) ?? Promise.resolve();
   const current = previous.catch(() => undefined).then(operation);

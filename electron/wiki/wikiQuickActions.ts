@@ -1,12 +1,19 @@
 /**
+ * Wiki quick-action contracts (plan §5).
  * Wiki 节点快捷动作契约（方案 §5）。
  *
+ * This module is pure types and pure string constants with no Node/Electron runtime dependencies,
+ * so both the main and renderer processes can import it safely (the renderer only consumes
+ * `WikiActionKind` via `import type`; menu copy stays on the renderer side as UI text).
  * 本模块为纯类型 + 纯字符串常量，不引入任何 Node/Electron 运行时依赖，
  * 因此主进程与渲染进程都可安全导入（渲染进程仅按 `import type` 消费
  * `WikiActionKind`，菜单文案作为 UI 拷贝留在渲染进程侧）。
  */
 
-/** 自由问答 + 六个快捷动作；'free' 为默认问答，不注入动作输出契约。 */
+/**
+ * All available Wiki action kinds; `'free'` is the default unconstrained Q&A mode.
+ * 所有可用的 Wiki 动作类型；`'free'` 为默认自由问答，不注入动作输出契约。
+ */
 export const wikiActionKinds = [
   'free',
   'summarize',
@@ -17,15 +24,19 @@ export const wikiActionKinds = [
   'cross-links',
 ] as const;
 
+/** Union of all Wiki action kind strings / 所有 Wiki 动作类型字符串的联合类型 */
 export type WikiActionKind = typeof wikiActionKinds[number];
 
-/** 快捷动作菜单定义（渲染进程 UI 拷贝的单一事实来源）。 */
+/** Definition of a Wiki quick-action menu item (single source of truth for renderer UI copy). / Wiki 快捷动作菜单项定义（渲染进程 UI 拷贝的单一事实来源）。 */
 export interface WikiQuickActionDefinition {
   id: WikiActionKind;
   label: string;
 }
 
 /**
+ * Output policy for the "summarize" action: the target length adapts to the source section size
+ * without ever relying on mechanical truncation; char counts refer to visible Chinese body text;
+ * Markdown markup and citation markers are excluded.
  * 「总结本节」的输出策略：正文长度按源章节规模自适应，但永远不靠机械截断实现。
  * 字符数以可见中文正文为口径；Markdown 标记和引用号不计入目标长度。
  */
@@ -34,13 +45,23 @@ export interface WikiSummaryPolicy {
   targetMinChars: number;
   targetMaxChars: number;
   hardMaxChars: number;
-  /** 用于服务商容量保护，不能替代可见正文长度约束。 */
+  /** Token budget for provider capacity protection, not a substitute for the visible-body length cap. / 用于服务商容量保护，不能替代可见正文长度约束。 */
   maxOutputTokens: number;
+  /** Whether the section is long enough to require expanded multi-window reading / 章节是否长到需要展开多窗深读 */
   requiresExpandedReading: boolean;
 }
 
+/** Absolute hard cap on visible-body chars for any summary / 任何总结的可见正文字符硬上限 */
 export const WIKI_SUMMARY_HARD_MAX_CHARS = 2_000;
 
+/**
+ * Compute the summary policy tier based on the source section's character count; longer sections
+ * use higher target ranges and require expanded reading.
+ * 根据源章节字符数计算总结策略分档；较长章节使用更高的目标字数区间并要求展开深读。
+ *
+ * @param sourceChars - Character count of the source section markdown / 源章节 markdown 的字符数
+ * @returns Summary policy with target lengths and token budget / 含目标字数区间与 token 预算的总结策略
+ */
 export function resolveWikiSummaryPolicy(sourceChars: number): WikiSummaryPolicy {
   const safeSourceChars = Math.max(0, Math.floor(sourceChars));
   if (safeSourceChars <= 3_000) {
@@ -59,6 +80,8 @@ export function resolveWikiSummaryPolicy(sourceChars: number): WikiSummaryPolicy
 }
 
 /**
+ * The six quick-action menu definitions (menu display order matches this array); `'free'` is not
+ * in the menu and corresponds to the free-input box.
  * 六个快捷动作的菜单文案（保持现有中文不变，方案 §5）。
  * 顺序即菜单展示顺序；'free' 不出现在菜单里（对应自由输入框）。
  */
@@ -71,16 +94,31 @@ export const WIKI_QUICK_ACTIONS: readonly WikiQuickActionDefinition[] = [
   { id: 'cross-links', label: '找出与其他章节的关联' },
 ];
 
+/**
+ * Type guard: returns true when the given value is a valid `WikiActionKind` string.
+ * 类型守卫：当值为合法的 `WikiActionKind` 字符串时返回 true。
+ *
+ * @param value - Candidate value to check / 待检查的候选值
+ * @returns Whether `value` is a `WikiActionKind` / 是否为 `WikiActionKind`
+ */
 export function isWikiActionKind(value: unknown): value is WikiActionKind {
   return typeof value === 'string' && (wikiActionKinds as readonly string[]).includes(value);
 }
 
 /**
+ * Build the `<action_contract>` output-format constraint to inject per actionKind (plan §5).
  * 按 actionKind 产出注入 `<action_contract>` 的输出格式硬约束（方案 §5）。
- * 'free' 返回空串（不额外约束，走通用问答规范）。
+ * `'free'` returns an empty string (no extra constraints; the general QA spec applies).
+ * `'free'` 返回空串（不额外约束，走通用问答规范）。
  *
- * @param documentSearchAvailable cross-links 依赖 wiki_search_document；
- *   该工具未注册（P1/P2）时降级为"在已检索证据内说明关联"，避免诱导模型调用不存在的工具。
+ * @param actionKind - Quick-action kind; `'free'` yields no contract / 快捷动作类型；`'free'` 不产出契约
+ * @param options - Document-search availability and summary policy / 跨章节检索可用性与总结策略
+ * @param options.documentSearchAvailable cross-links depends on wiki_search_document;
+ *   when the tool is unregistered (P1/P2) the contract degrades to "explain relations within retrieved
+ *   evidence" to avoid prompting a nonexistent tool.
+ *   cross-links 依赖 wiki_search_document；该工具未注册（P1/P2）时降级为"在已检索证据内说明关联"，
+ *   避免诱导模型调用不存在的工具。
+ * @returns The `<action_contract>` XML block, or `''` for `'free'` / `<action_contract>` XML 块；`'free'` 返回空串
  */
 export function buildWikiActionContract(
   actionKind: WikiActionKind,
@@ -172,7 +210,13 @@ export function buildWikiActionContract(
   }
 }
 
-/** cross-links 动作需要跨章节检索工具（wiki_search_document，P3 注册）。 */
+/**
+ * Whether the given action kind requires the cross-document search tool (wiki_search_document, registered in P3).
+ * 该动作类型是否需要跨章节检索工具（wiki_search_document，P3 注册）。
+ *
+ * @param actionKind - Quick-action kind to check / 待检查的快捷动作类型
+ * @returns `true` for `cross-links` / `cross-links` 时返回 `true`
+ */
 export function wikiActionRequiresDocumentSearch(actionKind: WikiActionKind): boolean {
   return actionKind === 'cross-links';
 }

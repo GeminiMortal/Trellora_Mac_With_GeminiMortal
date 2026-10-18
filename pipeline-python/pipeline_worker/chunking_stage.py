@@ -1,4 +1,12 @@
-"""Parent/Child chunking coordinator for Worker chunks v2."""
+"""
+Module: chunking_stage
+Parent/Child chunking coordinator for Worker chunks v2.
+Implements hierarchical chunking with multiple strategies (structure, recursive,
+semantic, LLM, page, regex, fixed).
+模块：chunking_stage
+Worker chunks v2 的父子切块协调器。
+实现支持多种策略（结构、递归、语义、LLM、页面、正则、定长）的层次化切块。
+"""
 
 from __future__ import annotations
 
@@ -18,9 +26,13 @@ from .chunking_strategies import group_adjacent_structure, group_by_page, group_
 from .stage_errors import StageCancelled, StageError
 
 
+# Schema version for chunking output / 切块输出的 schema 版本
 CHUNKING_SCHEMA_VERSION = 2
+# Checkpoint interval for processing / 处理的检查点间隔
 CHECKPOINT_INTERVAL = 100
+# Fallback parent chunk size defaults / 父块大小的后备默认值
 FALLBACK_PARENT_DEFAULTS = (1200, 2400, 3500)
+# Maximum characters for LLM wrapper text / LLM 包装文本的最大字符数
 LLM_WRAPPER_MAX_CHARS = 240
 # This path is deliberately separate from the normal recursive strategy. The
 # latter cleans and repacks natural units, while an LLM request must retain the

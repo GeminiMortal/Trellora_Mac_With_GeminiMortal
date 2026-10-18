@@ -1,52 +1,101 @@
+/**
+ * Module: keywordIndex
+ * SQLite FTS5 keyword index management. Imports keyword data from pipeline
+ * artifacts into the database for full-text search capabilities.
+ * 模块：keywordIndex
+ * SQLite FTS5 关键词索引管理。将流水线产物中的关键词数据导入数据库以支持全文搜索。
+ */
+
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import Database from 'better-sqlite3';
-import { getLibraryMetaDirectory } from '../treeOrder';
-import { isMaterialChunkProjectionCurrent, removeMaterialChunkProjection, replaceMaterialChunkProjection, type MaterialChunkParentProjectionRecord, type MaterialChunkProjectionKeyword, type MaterialChunkProjectionRecord } from './materialChunkSearch';
-import { PipelineStageError } from './stageErrors';
-import { KEYWORD_OUTPUT_SCHEMA_VERSION } from './keywordTypes';
+import { getLibraryMetaDirectory } from '../files/treeOrder.ts';
+import { isMaterialChunkProjectionCurrent, removeMaterialChunkProjection, replaceMaterialChunkProjection, type MaterialChunkParentProjectionRecord, type MaterialChunkProjectionKeyword, type MaterialChunkProjectionRecord } from './materialChunkSearch.ts';
+import { PipelineStageError } from './stageErrors.ts';
+import { KEYWORD_OUTPUT_SCHEMA_VERSION } from './keywordTypes.ts';
 
+// SQLite table name for chunk keywords / 切块关键词的 SQLite 表名
 const keywordTableName = 'chunk_keywords';
+// SQLite table name for keyword documents / 关键词文档的 SQLite 表名
 const documentTableName = 'chunk_keyword_documents';
+// Maximum search tokens per chunk / 每块最大搜索 token 数
 const maxSearchTokensPerChunk = 8_192;
+// Maximum characters per search token / 每个搜索 token 的最大字符数
 const maxSearchTokenCharacters = 128;
 
+/**
+ * Result of importing keywords into the FTS index.
+ * 将关键词导入 FTS 索引的结果。
+ */
 export interface KeywordIndexImportResult {
+  /** Document ID / 文档 ID */
   documentId: string;
+  /** Number of chunks imported / 导入的切块数 */
   importedChunks: number;
+  /** Number of keywords imported / 导入的关键词数 */
   importedKeywords: number;
+  /** Number of keywords replaced / 替换的关键词数 */
   replacedKeywords: number;
+  /** Number of chunks read back / 读回的切块数 */
   readBackChunks: number;
+  /** Number of keywords read back / 读回的关键词数 */
   readBackKeywords: number;
+  /** Source content hash / 源内容哈希 */
   sourceContentHash: string;
+  /** Stage cache key / 阶段缓存键 */
   stageKey: string;
 }
 
+/**
+ * Status of keyword index for a specific document.
+ * 特定文档的关键词索引状态。
+ */
 export interface KeywordIndexDocumentStatus {
+  /** Document ID / 文档 ID */
   documentId: string;
+  /** Source content hash / 源内容哈希 */
   sourceContentHash: string;
+  /** Stage cache key / 阶段缓存键 */
   stageKey: string;
+  /** Number of chunks / 切块数 */
   chunkCount: number;
+  /** Number of keywords / 关键词数 */
   keywordCount: number;
+  /** Import timestamp / 导入时间戳 */
   importedAt: string;
 }
 
+/**
+ * Snapshot of FTS index projection state.
+ * FTS 索引投影状态的快照。
+ */
 export interface FtsIndexProjectionSnapshot {
+  /** Document ID / 文档 ID */
   documentId: string;
+  /** Source content hash / 源内容哈希 */
   sourceContentHash: string;
+  /** Stage cache key / 阶段缓存键 */
   stageKey: string;
+  /** Number of chunks projected / 投影的切块数 */
   projectedChunkCount: number;
+  /** Number of keywords projected / 投影的关键词数 */
   projectedKeywordCount: number;
+  /** Number of chunks indexed / 已索引的切块数 */
   indexedChunks: number;
+  /** Number of FTS rows / FTS 行数 */
   ftsRows: number;
+  /** Number of keywords indexed / 已索引的关键词数 */
   indexedKeywords: number;
+  /** Index timestamp / 索引时间戳 */
   indexedAt: string;
 }
 
 interface ChunkSnapshot {
+  /** Document ID / 文档 ID */
   documentId: string;
+  /** Chunk ID / 切块 ID */
   chunkId: string;
   parentChunkId: string | null;
   ordinal: number;

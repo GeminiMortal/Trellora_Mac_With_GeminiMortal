@@ -1,34 +1,45 @@
-import type { EditorPreferences } from '../shared/editorPreferences';
-import type { DocumentEncoding, DocumentOpenRequest, DocumentOpenResult, DocumentDraftRequest, DocumentDraftResult, DocumentSaveRequest, DocumentSaveResult, DocumentCloseRequest, DocumentCloseResult, DocumentJoinRequest, DocumentJoinResult, DocumentRecovery, DocumentRecent, DocumentSnapshot } from '../shared/documentSession';
-import type { SelectionTransformAction, SelectionTransformRequest, SelectionTransformResult } from '../electron/knowledge/selectionTransformTypes';
-import type { NoteEditSnapshot, SaveNoteRequest, SaveNoteResult, NoteMutationRequest, NoteCloseRequest, NoteCloseResponse, NoteSaveState, NoteIndexChanged } from '../shared/noteSave';
-import type { NoteExportRequest } from '../shared/noteExport';
-import type { CreateAssistantNoteRequest, CreateAssistantNoteResult } from '../shared/assistantNote';
-import type { StartupAppearance } from '../shared/startupAppearance';
-import type { WorkspaceMigrationPreview, WorkspaceMigrationState, WorkspaceMigrationStatus } from '../shared/workspaceMigration';
-import type { CapabilityProbeRequest, CapabilityRequest, CapabilitySnapshot } from '../shared/userCapabilities';
-import type { OnboardingState, OnboardingUpdate, OnboardingPracticeBinding } from '../shared/onboarding';
-import type { ModelConfigurationChange, ModelConfigurationSaveResult, ModelProviderCatalogDraft } from '../shared/modelConfiguration';
-import type { ModelHub, ModelHubPatch } from '../shared/modelHubTypes';
-import type { MaterialVectorGeneration } from '../shared/materialVectorGenerations';
-export type { ModelSlotId, ModelSlot, ProviderConnection, ModelHub, ModelHubPatch } from '../shared/modelHubTypes';
-import type { BackupConfiguration, BackupStatus, RestorePreview, RestoreStatus, RestoredConnectionHints } from '../shared/workspaceBackup';
-import type { ReleaseCheckResult } from '../shared/releaseCheck';
-import type { SelectionEditRunRequest, SelectionEditRunResult } from '../electron/knowledge/selectionEditIpc';
-import type { SelectionExpansionCapabilities, SelectionExpansionEvent, SelectionExpansionEvidence, SelectionExpansionPlan, SelectionExpansionRequest, SelectionExpansionResult, SelectionExpansionSettings, SelectionExpansionSettingsPatch, SelectionExpansionSourcePreparation } from '../electron/knowledge/selectionExpansionTypes';
-import type { SelectionEditAction, SelectionEditContextScope } from '../electron/knowledge/selectionEditTypes';
-import type { AgentStopReason, AssistantAnswerDepth, AssistantAttachment, AssistantCitationValidation, AssistantContextSource, AssistantContextSourceKind, AssistantEvidenceCitation, AssistantEvidenceContextStats, AssistantIntent, AssistantKnowledgeBaseCitation, AssistantPlanGoalStatus, AssistantPlanStatus, AssistantPublicModelEvent, AssistantPublicModelText, AssistantScope, AssistantThinkingMode, AssistantTurnEvent, AssistantTurnRequest, AssistantTurnResult, AssistantWebCitation, AssistantWikiScopeProgress, AssistantWikiScopeResult, CurrentNoteAgentStats, CurrentNoteCacheUsage, CurrentNoteContextMode, CurrentNotePublicPlanEvent, CurrentNotePublicPlanGoal, CurrentNotePublicSearchCoverage, CurrentNotePublicSearchScope, CurrentNotePublicToolContentPreview, CurrentNotePublicToolEvent, CurrentNoteSummaryCoverage, CurrentNoteToolStats, EvidencePromptManifest, LibrarySectionNavigationCandidate, LibrarySectionNavigationObservation } from '../electron/knowledge/assistantTurnTypes';
-import type { AssistantMemoryMode, AssistantMemorySettings, AssistantSessionDetail, AssistantSessionSummary } from '../electron/knowledge/assistantMemoryTypes';
-import type { QaMemoryPage, QaSessionDetail, QaSessionScope, QaSessionSummary, QaStoredTurn, QaSummaryBlock } from '../electron/knowledge/qaMemoryTypes';
-import type { ManualMemoryInput, MemoryExtractionRuntimeStatus, MemoryClearResult, MemoryConsolidationResult, MemoryDocumentAffinity, MemoryImportResult, MemoryItemListQuery, MemoryItemPage, MemoryItemPatch, MemoryItemRecord, MemorySubjectRecord, MemoryTopicRecord, MemoryUsedSnapshot, MemoryWriteResult, WorkspaceMemoryConfig, MemoryProposalReview, MemoryProposalContext, MemoryTurnStatus } from '../electron/knowledge/memory/memoryTypes';
-import type { MemoryCitationSource } from '../shared/memoryCitations';
-import type { MemoryPage, MemoryPageQuery, MemoryItemPageQuery, MemoryItemCounts } from '../electron/knowledge/memory/memoryTypes';
-import type { MemoryCutoverReport } from '../electron/knowledge/memory/memoryCutover';
-import type { AssistantDetailedTraceRecordView } from '../electron/knowledge/assistantDetailedTrace';
-import type { ContextProjectionDiagnostics } from '../electron/knowledge/contextRuntimeTypes';
-import type { WebSearchConfig, WebSearchProviderConfigField, WebSearchProviderId, WebSearchProviderRequirement } from '../electron/websearch/webSearchTypes';
-import type { NoteAnalysis, NoteAnalysisRunDetail, NoteAnalysisProgress } from '../electron/knowledge/noteAnalysisTypes';
-export type { NoteAnalysis, NoteAnalysisTagCandidate, NoteAnalysisRunDetail, NoteAnalysisProgress, NoteAnalysisBatchResult, NoteAnalysisSourceSpan, NoteAnalysisRunState, NoteAnalysisLengthHandling } from '../electron/knowledge/noteAnalysisTypes';
+/**
+ * Module: electron.d.ts
+ * TypeScript declarations for window.electronAPI exposed by the preload bridge.
+ * Defines the complete IPC interface between renderer and main process.
+ * 模块：electron.d.ts
+ * preload 桥接暴露的 window.electronAPI 的 TypeScript 声明。
+ * 定义渲染进程与主进程之间的完整 IPC 接口。
+ */
+
+import type { EditorPreferences } from '../shared/editorPreferences.ts';
+import type { ScheduleRangeQuery, ScheduleCreateRequest, ScheduleUpdateRequest, ScheduleDeleteRequest, ScheduleOccurrenceOverrideRequest, ScheduleChangedEvent, ScheduleReminderFiredEvent, ScheduleOccurrence, ScheduleItem, ScheduleCategory, CourseTimeSettings, ScheduleImportBatch, ScheduleImportPreviewResult, ScheduleImportCommitRequest, ScheduleImportCommitResult, TodoStatus } from '../shared/schedule.ts';
+import type { TerminalCreateOptions, TerminalSessionInfo, TerminalDataEvent, TerminalExitEvent, ShellInfo } from '../shared/terminal.ts';
+import type { DocumentEncoding, DocumentOpenRequest, DocumentOpenResult, DocumentDraftRequest, DocumentDraftResult, DocumentSaveRequest, DocumentSaveResult, DocumentCloseRequest, DocumentCloseResult, DocumentJoinRequest, DocumentJoinResult, DocumentRecovery, DocumentRecent, DocumentSnapshot } from '../shared/documentSession.ts';
+import type { SelectionTransformAction, SelectionTransformRequest, SelectionTransformResult } from '../electron/knowledge/selection/selectionTransformTypes.ts';
+import type { NoteEditSnapshot, SaveNoteRequest, SaveNoteResult, NoteMutationRequest, NoteCloseRequest, NoteCloseResponse, NoteSaveState, NoteIndexChanged } from '../shared/noteSave.ts';
+import type { NoteExportRequest } from '../shared/noteExport.ts';
+import type { CreateAssistantNoteRequest, CreateAssistantNoteResult } from '../shared/assistantNote.ts';
+import type { StartupAppearance } from '../shared/startupAppearance.ts';
+import type { WorkspaceMigrationPreview, WorkspaceMigrationState, WorkspaceMigrationStatus } from '../shared/workspaceMigration.ts';
+import type { CapabilityProbeRequest, CapabilityRequest, CapabilitySnapshot } from '../shared/userCapabilities.ts';
+import type { OnboardingState, OnboardingUpdate, OnboardingPracticeBinding } from '../shared/onboarding.ts';
+import type { ModelConfigurationChange, ModelConfigurationSaveResult, ModelProviderCatalogDraft } from '../shared/modelConfiguration.ts';
+import type { ModelHub, ModelHubPatch } from '../shared/modelHubTypes.ts';
+import type { MaterialVectorGeneration } from '../shared/materialVectorGenerations.ts';
+export type { ModelSlotId, ModelSlot, ProviderConnection, ModelHub, ModelHubPatch } from '../shared/modelHubTypes.ts';
+import type { BackupConfiguration, BackupStatus, RestorePreview, RestoreStatus, RestoredConnectionHints } from '../shared/workspaceBackup.ts';
+import type { ReleaseCheckResult } from '../shared/releaseCheck.ts';
+import type { SelectionEditRunRequest, SelectionEditRunResult } from '../electron/knowledge/selection/selectionEditIpc.ts';
+import type { SelectionExpansionCapabilities, SelectionExpansionEvent, SelectionExpansionEvidence, SelectionExpansionPlan, SelectionExpansionRequest, SelectionExpansionResult, SelectionExpansionSettings, SelectionExpansionSettingsPatch, SelectionExpansionSourcePreparation } from '../electron/knowledge/selection/selectionExpansionTypes.ts';
+import type { SelectionEditAction, SelectionEditContextScope } from '../electron/knowledge/selection/selectionEditTypes.ts';
+import type { AgentStopReason, AssistantAnswerDepth, AssistantAttachment, AssistantCitationValidation, AssistantContextSource, AssistantContextSourceKind, AssistantEvidenceCitation, AssistantEvidenceContextStats, AssistantIntent, AssistantKnowledgeBaseCitation, AssistantPlanGoalStatus, AssistantPlanStatus, AssistantPublicModelEvent, AssistantPublicModelText, AssistantScope, AssistantThinkingMode, AssistantTurnEvent, AssistantTurnRequest, AssistantTurnResult, AssistantWebCitation, AssistantWikiScopeProgress, AssistantWikiScopeResult, CurrentNoteAgentStats, CurrentNoteCacheUsage, CurrentNoteContextMode, CurrentNotePublicPlanEvent, CurrentNotePublicPlanGoal, CurrentNotePublicSearchCoverage, CurrentNotePublicSearchScope, CurrentNotePublicToolContentPreview, CurrentNotePublicToolEvent, CurrentNoteSummaryCoverage, CurrentNoteToolStats, EvidencePromptManifest, LibrarySectionNavigationCandidate, LibrarySectionNavigationObservation } from '../electron/knowledge/assistant/assistantTurnTypes.ts';
+import type { AssistantMemoryMode, AssistantMemorySettings, AssistantSessionDetail, AssistantSessionSummary } from '../electron/knowledge/assistant/assistantMemoryTypes.ts';
+import type { QaMemoryPage, QaSessionDetail, QaSessionScope, QaSessionSummary, QaStoredTurn, QaSummaryBlock } from '../electron/knowledge/qa/qaMemoryTypes.ts';
+import type { ManualMemoryInput, MemoryExtractionRuntimeStatus, MemoryClearResult, MemoryConsolidationResult, MemoryDocumentAffinity, MemoryImportResult, MemoryItemListQuery, MemoryItemPage, MemoryItemPatch, MemoryItemRecord, MemorySubjectRecord, MemoryTopicRecord, MemoryUsedSnapshot, MemoryWriteResult, WorkspaceMemoryConfig, MemoryProposalReview, MemoryProposalContext, MemoryTurnStatus } from '../electron/knowledge/memory/memoryTypes.ts';
+import type { MemoryCitationSource } from '../shared/memoryCitations.ts';
+import type { MemoryPage, MemoryPageQuery, MemoryItemPageQuery, MemoryItemCounts } from '../electron/knowledge/memory/memoryTypes.ts';
+import type { MemoryCutoverReport } from '../electron/knowledge/memory/memoryCutover.ts';
+import type { AssistantDetailedTraceRecordView } from '../electron/knowledge/assistant/assistantDetailedTrace.ts';
+import type { ContextProjectionDiagnostics } from '../electron/knowledge/context/contextRuntimeTypes.ts';
+import type { WebSearchConfig, WebSearchProviderConfigField, WebSearchProviderId, WebSearchProviderRequirement } from '../electron/websearch/webSearchTypes.ts';
+import type { NoteAnalysis, NoteAnalysisRunDetail, NoteAnalysisProgress } from '../electron/knowledge/noteAnalysis/noteAnalysisTypes.ts';
+export type { NoteAnalysis, NoteAnalysisTagCandidate, NoteAnalysisRunDetail, NoteAnalysisProgress, NoteAnalysisBatchResult, NoteAnalysisSourceSpan, NoteAnalysisRunState, NoteAnalysisLengthHandling } from '../electron/knowledge/noteAnalysis/noteAnalysisTypes.ts';
 
 export type { SelectionTransformAction, SelectionTransformRequest, SelectionTransformResult };
 export type { SelectionEditRunRequest, SelectionEditRunResult };
@@ -485,9 +496,9 @@ export type MemoryProjectionRouteMode = MemoryProjectionMode | 'inherit';
 export interface AppPreferences extends EditorPreferences {
     schemaVersion: 1;
     theme: AppTheme;
-    lightColorScheme: import('../shared/lightColorSchemes').LightColorScheme;
+    lightColorScheme: import('../shared/lightColorSchemes.ts').LightColorScheme;
     density: InterfaceDensity;
-    language: import('../shared/appLanguage').AppLanguage;
+    language: import('../shared/appLanguage.ts').AppLanguage;
     startupBehavior: StartupBehavior;
     externalLinkOpenMode: ExternalLinkOpenMode;
     backupRetention: number;
@@ -610,7 +621,7 @@ export interface UnifiedSearchOutcome {
     notice?: string;
 }
 
-export type FileKind = 'markdown' | 'text';
+export type FileKind = 'markdown' | 'text' | 'code';
 
 export interface FileNode {
     path: string;
@@ -1002,6 +1013,30 @@ declare global {
         activateLibrary: (path: string) => Promise<string>;
         removeLibrary: (path: string) => Promise<LibrarySummary[]>;
         getLibraryPath: () => Promise<string | null>;
+        // Schedule / Calendar
+        listScheduleOccurrences: (query: ScheduleRangeQuery) => Promise<ScheduleOccurrence[]>;
+        createScheduleItem: (req: ScheduleCreateRequest) => Promise<ScheduleItem>;
+        updateScheduleItem: (req: ScheduleUpdateRequest) => Promise<ScheduleItem>;
+        deleteScheduleItem: (req: ScheduleDeleteRequest) => Promise<void>;
+        updateScheduleOccurrence: (req: ScheduleOccurrenceOverrideRequest) => Promise<void>;
+        setScheduleTodoStatus: (id: string, status: TodoStatus) => Promise<ScheduleItem>;
+        listScheduleCategories: () => Promise<ScheduleCategory[]>;
+        upsertScheduleCategory: (name: string, color: string) => Promise<ScheduleCategory>;
+        deleteScheduleCategory: (name: string) => Promise<void>;
+        getScheduleCourseTimes: () => Promise<CourseTimeSettings>;
+        setScheduleCourseTimes: (settings: CourseTimeSettings) => Promise<void>;
+        getScheduleImportBatches: () => Promise<ScheduleImportBatch[]>;
+        revertScheduleImport: (batchId: string) => Promise<void>;
+        scheduleImportPickFile: (kind: 'csv' | 'excel' | 'image') => Promise<string | null>;
+        scheduleImportPreviewCsv: (filePath: string) => Promise<ScheduleImportPreviewResult>;
+        scheduleImportPreviewExcel: (filePath: string) => Promise<ScheduleImportPreviewResult>;
+        scheduleImportCommit: (req: ScheduleImportCommitRequest) => Promise<ScheduleImportCommitResult>;
+        scheduleImportPreviewUrl: (url: string) => Promise<ScheduleImportPreviewResult>;
+        scheduleImportPreviewImage: (filePath: string) => Promise<ScheduleImportPreviewResult>;
+        scheduleImportOpenBrowser: (url: string) => Promise<ScheduleImportPreviewResult>;
+        onScheduleChanged: (callback: (event: ScheduleChangedEvent) => void) => () => void;
+        onScheduleReminder: (callback: (event: ScheduleReminderFiredEvent) => void) => () => void;
+        onScheduleReminderClicked: (callback: (event: { itemId: string }) => void) => () => void;
         listMaterialsLibraries: () => Promise<MaterialsLibrarySummary[]>;
         createMaterialsLibrary: (name: string, icon?: string | null, chunkingConfigDraft?: Partial<LibraryChunkingConfig>) => Promise<string | null>;
         openMaterialsLibrary: (path: string) => Promise<string>;
@@ -1132,7 +1167,7 @@ declare global {
         testAiProviderConfig: (config: AiProviderConfig, context?: { profileId: string }) => Promise<AiProviderStatus>;
         fetchAiProviderModels: (config: AiProviderConfig, context?: { profileId: string }) => Promise<AiProviderStatus>;
         saveAiProviderConfig: (config: AiProviderConfig) => Promise<AiProviderConfig>;
-        readClipboardContent: () => Promise<import('../shared/editorClipboard').EditorClipboardContent>;
+        readClipboardContent: () => Promise<import('../shared/editorClipboard.ts').EditorClipboardContent>;
         readClipboardText: () => Promise<string>;
         addSpellcheckerWord: (word: string) => Promise<boolean>;
         startSelectionTransform: (request: SelectionTransformRequest) => Promise<SelectionTransformResult>;
@@ -1222,12 +1257,12 @@ declare global {
         openDocumentRequest: (id: string, encoding?: DocumentEncoding) => Promise<DocumentOpenResult>;
         finishDocumentOpenRequest: (id: string) => Promise<void>;
         updateDocumentDraft: (request: DocumentDraftRequest) => Promise<DocumentDraftResult>;
-        previewDocumentResources: (id: string) => Promise<import('../shared/documentSession').DocumentResourcePreview>;
+        previewDocumentResources: (id: string) => Promise<import('../shared/documentSession.ts').DocumentResourcePreview>;
         grantDocumentResourceRoot: (id: string) => Promise<boolean>;
         openDocumentLink: (id: string, href: string) => Promise<DocumentOpenRequest>;
         addDocumentImage: (id: string, input: { bytes?: Uint8Array; extension?: string; sourcePath?: string }) => Promise<SavedEditorImage>;
-        runDocumentAi: (request: import('../shared/documentAi').DocumentAiRequest) => Promise<import('../shared/documentAi').DocumentAiResult>;
-        applyDocumentAi: (request: import('../shared/documentAi').DocumentAiApplyRequest) => Promise<DocumentSnapshot>;
+        runDocumentAi: (request: import('../shared/documentAi.ts').DocumentAiRequest) => Promise<import('../shared/documentAi.ts').DocumentAiResult>;
+        applyDocumentAi: (request: import('../shared/documentAi.ts').DocumentAiApplyRequest) => Promise<DocumentSnapshot>;
         cancelDocumentAi: (requestId: string) => Promise<void>;
         saveDocument: (request: DocumentSaveRequest) => Promise<DocumentSaveResult>;
         saveDocumentAs: (request: DocumentSaveRequest) => Promise<DocumentSaveResult | null>;
@@ -1282,6 +1317,16 @@ declare global {
         onPipelineStatus: (callback: (status: PipelineDocumentStatus) => void) => () => void;
         onPipelineProgress: (callback: (progress: PipelineProgressEvent) => void) => () => void;
         onLibraryGraphUpdated: (callback: (libraryPath: string) => void) => () => void;
+
+        // ── Terminal ──────────────────────────────────────────────────────────
+        createTerminal: (options?: TerminalCreateOptions) => Promise<TerminalSessionInfo>;
+        resizeTerminal: (id: string, cols: number, rows: number) => Promise<void>;
+        killTerminal: (id: string) => Promise<void>;
+        writeTerminal: (id: string, data: string) => void;
+        onTerminalData: (callback: (event: TerminalDataEvent) => void) => () => void;
+        onTerminalExit: (callback: (event: TerminalExitEvent) => void) => () => void;
+        listTerminalShells: () => Promise<ShellInfo[]>;
+        getDefaultTerminalShell: () => Promise<string>;
     }
 
     interface Window {

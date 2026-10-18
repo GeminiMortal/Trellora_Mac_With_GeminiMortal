@@ -1,62 +1,73 @@
+/**
+ * Module: App
+ * Root application component. Manages global state, routing, file operations,
+ * editor lifecycle, AI integration, and user preferences.
+ * 模块：App
+ * 根应用组件。管理全局状态、路由、文件操作、编辑器生命周期、AI 集成和用户偏好。
+ */
+
 import './styles/editorPreferences.css';
-import { useExternalDocuments } from './hooks/useExternalDocuments';
-import ExternalDocumentWorkspace from './components/ExternalDocumentWorkspace';
-import { useTypewriterScroll } from './hooks/useTypewriterScroll';
-import { hasVisibleOverlay } from './editor/visibleOverlay';
-import { canHandleEditorEscape, consumeEditorEscape } from './editor/escapeBoundary';
-import { getNoteViewportRect } from './editor/editorCoordinates';
-import { defaultEditorPreferences, normalizeEditorPreferences, editorContentWidths } from '../shared/editorPreferences';
-import { setAppLanguage, t, useI18n } from './i18n';
+import { useExternalDocuments } from './components/externalDocument/useExternalDocuments.tsx';
+import ExternalDocumentWorkspace from './components/externalDocument/ExternalDocumentWorkspace.tsx';
+import { useTypewriterScroll } from './components/editor/useTypewriterScroll.ts';
+import { hasVisibleOverlay } from './editor/behavior/visibleOverlay.ts';
+import { canHandleEditorEscape, consumeEditorEscape } from './editor/behavior/escapeBoundary.ts';
+import { getNoteViewportRect } from './editor/behavior/editorCoordinates.ts';
+import { defaultEditorPreferences, normalizeEditorPreferences, editorContentWidths } from '../shared/editorPreferences.ts';
+import { setAppLanguage, t, useI18n } from './i18n/index.ts';
 import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { EditorView as CodeMirrorView, keymap as codeMirrorKeymap } from '@codemirror/view';
 import type { CSSProperties } from 'react';
 import { markdown as codemirrorMarkdown } from '@codemirror/lang-markdown';
-import Sidebar, { type LeftPanelMode } from './components/Sidebar';
-import Editor from './components/Editor';
-import SearchModal, { type SearchNavigationTarget } from './components/SearchModal';
-import CreateFileModal from './components/CreateFileModal';
-import KnowledgePanel from './components/KnowledgePanel';
-import TagModal from './components/TagModal';
-import MarkdownPreview from './components/MarkdownPreview';
-import EditorZoomControl from './components/EditorZoomControl';
-import EditorWordCount from './components/EditorWordCount';
-import SettingsPanel, { type SettingsSection } from './components/SettingsPanel';
-import { useModelConfigurationSave } from './components/settings/useModelConfigurationSave';
-import type { ModelConfigurationChange, ModelProviderCatalogDraft } from '../shared/modelConfiguration';
-import WorkspaceMigrationDialog from './components/WorkspaceMigrationDialog';
-import { notifyWorkspaceDataChanged } from './utils/workspaceDataEvents';
-import NavRail, { type MainView } from './components/NavRail';
-
-import MaterialsView from './components/MaterialsView';
-import AssistantWorkspaceView from './components/AssistantWorkspaceView';
-import LibraryGraphView from './components/LibraryGraphView';
-import LibraryManagerView from './components/LibraryManagerView';
-import { useOnboarding } from './components/onboarding/useOnboarding';
-import { OnboardingAiTask, OnboardingBar, OnboardingCompletion, OnboardingMenus, type OnboardingModelDraft } from './components/onboarding/OnboardingGuide';
+import Sidebar, { type LeftPanelMode } from './components/navigation/Sidebar.tsx';
+import Editor from './components/editor/Editor.tsx';
+import SearchModal, { type SearchNavigationTarget } from './components/search/SearchModal.tsx';
+import CreateFileModal from './components/noteLibrary/CreateFileModal.tsx';
+import KnowledgePanel from './components/knowledge/KnowledgePanel.tsx';
+import TagModal from './components/noteLibrary/TagModal.tsx';
+import MarkdownPreview from './components/markdown/MarkdownPreview.tsx';
+import EditorZoomControl from './components/editor/EditorZoomControl.tsx';
+import EditorWordCount from './components/editor/EditorWordCount.tsx';
+import SettingsPanel, { type SettingsSection } from './components/settings/SettingsPanel.tsx';
+import { useModelConfigurationSave } from './components/settings/useModelConfigurationSave.tsx';
+import type { ModelConfigurationChange, ModelProviderCatalogDraft } from '../shared/modelConfiguration.ts';
+import WorkspaceMigrationDialog from './components/settings/WorkspaceMigrationDialog.tsx';
+import { notifyWorkspaceDataChanged } from './utils/wiki/workspaceDataEvents.ts';
+import NavRail, { type MainView } from './components/navigation/NavRail.tsx';
+import ScheduleView from './components/schedule/ScheduleView.tsx';
+import { TerminalSessionsProvider } from './components/terminal/useTerminalSessions.tsx';
+import TerminalPanel from './components/terminal/TerminalPanel.tsx';
+import TerminalView from './components/terminal/TerminalView.tsx';
+import MaterialsView from './components/materials/MaterialsView.tsx';
+import AssistantWorkspaceView from './components/assistant/AssistantWorkspaceView.tsx';
+import LibraryGraphView from './components/library/LibraryGraphView.tsx';
+import LibraryManagerView from './components/library/LibraryManagerView.tsx';
+import { useOnboarding } from './components/onboarding/useOnboarding.ts';
+import { OnboardingAiTask, OnboardingBar, OnboardingCompletion, OnboardingMenus, type OnboardingModelDraft } from './components/onboarding/OnboardingGuide.tsx';
 import { Button } from '@mantine/core';
-import WikiView from './components/wiki/WikiView';
-import type { WikiNoteSource } from './components/wiki/WikiOpenInNotesModal';
-import CreateLibraryModal from './components/CreateLibraryModal';
-import CreateMaterialsLibraryModal, { type MaterialsLibraryModalMode } from './components/CreateMaterialsLibraryModal';
-import { NoteSaveController, type NoteSaveView } from './utils/noteSaveController';
-import { applyNoteIndexDelta } from './utils/noteIndexDelta';
-import { NOTE_BACKUP_RETENTION } from '../shared/noteBackup';
-import { ASSISTANT_RELEASE_DEFAULTS } from '../shared/assistantReleaseDefaults';
-import type { NoteExportFormat } from '../shared/noteExport';
-import type { MarkdownRelativeLinkTarget } from './utils/markdownLinks';
+import WikiView from './components/wiki/WikiView.tsx';
+import type { WikiNoteSource } from './components/wiki/WikiOpenInNotesModal.tsx';
+import CreateLibraryModal from './components/library/CreateLibraryModal.tsx';
+import CreateMaterialsLibraryModal, { type MaterialsLibraryModalMode } from './components/library/CreateMaterialsLibraryModal.tsx';
+import { NoteSaveController, type NoteSaveView } from './utils/note/noteSaveController.ts';
+import { applyNoteIndexDelta } from './utils/note/noteIndexDelta.ts';
+import { NOTE_BACKUP_RETENTION } from '../shared/noteBackup.ts';
+import { ASSISTANT_RELEASE_DEFAULTS } from '../shared/assistantReleaseDefaults.ts';
+import type { NoteExportFormat } from '../shared/noteExport.ts';
+import type { MarkdownRelativeLinkTarget } from './utils/markdown/markdownLinks.ts';
 import type { AiExtensionsSettings, AiModelSettings, AiModelSettingsInput, AiProviderConfig, AiProviderStatus, AppPreferences, AssistantAiOptions, AssistantCitationValidation, AssistantEvidenceCitation, AssistantTurnRequest, BackupEntry, FileNode, HeadingEntry, LibrarySummary, ModelHub, NoteAnalysis, NoteAnalysisRunDetail, NoteMeta, RemoteProviderModelsResult, SavedEditorImage, SelectionExpansionEvent, SelectionExpansionSettings, TagSummary } from './electron';
-import { createSelectionLocatorCapture, getSelectionWritebackCapability, type SelectionSnapshot } from './editor/selectionActions';
-import type { SelectionExpansionApplyRequest, SelectionExpansionDraftSession } from './editor/selectionExpansion';
-import { primarySelectionEditQualityIssue, selectionEditQualityIssueLabel } from '../electron/knowledge/selectionEditQuality';
-import { collapseAllFolders } from './utils/fileTreeState';
-import { applyAppearance, resolveTheme, type ResolvedTheme } from './utils/theme';
+import { createSelectionLocatorCapture, getSelectionWritebackCapability, type SelectionSnapshot } from './editor/behavior/selectionActions.ts';
+import type { SelectionExpansionApplyRequest, SelectionExpansionDraftSession } from './editor/behavior/selectionExpansion.ts';
+import { primarySelectionEditQualityIssue, selectionEditQualityIssueLabel } from '../electron/knowledge/selection/selectionEditQuality.ts';
+import { collapseAllFolders } from './utils/note/fileTreeState.ts';
+import { applyAppearance, resolveTheme, type ResolvedTheme } from './utils/ui/theme.ts';
 import {
   formatSavedEditorImageMarkdown,
   getClipboardImageSources,
   MAX_EDITOR_IMAGE_BYTES,
   type ClipboardImageSource,
-} from './utils/editorImageClipboard';
+} from './utils/editor/editorImageClipboard.ts';
 
 type EditorMode = 'wysiwyg' | 'preview' | 'source';
 type CreateEntryMode = 'file' | 'folder';
@@ -132,6 +143,8 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
   const [migrationRequest, setMigrationRequest] = useState<{ sequence: number; mode: 'migrate' | 'open' }>({ sequence: 0, mode: 'migrate' });
   // 已访问的一级菜单保持挂载；切换时只隐藏，保留各页面自己的筛选、滚动和草稿状态。
   const [cachedMainViews, setCachedMainViews] = useState<ReadonlySet<MainView>>(() => new Set(['home']));
+  const [terminalPanelOpen, setTerminalPanelOpen] = useState(false);
+  const [terminalPanelHeight, setTerminalPanelHeight] = useState(240);
   // 地图视图「就这个社区提问」→ 预填问题跳转问答区（引导走图谱全局检索）。
   const [graphQuestionDraft, setGraphQuestionDraft] = useState<{ libraryPath: string; question: string } | null>(null);
   const [settingsReturnView, setSettingsReturnView] = useState<Exclude<MainView, 'settings'>>('home');
@@ -216,7 +229,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
     }).catch(error => window.alert(String(error)));
     return true;
   } }])], []);
-  const currentIsMarkdown = noteMeta?.kind !== 'text';
+  const currentIsMarkdown = noteMeta?.kind === 'markdown';
   // These surfaces own focus and must suspend editor-only floating controls.
   // Keep this derived state local: it is not user data and is never persisted.
   const isEditorInteractionBlocked = isSearchOpen
@@ -480,9 +493,25 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && (event.key === 'k' || event.key === 'p')) {
+      const mod = event.ctrlKey || event.metaKey;
+
+      // Cmd/Ctrl + K or P — toggle search
+      if (mod && (event.key === 'k' || event.key === 'p')) {
         event.preventDefault();
         setIsSearchOpen((previous) => !previous);
+        return;
+      }
+      // Ctrl + ` — toggle terminal panel
+      if (event.ctrlKey && event.key === '`') {
+        event.preventDefault();
+        setTerminalPanelOpen((prev) => !prev);
+        return;
+      }
+      // Cmd/Ctrl + B — toggle sidebar
+      if (mod && !event.shiftKey && event.key === 'b') {
+        event.preventDefault();
+        setIsLeftSidebarCollapsed((prev) => !prev);
+        return;
       }
     };
 
@@ -516,7 +545,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
   }, []);
 
   useEffect(() => {
-    if (noteMeta?.kind === 'text' && editorMode !== 'source') {
+    if ((noteMeta?.kind === 'text' || noteMeta?.kind === 'code') && editorMode !== 'source') {
       setEditorMode('source');
     }
   }, [editorMode, noteMeta?.kind]);
@@ -812,7 +841,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
       setBackups([]);
 
       setContent(snapshot.content); setNoteMeta(meta); setBackups(backupEntries); setAllTags(tags);
-      const preferredMode = meta?.kind === 'text'
+      const preferredMode = (meta?.kind === 'text' || meta?.kind === 'code')
         ? 'source'
         : appPreferences.defaultEditorMode === 'preview'
           ? (appPreferences.previewPreference === 'source' ? 'source' : 'preview')
@@ -820,7 +849,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
       const targetHeading = navigationTarget?.heading
         ? meta?.headings.find((heading) => heading.text.trim() === navigationTarget.heading?.trim())
         : undefined;
-      if (headingFragment && meta?.kind !== 'text') {
+      if (headingFragment && meta?.kind === 'markdown') {
         setEditorMode('preview');
         setHeadingJump({
           heading: { id: headingFragment, level: 1, text: headingFragment, line: 1, index: -1 },
@@ -832,7 +861,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
         // editor's positioning effect, so search results open in WYSIWYG.
         setEditorMode('wysiwyg');
         setHeadingJump({ heading: targetHeading, nonce: Date.now() });
-      } else if (navigationTarget?.snippet?.trim() && meta?.kind !== 'text') {
+      } else if (navigationTarget?.snippet?.trim() && meta?.kind === 'markdown') {
         setEditorMode('wysiwyg');
         setSearchScrollTarget({ text: navigationTarget.snippet, nonce: Date.now() });
       } else {
@@ -1414,6 +1443,53 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
     }
   };
 
+  // Extended keyboard shortcuts (depend on functions defined above)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const mod = event.ctrlKey || event.metaKey;
+
+      // Ctrl + ` — toggle terminal panel (works even in text input)
+      if (event.ctrlKey && event.key === '`') {
+        event.preventDefault();
+        setTerminalPanelOpen((prev) => !prev);
+        return;
+      }
+
+      const tag = (event.target as HTMLElement)?.tagName;
+      const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || (event.target as HTMLElement)?.isContentEditable;
+
+      // Skip shortcuts when in text input (theme shortcut has its own listener)
+      if (isInput) return;
+
+      // Cmd/Ctrl + N — new note
+      if (mod && !event.shiftKey && event.key === 'n') {
+        event.preventDefault();
+        void handleCreateFile('');
+        return;
+      }
+      // Cmd/Ctrl + S — save current note
+      if (mod && !event.shiftKey && event.key === 's') {
+        event.preventDefault();
+        void flushPendingSave();
+        return;
+      }
+      // Cmd/Ctrl + , — open settings
+      if (mod && event.key === ',') {
+        event.preventDefault();
+        void handleOpenSettings();
+        return;
+      }
+      // Cmd/Ctrl + Shift + E — toggle editor mode (wysiwyg/source)
+      if (mod && event.shiftKey && event.key.toLowerCase() === 'e') {
+        event.preventDefault();
+        setEditorMode((prev) => prev === 'wysiwyg' ? 'source' : 'wysiwyg');
+        return;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleCreateFile, handleOpenSettings, flushPendingSave]);
+
   const handleOpenWikiLink = async (target: string) => {
     if (!window.electronAPI || !currentPath) return;
     const saved = await flushPendingSave();
@@ -1501,7 +1577,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
     try {
       let output = content;
       if (format !== 'md') {
-        const { renderMarkdownExport } = await import('./utils/markdownExport');
+        const { renderMarkdownExport } = await import('./utils/markdown/markdownExport.ts');
         output = await renderMarkdownExport({ title, markdown: content, currentPath, libraryPath, resolvedTheme,
           output: format, resolveImageDataUrl: source => window.electronAPI.readMarkdownExportImage(source) });
       }
@@ -1652,6 +1728,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
       {modelConnectionDialog}
       {externalDocuments.dialog}
       <WorkspaceMigrationDialog request={migrationRequest} onBlockedChange={handleMigrationBlocked} onDataChanged={handleMigratedData} />
+      <TerminalSessionsProvider themeMode={resolvedTheme}>
       <div className={`app-shell${focusActive ? ' note-focus-active' : ''}`} ref={element => { if (element) element.inert = migrationBlocked; }} data-workspace-migration-blocked={migrationBlocked || undefined}>
         {isMaintaining && !migrationBlocked && <div role="status" style={{ position: 'fixed', top: 8, left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'var(--mantine-color-body)', border: '1px solid var(--mantine-color-default-border)', borderRadius: 8, padding: '8px 16px' }}>{t('正在保存并捕获数据快照，完成后即可继续编辑。')}</div>}
         {!guide.state && guide.error && <div className="onboarding-state-error" role="status">{t('使用引导暂时无法读取，可在设置中重试')}<Button size="compact-xs" variant="subtle" onClick={() => void guide.refresh().catch(() => undefined)}>{t('重试')}</Button></div>}
@@ -1659,6 +1736,18 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
           if (guide.visible && guide.step === 'menus') setIntroMenu('settings');
           else void (async () => { if (guide.visible) await guide.pause(); await handleOpenSettings(); })();
         }} />
+        <div className="app-content">
+        <div className="app-body">
+        {isMainViewMounted('terminal') ? (
+          <main className="main-pane" hidden={mainView !== 'terminal'}>
+            <TerminalView active={mainView === 'terminal'} />
+          </main>
+        ) : null}
+        {isMainViewMounted('calendar') ? (
+          <main className="main-pane" hidden={mainView !== 'calendar'}>
+            <ScheduleView />
+          </main>
+        ) : null}
         {isMainViewMounted('libraries') ? (
           <main className="main-pane" hidden={mainView !== 'libraries'}>
             <LibraryManagerView
@@ -1994,7 +2083,17 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
             </main>
           </div>
         ) : null}
+        </div>
+        {terminalPanelOpen && (
+          <TerminalPanel
+            height={terminalPanelHeight}
+            onHeightChange={setTerminalPanelHeight}
+            onToggle={() => setTerminalPanelOpen(false)}
+          />
+        )}
+        </div>
       </div>
+      </TerminalSessionsProvider>
       {themeFeedback ? <div className="theme-toast" role="status">{themeFeedback}</div> : null}
       <SearchModal
         isOpen={isSearchOpen}

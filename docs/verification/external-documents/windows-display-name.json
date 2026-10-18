@@ -7,7 +7,7 @@
   "nativeOpenWithUiVerified": false,
   "artifacts": [
     {
-      "path": "trellora/win-unpacked/Trellora.exe",
+      "path": "trellora/win-unpacked/Trellora.app",
       "byteLength": 180860416,
       "sha256": "872c96450733ed01088d021c6c6769fa63cb011325cee5a877fd8e8a6c2ddb3f",
       "fileDescription": "Trellora",

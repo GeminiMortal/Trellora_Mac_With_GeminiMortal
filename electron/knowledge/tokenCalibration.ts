@@ -1,7 +1,14 @@
+/**
+ * Token calibration: EWMA-based ratio cache that learns provider vs local token counts.
+ * Token 校准：基于 EWMA 的比率缓存，学习提供商与本地 token 计数的差异。
+ */
+
 import type { AssistantTokenUsage } from './tokenEstimator';
 
+/** Current calibration version identifier. / 当前校准版本标识。 */
 export const TOKEN_CALIBRATION_VERSION = 'estimator-v2-envelope-v1';
 
+/** Key identifying a calibration bucket by provider, model, and call kind. / 按提供商、模型和调用类型标识校准桶的键。 */
 export interface TokenCalibrationKey {
   providerKind: string;
   model: string;
@@ -10,6 +17,7 @@ export interface TokenCalibrationKey {
   requestEnvelopeVersion?: string;
 }
 
+/** A single calibration observation pairing local estimate with provider count. / 单条校准观察，将本地估算与提供商计数配对。 */
 export interface TokenCalibrationSample {
   key: TokenCalibrationKey;
   locallyEstimatedTokens: number;
@@ -24,6 +32,7 @@ const EWMA_ALPHA = 0.25;
  * Small in-process calibration cache. It deliberately has no persistence: a
  * request envelope or tokenizer version change must not reuse stale ratios.
  */
+/** In-process EWMA calibration cache (no persistence). / 进程内 EWMA 校准缓存（不持久化）。 */
 export class TokenCalibrationStore {
   private readonly ratios = new Map<string, number>();
 
@@ -56,6 +65,7 @@ export class TokenCalibrationStore {
   }
 }
 
+/** Singleton calibration store shared across the application. / 应用共享的单例校准存储。 */
 export const sharedTokenCalibrationStore = new TokenCalibrationStore();
 
 function createCalibrationKey(key: TokenCalibrationKey): string {

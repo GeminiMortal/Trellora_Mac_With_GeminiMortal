@@ -1,16 +1,26 @@
+/**
+ * Module: materialChunkSearch
+ * Material chunk search and projection. Manages SQLite FTS5 indexes, vector search,
+ * hybrid retrieval with RRF fusion, and chunk projection for the materials pipeline.
+ * 模块：materialChunkSearch
+ * 资料切块搜索与投影。管理 SQLite FTS5 索引、向量搜索、带 RRF 融合的混合检索，
+ * 以及资料流水线的切块投影。
+ */
+
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import { getLibraryMetaDirectory } from '../treeOrder';
-import { sqliteVecPackagedExtensionPath } from '../loadSqliteVec';
-import { LEXICAL_KEYWORD_BOOST, RRF_RANK_CONSTANT, reciprocalRankFusion, type RrfChannelEntry } from '../knowledge/hybridRetrievalFusion';
-import { PipelineStageError } from './stageErrors';
-import { scoreLexicalCandidates, type LexicalCorpusStats, type LexicalScoreBreakdown, type LexicalTermDf } from './lexicalScorer';
-import { readMaterialEmbeddingProfile, readMaterialEmbeddingProfileFromDatabase } from './materialEmbeddingProfile';
-import type { MaterialEmbeddingAdapter as ProfileEmbeddingAdapter } from './materialEmbeddingAdapters';
-import type { MaterialEmbeddingProfile, MaterialEmbeddingProfileStatus } from './materialEmbeddingTypes';
-import { getActiveMaterialVectorTable } from './materialVectorGenerationStore';
+import { getLibraryMetaDirectory } from '../files/treeOrder.ts';
+import { sqliteVecPackagedExtensionPath } from '../loadSqliteVec.ts';
+import { LEXICAL_KEYWORD_BOOST, RRF_RANK_CONSTANT, reciprocalRankFusion, type RrfChannelEntry } from '../knowledge/hybridRetrievalFusion.ts';
+import { PipelineStageError } from './stageErrors.ts';
+import { scoreLexicalCandidates, type LexicalCorpusStats, type LexicalScoreBreakdown, type LexicalTermDf } from './lexicalScorer.ts';
+import { readMaterialEmbeddingProfile, readMaterialEmbeddingProfileFromDatabase } from './materialEmbeddingProfile.ts';
+import type { MaterialEmbeddingAdapter as ProfileEmbeddingAdapter } from './materialEmbeddingAdapters.ts';
+import type { MaterialEmbeddingProfile, MaterialEmbeddingProfileStatus } from './materialEmbeddingTypes.ts';
+import { getActiveMaterialVectorTable } from './materialVectorGenerationStore.ts';
 
+// SQLite table names / SQLite 表名
 const materialDocumentTableName = 'material_chunk_documents';
 const materialChunkTableName = 'material_chunks';
 const materialParentTableName = 'material_chunk_parents';
@@ -18,35 +28,66 @@ const materialFtsTableName = 'material_chunk_fts';
 const materialPostingsTableName = 'material_term_postings';
 const materialLexicalStatsTableName = 'material_lexical_stats';
 const materialVectorMetaTableName = 'material_chunk_vector_meta';
+// Vector batch size for embedding calls / embedding 调用的向量批次大小
 const vectorBatchSize = 16;
+// FTS5 bm25 weights are passed by virtual table column order; first two columns are UNINDEXED identifiers.
 // FTS5 的 bm25 权重按虚表列顺序传入；前两列为 UNINDEXED 标识列。
 const materialFtsBm25Expression = `bm25(${materialFtsTableName}, 0.0, 0.0, 1.0, 4.0, 0.5)`;
+// FTS rank score shares the same rank constant as RRF to avoid literal drift (optimization P2-8).
 // FTS 名次分数与 RRF 共用同一个名次常数，避免两处字面量漂移（优化方案 P2-8）。
 const materialFtsFallbackScore = 0.65;
 
 const sqliteVec = require('sqlite-vec') as { load(database: Database.Database): void };
 
+/**
+ * Search mode for material chunk queries.
+ * 资料切块查询的搜索模式。
+ */
 export type MaterialChunkSearchMode = 'hybrid' | 'keyword' | 'semantic';
+
+/**
+ * Fusion method for combining search results.
+ * 合并搜索结果的融合方法。
+ */
 export type MaterialChunkFusion = 'weighted' | 'rrf';
 
+/**
+ * Record for material chunk projection in SQLite.
+ * SQLite 中资料切块投影的记录。
+ */
 export interface MaterialChunkProjectionRecord {
+  /** Document ID / 文档 ID */
   documentId: string;
+  /** Chunk ID / 切块 ID */
   chunkId: string;
+  /** Parent chunk ID (null for top-level) / 父块 ID（顶层为 null） */
   parentChunkId: string | null;
+  /** Chunk ordinal / 切块序号 */
   ordinal: number;
+  /** Chunk text with section context / 带章节上下文的切块文本 */
   text: string;
-  /** 供引用与原文保全使用；检索仍使用带章节上下文的 text。 */
+  /** Source text for citation and provenance; search uses text with section context. / 供引用与原文保全使用；检索仍使用带章节上下文的 text。 */
   sourceText: string;
+  /** Section path from document root / 从文档根的章节路径 */
   sectionPath: unknown[];
+  /** Section context string / 章节上下文字符串 */
   sectionContext: string;
+  /** Source references / 来源引用 */
   sourceRefs: unknown[];
+  /** Content hash / 内容哈希 */
   contentHash: string;
-  /** Jieba 预分词结果；SQLite FTS5 只负责对空格分隔词元建立倒排。 */
+  /** Jieba pre-tokenized results; SQLite FTS5 only builds inverted index on space-separated tokens. / Jieba 预分词结果；SQLite FTS5 只负责对空格分隔词元建立倒排。 */
   searchTokens: string[];
 }
 
+/**
+ * Record for material chunk parent projection.
+ * 资料切块父块投影的记录。
+ */
 export interface MaterialChunkParentProjectionRecord {
+  /** Document ID / 文档 ID */
   documentId: string;
+  /** Parent chunk ID / 父块 ID */
   parentChunkId: string;
   ordinal: number;
   text: string;

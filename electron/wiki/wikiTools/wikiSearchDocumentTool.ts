@@ -1,20 +1,34 @@
-import { mergeKnowledgeBaseRetrievals, retrieveKnowledgeBaseEvidence } from '../../knowledge/knowledgeBaseRag';
-import type { ReActTool, ReActToolExecution } from '../../knowledge/reactAgent/toolRegistry';
-import { compactObservationText, escapeXmlAttribute, escapeXmlText } from '../../knowledge/knowledgeToolContext';
-import type { KnowledgeEvidenceRecord } from '../../knowledge/knowledgeTools/knowledgeSessionState';
-import { renderKnowledgeBaseImageTransportIndex } from '../../knowledge/knowledgeBaseImageResolver';
-import type { WikiToolContext } from '../wikiToolContext';
-import { collectCrossNodeHeadingIds } from '../wikiNodeScope';
+/**
+ * Wiki tool for cross-section semantic retrieval within the same document (outside the current subtree).
+ * 在同文档当前子树之外做跨章节语义检索的 Wiki 工具。
+ */
+
+import { mergeKnowledgeBaseRetrievals, retrieveKnowledgeBaseEvidence } from '../../knowledge/knowledgeBaseRag.ts';
+import type { ReActTool, ReActToolExecution } from '../../knowledge/reactAgent/toolRegistry.ts';
+import { compactObservationText, escapeXmlAttribute, escapeXmlText } from '../../knowledge/tools/knowledgeToolContext.ts';
+import type { KnowledgeEvidenceRecord } from '../../knowledge/tools/knowledgeTools/knowledgeSessionState.ts';
+import { renderKnowledgeBaseImageTransportIndex } from '../../knowledge/knowledgeBaseImageResolver.ts';
+import type { WikiToolContext } from '../wikiToolContext.ts';
+import { collectCrossNodeHeadingIds } from '../wikiNodeScope.ts';
 import {
   WIKI_NODE_SEARCH_MAX_QUERIES,
   WIKI_NODE_SEARCH_MERGED_TOP_K,
   WIKI_NODE_SEARCH_PER_QUERY_TOP_K,
-} from '../wikiNodeBudget';
+} from '../wikiNodeBudget.ts';
 
-/** 跨章节证据的来源章节标签（sectionContext）字符上限，避免属性过长挤占观察预算。 */
+/** Max chars for cross-section evidence sectionContext label, to avoid squeezing the observation budget. / 跨章节证据的来源章节标签（sectionContext）字符上限，避免属性过长挤占观察预算。 */
 const WIKI_CROSS_SECTION_LABEL_CHARS = 120;
 
 /**
+ * wiki_search_document tool (plan §4.3): performs hybrid retrieval across other sections of the
+ * same document, outside the current section subtree.
+ *
+ * Reuses the same retrieveKnowledgeBaseEvidence pipeline as wiki_node_search; the only difference
+ * is that sectionNodeIds is the complement of "all document headingIds minus current subtree
+ * headingIds", so only other sections are recalled. Serves the cross-links action and user
+ * explicit requests for "relations with other sections". Each evidence item carries a section label
+ * from the matching child chunk's sectionContext, enabling the model to group answers by section.
+ *
  * wiki_search_document（方案 §4.3）：在同一篇文档内、当前章节子树之外的其他章节做混合检索。
  *
  * 与 wiki_node_search 复用同一 retrieveKnowledgeBaseEvidence 管道，唯一差异是作用域参数
@@ -46,6 +60,7 @@ export const wikiSearchDocumentTool: ReActTool<WikiToolContext> = {
   execute: async (args, ctx) => runWikiSearchDocument(args, ctx),
 };
 
+/** Execute wiki_search_document: validate scope, run multi-path cross-section retrieval, register evidence and format XML. / 执行 wiki_search_document：校验范围、运行多路跨章节检索、登记证据并格式化 XML 输出。 */
 async function runWikiSearchDocument(args: Record<string, unknown>, ctx: WikiToolContext): Promise<ReActToolExecution> {
   const queries = (Array.isArray(args.queries) ? args.queries : [])
     .filter((item): item is string => typeof item === 'string')
@@ -56,6 +71,8 @@ async function runWikiSearchDocument(args: Record<string, unknown>, ctx: WikiToo
     return { ok: false, observation: '<tool_error>wiki_search_document 需要至少一条非空查询。</tool_error>', message: '检索查询为空，已拒绝执行。' };
   }
 
+  // The root node's scope already covers the whole document; there are no "other sections" to
+  // correlate. Report this directly to avoid a pointless retrieval.
   // 根节点作用域即整篇文档，没有"其他章节"可关联；直接如实说明，避免无意义检索。
   if (ctx.sectionNodeIds === undefined) {
     return {
@@ -92,6 +109,8 @@ async function runWikiSearchDocument(args: Record<string, unknown>, ctx: WikiToo
       parentTopK: WIKI_NODE_SEARCH_PER_QUERY_TOP_K,
       allowExpansion: false,
       historyEvidenceKeys: ctx.session.seenEvidenceKeys(),
+      // Cross-section scope: same document, sectionNodeIds is the complement of current subtree,
+      // only recalling other sections.
       // 跨章节作用域：限定同一文档，sectionNodeIds 取当前子树的补集，只召回其他章节。
       documentIds: [ctx.documentId],
       sectionNodeIds: crossNodeIds,
@@ -114,6 +133,8 @@ async function runWikiSearchDocument(args: Record<string, unknown>, ctx: WikiToo
     };
   }
 
+  // Section label: provided by the matching child chunk's sectionContext, for the model to group
+  // answers by correlated section.
   // 来源章节标签：由匹配子块的 sectionContext 提供，供模型按关联章节分组。
   const sectionByChild = new Map<string, string>();
   const sourceNodeByChild = new Map<string, { id: string; title: string }>();

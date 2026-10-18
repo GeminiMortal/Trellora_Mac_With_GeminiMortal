@@ -1,0 +1,332 @@
+/**
+ * Terminal — component styles for terminal panel and view.
+ * 终端 — 终端面板和视图的组件样式。
+ */
+
+/* ── Terminal panel (bottom) ────────────────────────────────────────────────── */
+
+.terminal-panel {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-canvas);
+  position: relative;
+  min-height: 120px;
+  max-height: 800px;
+}
+
+.terminal-panel-resize {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
+  z-index: 10;
+}
+
+.terminal-panel-resize:hover,
+.terminal-panel-resize--active {
+  background: var(--accent-primary);
+  opacity: 0.5;
+}
+
+.terminal-panel-header {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.terminal-panel-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.terminal-panel-surface {
+  position: absolute;
+  inset: 0;
+}
+
+.terminal-panel-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+/* ── Terminal view (standalone) ─────────────────────────────────────────────── */
+
+.terminal-view {
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--surface-canvas);
+}
+
+.terminal-view-header {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.terminal-view-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.terminal-view-surface {
+  position: absolute;
+  inset: 0;
+}
+
+/* ── Terminal tabs ──────────────────────────────────────────────────────────── */
+
+.terminal-tabs {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  background: var(--surface-raised);
+  gap: 2px;
+  padding: 0 4px;
+}
+
+.terminal-tabs-list {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.terminal-tabs-list::-webkit-scrollbar {
+  display: none;
+}
+
+.terminal-tabs-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* ── Shell selector ────────────────────────────────────────────────────── */
+
+.terminal-shell-selector {
+  position: relative;
+}
+
+.terminal-shell-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.terminal-shell-trigger:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+
+.terminal-shell-name {
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.terminal-shell-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 1000;
+  min-width: 220px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--mantine-color-body);
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  padding: 4px;
+}
+
+.terminal-shell-menu-header {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  padding: 6px 8px 2px;
+}
+
+.terminal-shell-menu-empty {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  padding: 8px;
+  text-align: center;
+}
+
+.terminal-shell-menu-divider {
+  height: 1px;
+  background: var(--mantine-color-default-border);
+  margin: 4px 0;
+}
+
+.terminal-shell-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+  transition: background 0.1s;
+}
+
+.terminal-shell-option:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.terminal-shell-option--active {
+  background: var(--mantine-color-blue-light);
+  color: var(--mantine-color-blue-filled);
+}
+
+.terminal-shell-option--new {
+  color: var(--text-tertiary);
+}
+
+.terminal-shell-option--new:hover {
+  color: var(--mantine-color-blue-filled);
+}
+
+.terminal-shell-option-name {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.terminal-shell-option-path {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  text-align: right;
+}
+
+.terminal-shell-option-badge {
+  font-size: 9px;
+  background: var(--mantine-color-blue-light);
+  color: var(--mantine-color-blue-filled);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.terminal-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  user-select: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.terminal-tab:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.terminal-tab--active {
+  background: var(--surface-selected);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.terminal-tab-title {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.terminal-tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.terminal-tab:hover .terminal-tab-close {
+  opacity: 1;
+}
+
+.terminal-tab-close:hover {
+  background: var(--surface-hover);
+  color: var(--status-danger);
+}
+
+/* ── Resizing state ─────────────────────────────────────────────────────────── */
+
+body.resizing-terminal-panel {
+  cursor: ns-resize !important;
+  user-select: none !important;
+}
+
+body.resizing-terminal-panel * {
+  pointer-events: none !important;
+}
+
+/* ── xterm overrides ────────────────────────────────────────────────────────── */
+
+.terminal-panel-surface .xterm,
+.terminal-view-surface .xterm {
+  padding: 8px;
+  height: 100%;
+}
+
+.terminal-panel-surface .xterm-viewport,
+.terminal-view-surface .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-hover) transparent;
+}
+
+.terminal-panel-surface .xterm-viewport::-webkit-scrollbar,
+.terminal-view-surface .xterm-viewport::-webkit-scrollbar {
+  width: 6px;
+}
+
+.terminal-panel-surface .xterm-viewport::-webkit-scrollbar-thumb,
+.terminal-view-surface .xterm-viewport::-webkit-scrollbar-thumb {
+  background: var(--surface-hover);
+  border-radius: 3px;
+}
+
+/* Ensure terminal has proper dimensions */
+.terminal-panel-surface .xterm-screen,
+.terminal-view-surface .xterm-screen {
+  width: 100% !important;
+  height: 100% !important;
+}

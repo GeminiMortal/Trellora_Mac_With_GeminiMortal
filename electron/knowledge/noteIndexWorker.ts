@@ -1,5 +1,5 @@
 import { parentPort } from 'node:worker_threads';
-import { buildNoteIndex, parseNoteContent } from '../noteIndex';
+import { buildNoteIndex, parseNoteContent } from '../note/noteIndex';
 
 /** CPU-heavy Markdown parsing and cold scans stay outside the Electron event loop. */
 parentPort?.on('message', (request) => {

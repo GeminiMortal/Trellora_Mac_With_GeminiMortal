@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Alert, Badge, Button, Group, Stack, Text, Title } from '@mantine/core';
 import { ArrowRight, Check, FileText, Library, Map, MessageSquare, Settings, Sparkles, Upload } from 'lucide-react';
-import type { MainView } from '../NavRail';
-import type { OnboardingController } from './useOnboarding';
-import { t, useI18n } from '../../i18n';
+import type { MainView } from '../navigation/NavRail.tsx';
+import type { OnboardingController } from './useOnboarding.ts';
+import { t, useI18n } from '../../i18n/index.ts';
 import './OnboardingGuide.css';
 
 const menuIntroductions = [

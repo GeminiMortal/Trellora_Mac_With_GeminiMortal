@@ -1,4 +1,11 @@
-"""Deterministic chunk boundary strategies used by the v2 coordinator."""
+"""
+Module: chunking_strategies
+Deterministic chunk boundary strategies used by the v2 coordinator.
+Implements structure, page, regex, recursive, and fixed-size splitting.
+模块：chunking_strategies
+v2 协调器使用的确定性切块边界策略。
+实现结构、页面、正则、递归和定长切分。
+"""
 
 from __future__ import annotations
 
@@ -10,11 +17,18 @@ from .chunking_models import SourceBlock, clean_text
 
 
 def join_blocks(blocks: Iterable[SourceBlock]) -> str:
+    """
+    Join source blocks with double newlines.
+    用双换行符合并源块。
+    """
     return '\n\n'.join(block.text for block in blocks if block.text)
 
 
 def group_adjacent_structure(blocks: list[SourceBlock]) -> list[list[SourceBlock]]:
-    """Group only adjacent identical section identities; never merge by title globally."""
+    """
+    Group only adjacent identical section identities; never merge by title globally.
+    只按相邻相同章节标识分组；不按标题全局合并。
+    """
     groups: list[list[SourceBlock]] = []
     for block in blocks:
         if groups and groups[-1][0].section_key == block.section_key:
@@ -25,6 +39,10 @@ def group_adjacent_structure(blocks: list[SourceBlock]) -> list[list[SourceBlock
 
 
 def group_by_page(blocks: list[SourceBlock], min_coverage: float) -> list[list[SourceBlock]]:
+    """
+    Group blocks by page number with minimum coverage validation.
+    按页码分组块，并进行最低覆盖率验证。
+    """
     if not blocks:
         return []
     known = sum(1 for block in blocks if block.page is not None)
@@ -41,6 +59,10 @@ def group_by_page(blocks: list[SourceBlock], min_coverage: float) -> list[list[S
 
 
 def group_by_regex(blocks: list[SourceBlock], pattern: str, flags: list[str] | None = None, boundary: str = 'before') -> list[list[SourceBlock]]:
+    """
+    Group blocks by regex pattern matches.
+    按正则模式匹配分组块。
+    """
     expression = re.compile(pattern, (re.I if flags and 'i' in flags else 0) | (re.M if flags and 'm' in flags else 0))
     groups: list[list[SourceBlock]] = []
     for block in blocks:

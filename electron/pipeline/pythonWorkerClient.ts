@@ -1,9 +1,15 @@
+/**
+ * Python worker client: spawns the pipeline worker, performs the hello handshake,
+ * and speaks the NDJSON request/response protocol with timeouts and cancellation.
+ * Python Worker 客户端：启动流水线 Worker、执行 hello 握手，并以超时与取消语义收发 NDJSON 协议消息。
+ */
+
 import { app } from 'electron';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
-import { PIPELINE_ENGINE_VERSION, PIPELINE_PROTOCOL_VERSION, type PipelineProgressEvent, type PipelineStageId, type WorkerRunStageResult } from './types';
+import { PIPELINE_ENGINE_VERSION, PIPELINE_PROTOCOL_VERSION, type PipelineProgressEvent, type PipelineStageId, type WorkerRunStageResult } from './types.ts';
 
 interface WorkerMessage {
   id?: string;
@@ -29,11 +35,27 @@ interface WorkerCommand {
   packaged: boolean;
 }
 
+/**
+ * Error raised by the worker client with a stable code and retry hint.
+ * Worker 客户端抛出的错误，携带稳定错误码与可重试提示。
+ */
 export class WorkerClientError extends Error {
+  /** Stable error code / 稳定错误码 */
   readonly code: string;
+  /** Whether the operation may be retried / 操作是否可重试 */
   readonly retryable: boolean;
+  /** Optional developer diagnostics / 可选开发者诊断信息 */
   readonly diagnostic?: string;
 
+  /**
+   * Creates a worker client error.
+   * 创建 Worker 客户端错误。
+   *
+   * @param code - Stable error code / 稳定错误码
+   * @param message - Human-readable message / 可读错误信息
+   * @param retryable - Whether retry may succeed (defaults to true) / 重试是否可能成功（默认 true）
+   * @param diagnostic - Optional diagnostic detail / 可选诊断细节
+   */
   constructor(code: string, message: string, retryable = true, diagnostic?: string) {
     super(message);
     this.name = 'WorkerClientError';
@@ -43,18 +65,36 @@ export class WorkerClientError extends Error {
   }
 }
 
+/**
+ * Callbacks wired into the client by its owner.
+ * 由持有方注入客户端的回调。
+ */
 export interface WorkerClientOptions {
+  /** Progress event callback / 进度事件回调 */
   onProgress?: (event: Omit<PipelineProgressEvent, 'libraryPath' | 'documentId'>) => void;
+  /** Worker stderr log sink / Worker stderr 日志接收器 */
   onLog?: (message: string) => void;
 }
 
+/**
+ * Result of Jieba search tokenization performed by the worker.
+ * 由 Worker 执行的 Jieba 检索分词结果。
+ */
 export interface WorkerSearchTokenizationResult {
+  /** Produced tokens / 产出的词元 */
   tokens: string[];
+  /** Tokenizer id / 分词器标识 */
   tokenizer: string;
+  /** Tokenizer version / 分词器版本 */
   tokenizerVersion: string;
+  /** Dictionary hash used / 使用的词典哈希 */
   dictionaryHash: string;
 }
 
+/**
+ * Manages one Python worker process and its NDJSON protocol.
+ * 管理单个 Python Worker 进程及其 NDJSON 协议。
+ */
 export class PythonWorkerClient {
   private child: ChildProcessWithoutNullStreams | null = null;
   private readonly pending = new Map<string, PendingRequest>();
@@ -63,16 +103,40 @@ export class PythonWorkerClient {
   private capabilities = new Set<string>();
   private readonly options: WorkerClientOptions;
 
+  /**
+   * Creates the client (the process starts lazily on first request).
+   * 创建客户端（进程在首次请求时惰性启动）。
+   *
+   * @param options - Progress and log callbacks / 进度与日志回调
+   */
   constructor(options: WorkerClientOptions = {}) {
     this.options = options;
   }
 
+  /**
+   * Starts the worker if needed and returns its advertised capabilities.
+   * 必要时启动 Worker 并返回其声明的能力列表。
+   *
+   * @returns Capability names / 能力名称列表
+   */
   async probe(): Promise<string[]> {
     await this.ensureStarted();
     return [...this.capabilities];
   }
 
-  /** stage 支持文档级阶段与库级 'graph'（图装配，不属于文档流水线顺序）。 */
+  /**
+   * Runs one pipeline stage. stage supports document stages plus the
+   * library-level 'graph' (graph assembly, outside the document stage order).
+   * stage 支持文档级阶段与库级 'graph'（图装配，不属于文档流水线顺序）。
+   *
+   * @param params - Stage parameters / 阶段参数
+   * @param params.jobId - Job id for progress and cancellation / 用于进度与取消的任务 ID
+   * @param params.stage - Stage identifier / 阶段标识
+   * @param params.inputPath - Input path / 输入路径
+   * @param params.outputDir - Output directory / 输出目录
+   * @param params.options - Stage-specific options / 阶段专属选项
+   * @returns Stage result with manifest path and counters / 含清单路径与计数的阶段结果
+   */
   async runStage(params: { jobId: string; stage: PipelineStageId | 'graph'; inputPath: string; outputDir: string; options?: Record<string, unknown> }): Promise<WorkerRunStageResult> {
     const response = await this.request('runStage', {
       jobId: params.jobId,
@@ -87,6 +151,16 @@ export class PythonWorkerClient {
     };
   }
 
+  /**
+   * Tokenizes a search query with Jieba using the library dictionary.
+   * 使用资料库词典以 Jieba 对检索查询分词。
+   *
+   * @param params - Tokenization parameters / 分词参数
+   * @param params.query - Query text / 查询文本
+   * @param params.dictionaryTerms - Dictionary terms / 词典词表
+   * @param params.stopwords - Stopwords to drop / 需丢弃的停用词
+   * @returns Tokens plus tokenizer provenance / 词元及分词器来源信息
+   */
   async tokenizeSearch(params: { query: string; dictionaryTerms: string[]; stopwords: string[] }): Promise<WorkerSearchTokenizationResult> {
     const response = await this.request('tokenizeSearch', params, 15_000);
     if (!Array.isArray(response.tokens)
@@ -102,11 +176,21 @@ export class PythonWorkerClient {
     };
   }
 
+  /**
+   * Cancels a running job by id.
+   * 按 ID 取消运行中的任务。
+   *
+   * @param jobId - Job id to cancel / 要取消的任务 ID
+   */
   async cancel(jobId: string): Promise<void> {
     if (!this.child) return;
     await this.request('cancel', { jobId }, 10_000);
   }
 
+  /**
+   * Gracefully stops the worker, escalating to kill if it does not exit in time.
+   * 优雅停止 Worker，未在时限内退出则强制结束进程。
+   */
   async shutdown(): Promise<void> {
     if (!this.child) return;
     const child = this.child;
@@ -137,7 +221,7 @@ export class PythonWorkerClient {
         false,
       );
     }
-    if (packaged && !fs.existsSync(path.join(cwd, 'runtime-manifest.json')) && !(process.platform === 'darwin' && fs.existsSync(path.join(cwd, 'pipeline_worker')))) {
+    if (packaged && !fs.existsSync(path.join(cwd, 'runtime-manifest.json')) && !fs.existsSync(path.join(cwd, 'pipeline_worker'))) {
       throw new WorkerClientError('WORKER_RUNTIME_MISSING', '文档处理运行时清单缺失，请重新安装Trellora；笔记编辑和文件浏览仍可正常使用。', false);
     }
 
@@ -204,8 +288,9 @@ export class PythonWorkerClient {
         reject(new WorkerClientError('WORKER_TIMEOUT', `文档处理 Worker 在 ${Math.round(timeoutMs / 1000)} 秒内未响应。`, true));
       }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
-      // Keep request JSON ASCII-safe as well. This protects Windows packaged
+      // Keep request JSON ASCII-safe as well. This protects packaged
       // runtimes whose stdin still uses a legacy code page before reconfigure.
+      // 请求 JSON 同样保持 ASCII 安全。这保护发布版运行时——其 stdin 在 reconfigure 之前仍使用旧代码页。
       child.stdin.write(`${stringifyWorkerRequest({ id, method, params })}\n`);
     } catch (error) {
       reject(error instanceof WorkerClientError ? error : new WorkerClientError('WORKER_REQUEST_FAILED', String(error), true));
@@ -267,7 +352,11 @@ const MINIMUM_PYTHON_MAJOR = 3;
 const MINIMUM_PYTHON_MINOR = 10;
 let systemPythonProbe: Promise<string | null> | null = null;
 
-/** 校验解释器满足 Worker 源码的版本下限（graph_leiden 等使用 PEP 604 联合类型，需 3.10+）。 */
+/**
+ * Verifies the interpreter meets the worker source's minimum version (graph_leiden
+ * uses PEP 604 union types, requiring 3.10+).
+ * 校验解释器满足 Worker 源码的版本下限（graph_leiden 等使用 PEP 604 联合类型，需 3.10+）。
+ */
 function probePythonVersion(executable: string): Promise<boolean> {
   return new Promise((resolve) => {
     let child: ReturnType<typeof spawn>;
@@ -297,7 +386,12 @@ function probePythonVersion(executable: string): Promise<boolean> {
   });
 }
 
-/** 从 Finder 启动时 PATH 是干净的 /usr/bin:/bin，裸 python3 会命中系统 3.9；按绝对路径优先级探测。 */
+/**
+ * 从 Finder 启动时 PATH 是干净的 /usr/bin:/bin，裸 python3 会命中系统 3.9；按绝对路径优先级探测。
+ * When launched from Finder the PATH is a clean /usr/bin:/bin, so a bare python3 resolves to the system 3.9; candidates are probed by absolute-path priority.
+ *
+ * @returns Candidate interpreter paths in priority order / 按优先级排列的候选解释器路径
+ */
 function darwinPythonCandidates(): string[] {
   const candidates: string[] = [];
   const configured = process.env.MENGHAN_PIPELINE_PYTHON?.trim();
@@ -318,7 +412,12 @@ function darwinPythonCandidates(): string[] {
   return candidates;
 }
 
-/** 进程内一次性探测可用解释器；结果缓存，安装新 Python 后重启应用即可生效。 */
+/**
+ * 进程内一次性探测可用解释器；结果缓存，安装新 Python 后重启应用即可生效。
+ * Probes for a usable interpreter once per process; the result is cached, so a restart picks up newly installed Pythons.
+ *
+ * @returns Compatible interpreter path or null / 兼容解释器路径，找不到时为 null
+ */
 function findCompatibleSystemPython(): Promise<string | null> {
   systemPythonProbe ??= (async () => {
     for (const candidate of darwinPythonCandidates()) {
@@ -333,24 +432,18 @@ function findCompatibleSystemPython(): Promise<string | null> {
 async function resolveWorkerCommand(): Promise<WorkerCommand> {
   const developmentDirectory = path.resolve(__dirname, '../pipeline-python');
   if (!app.isPackaged) {
-    const venvPython = path.join(developmentDirectory, '.venv', process.platform === 'darwin' ? 'bin' : 'Scripts', process.platform === 'darwin' ? 'python' : 'python.exe');
+    const venvPython = path.join(developmentDirectory, '.venv', 'bin', 'python');
     if (fs.existsSync(venvPython)) return { executable: venvPython, args: ['-m', 'pipeline_worker'], cwd: developmentDirectory, packaged: false };
-    if (process.platform === 'darwin') {
-      const systemPython = await findCompatibleSystemPython();
-      if (!systemPython) throw new WorkerClientError('WORKER_RUNTIME_MISSING', `开发环境缺少 Python ${MINIMUM_PYTHON_MAJOR}.${MINIMUM_PYTHON_MINOR}+，请创建 pipeline-python/.venv 或安装 Homebrew Python 后重试。`, false);
-      return { executable: systemPython, args: ['-m', 'pipeline_worker'], cwd: developmentDirectory, packaged: false };
-    }
-    return { executable: 'python', args: ['-m', 'pipeline_worker'], cwd: developmentDirectory, packaged: false };
+    const systemPython = await findCompatibleSystemPython();
+    if (!systemPython) throw new WorkerClientError('WORKER_RUNTIME_MISSING', `开发环境缺少 Python ${MINIMUM_PYTHON_MAJOR}.${MINIMUM_PYTHON_MINOR}+，请创建 pipeline-python/.venv 或安装 Homebrew Python 后重试。`, false);
+    return { executable: systemPython, args: ['-m', 'pipeline_worker'], cwd: developmentDirectory, packaged: false };
   }
   const runtimeDirectory = path.join(process.resourcesPath, 'pipeline-runtime');
-  if (process.platform === 'darwin') {
-    const bundledPython = path.join(runtimeDirectory, 'python-worker');
-    if (fs.existsSync(bundledPython)) return { executable: bundledPython, args: ['-E', '-m', 'pipeline_worker'], cwd: runtimeDirectory, packaged: true };
-    const systemPython = await findCompatibleSystemPython();
-    if (!systemPython) throw new WorkerClientError('WORKER_RUNTIME_MISSING', `文档处理需要 Python ${MINIMUM_PYTHON_MAJOR}.${MINIMUM_PYTHON_MINOR} 或更高版本，当前系统未找到可用解释器。请安装 Homebrew Python（brew install python@3.12）后重启应用；笔记编辑和文件浏览仍可正常使用。`, false);
-    return { executable: systemPython, args: ['-E', '-m', 'pipeline_worker'], cwd: runtimeDirectory, packaged: true };
-  }
-  return { executable: path.join(runtimeDirectory, 'python-worker.exe'), args: ['-E', '-m', 'pipeline_worker'], cwd: runtimeDirectory, packaged: true };
+  const bundledPython = path.join(runtimeDirectory, 'python-worker');
+  if (fs.existsSync(bundledPython)) return { executable: bundledPython, args: ['-E', '-m', 'pipeline_worker'], cwd: runtimeDirectory, packaged: true };
+  const systemPython = await findCompatibleSystemPython();
+  if (!systemPython) throw new WorkerClientError('WORKER_RUNTIME_MISSING', `文档处理需要 Python ${MINIMUM_PYTHON_MAJOR}.${MINIMUM_PYTHON_MINOR} 或更高版本，当前系统未找到可用解释器。请安装 Homebrew Python（brew install python@3.12）后重启应用；笔记编辑和文件浏览仍可正常使用。`, false);
+  return { executable: systemPython, args: ['-E', '-m', 'pipeline_worker'], cwd: runtimeDirectory, packaged: true };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

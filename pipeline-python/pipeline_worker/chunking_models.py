@@ -1,4 +1,11 @@
-"""Parent/Child chunking domain models and deterministic normalization helpers."""
+"""
+Module: chunking_models
+Parent/Child chunking domain models and deterministic normalization helpers.
+Provides data structures and utility functions for chunking operations.
+模块：chunking_models
+父子切块领域模型和确定性标准化辅助函数。
+提供切块操作的数据结构和实用函数。
+"""
 
 from __future__ import annotations
 
@@ -11,7 +18,10 @@ from .stage_errors import StageError
 
 
 def clean_text(value: Any) -> str:
-    """Normalize parser noise without flattening paragraph semantics."""
+    """
+    Normalize parser noise without flattening paragraph semantics.
+    标准化解析器噪声，同时保留段落语义。
+    """
     text = unicodedata.normalize('NFKC', str(value or '').replace('\ufeff', ''))
     text = text.replace('\r\n', '\n').replace('\r', '\n')
     text = ''.join(ch for ch in text if ch not in '\x00\x0b\x0c\x85\u200b')
@@ -22,6 +32,10 @@ def clean_text(value: Any) -> str:
 
 
 def dedupe_refs(refs: Iterable[Any]) -> list[dict[str, Any]]:
+    """
+    Deduplicate source references by their serialized content.
+    通过序列化内容对源引用进行去重。
+    """
     result: list[dict[str, Any]] = []
     seen: set[str] = set()
     for value in refs:
@@ -35,12 +49,20 @@ def dedupe_refs(refs: Iterable[Any]) -> list[dict[str, Any]]:
 
 
 def section_key(section_path: Any) -> str:
+    """
+    Generate a unique key for a section path.
+    为章节路径生成唯一键。
+    """
     if not isinstance(section_path, list):
         return ''
     return '/'.join(str(item.get('nodeId') or item.get('path') or item.get('text') or '') for item in section_path if isinstance(item, dict))
 
 
 def section_title(section_path: Any) -> str:
+    """
+    Extract a human-readable title from a section path.
+    从章节路径提取人类可读的标题。
+    """
     if not isinstance(section_path, list):
         return ''
     values = [clean_text(item.get('text')) for item in section_path if isinstance(item, dict) and clean_text(item.get('text'))]

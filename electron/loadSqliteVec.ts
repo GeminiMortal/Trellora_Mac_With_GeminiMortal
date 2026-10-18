@@ -1,15 +1,29 @@
+/**
+ * Resolves and loads the native sqlite-vec extension for vector search databases.
+ * 解析并为向量检索数据库加载原生 sqlite-vec 扩展。
+ */
 import fs from 'node:fs';
 import path from 'node:path';
 import type Database from 'better-sqlite3';
 
-/** Native SQLite loading needs a physical extension path; an ASAR virtual path cannot be loaded. */
+/**
+ * Native SQLite loading needs a physical extension path; an ASAR virtual path cannot be loaded.
+ * SQLite 原生加载需要物理扩展文件路径；ASAR 虚拟路径无法被加载。
+ *
+ * @returns Absolute path to the packaged extension, or an empty string outside packaged runs / 已打包扩展的绝对路径；非打包运行时返回空字符串
+ */
 export function sqliteVecPackagedExtensionPath(): string {
   const resourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : '';
   if (!resourcesPath) return '';
-  if (process.platform === 'darwin') return path.join(resourcesPath, 'app.asar.unpacked', 'node_modules', 'sqlite-vec-darwin-arm64', 'vec0.dylib');
-  return path.join(resourcesPath, 'app.asar.unpacked', 'node_modules', 'sqlite-vec-windows-x64', 'vec0.dll');
+  return path.join(resourcesPath, 'app.asar.unpacked', 'node_modules', 'sqlite-vec-darwin-arm64', 'vec0.dylib');
 }
 
+/**
+ * Loads sqlite-vec into a database, preferring the packaged binary and falling back to the installed module.
+ * 将 sqlite-vec 加载进数据库：优先使用打包二进制，回退到已安装模块。
+ *
+ * @param database - Open better-sqlite3 database to extend / 需要扩展的已打开 better-sqlite3 数据库
+ */
 export function loadSqliteVec(database: Database.Database): void {
   const packaged = sqliteVecPackagedExtensionPath();
   if (packaged && fs.existsSync(packaged)) database.loadExtension(packaged);

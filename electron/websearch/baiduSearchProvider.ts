@@ -1,7 +1,11 @@
-import type { WebSearchProviderAdapter, WebSearchResult } from './webSearchTypes';
-import { WEB_SEARCH_TIMEOUT_MS } from './webSearchTypes';
+import type { WebSearchProviderAdapter, WebSearchResult } from './webSearchTypes.ts';
+import { WEB_SEARCH_TIMEOUT_MS } from './webSearchTypes.ts';
 
 /**
+ * Baidu AI Search adapter (aligned with WeKnora internal/infrastructure/web_search/baidu.go).
+ * Baidu Qianfan AI Search API: POST qianfan.baidubce.com/v2/ai_search/web_search.
+ * Query length is capped at 72 units (CJK/full-width characters count as 2); overlong queries are conservatively truncated.
+ * Aligned with WeKnora: HTTP 200 may still carry a business error code (code !== 0), which must be raised explicitly. The API key only goes into request headers.
  * 百度 AI 搜索适配器（对标 WeKnora internal/infrastructure/web_search/baidu.go）。
  * 百度千帆 AI Search API：POST qianfan.baidubce.com/v2/ai_search/web_search。
  * 查询长度上限 72 单元（CJK/全角按 2 计），超限保守截断；
@@ -10,13 +14,19 @@ import { WEB_SEARCH_TIMEOUT_MS } from './webSearchTypes';
 const BAIDU_AI_SEARCH_ENDPOINT = 'https://qianfan.baidubce.com/v2/ai_search/web_search';
 const BAIDU_MAX_QUERY_UNITS = 72;
 
+/**
+ * Baidu AI Search provider adapter, registered under id "baidu".
+ * 百度 AI 搜索适配器，注册 id 为 "baidu"。
+ */
 export const baiduSearchProvider: WebSearchProviderAdapter = {
   id: 'baidu',
   label: '百度AI搜索',
   description: '百度千帆 AI Search API，需要 API Key；国内可达性好，适合中文检索。',
   requirements: 'api-key',
   docsUrl: 'https://cloud.baidu.com/doc/AppBuilder/s/qlvEcai0p',
+  /** Checks that a Baidu API key is configured / 校验百度 API Key 是否已配置 */
   validateConfig: (config) => (config.baidu?.apiKey?.trim() ? undefined : '「百度AI搜索」需要配置 API Key 后才能使用。'),
+  /** Executes a search against Baidu Qianfan AI Search / 调用百度千帆 AI Search 执行搜索 */
   search: async ({ query, maxResults, config, signal }) => {
     const apiKey = config.baidu?.apiKey?.trim();
     if (!apiKey) throw new Error('尚未配置百度AI搜索 API Key。');
@@ -37,6 +47,7 @@ export const baiduSearchProvider: WebSearchProviderAdapter = {
       throw new Error(`百度AI搜索请求失败（HTTP ${response.status}）。`);
     }
     const payload = await response.json() as BaiduSearchResponse;
+    // Aligned with WeKnora: HTTP 200 may still carry business error codes (invalid key / quota exhausted); raise an error instead of silently returning empty results.
     // 对标 WeKnora：HTTP 200 仍可能携带业务错误码（如密钥无效/额度不足），必须显式报错而非静默空结果。
     if (typeof payload?.code === 'number' && payload.code !== 0) {
       const message = typeof payload.message === 'string' && payload.message.trim() ? payload.message.trim() : '未知错误';
@@ -61,6 +72,7 @@ export const baiduSearchProvider: WebSearchProviderAdapter = {
     }
     return results;
   },
+  /** Probes connectivity with a minimal "ping" query / 用最小 ping 查询探测连接可用性 */
   testConnection: async (config) => {
     try {
       const results = await baiduSearchProvider.search({
@@ -73,7 +85,10 @@ export const baiduSearchProvider: WebSearchProviderAdapter = {
   },
 };
 
-/** 百度文档查询上限 72 单元，CJK/全角按 2 计；与 WeKnora normalizeBaiduQuery 同款的保守宽度模型。 */
+/**
+ * Baidu document query limit is 72 units, with CJK/full-width counting as 2; conservative width model matching WeKnora normalizeBaiduQuery.
+ * 百度文档查询上限 72 单元，CJK/全角按 2 计；与 WeKnora normalizeBaiduQuery 同款的保守宽度模型。
+ */
 function normalizeBaiduQuery(query: string): string {
   const trimmed = query.trim();
   if (!trimmed) return '';
@@ -91,6 +106,7 @@ function normalizeBaiduQuery(query: string): string {
   return out.trim();
 }
 
+/** Width of one query unit: ASCII counts 1, anything else counts 2 / 单个查询单元宽度：ASCII 计 1，其余计 2 */
 function queryUnitWidth(char: string): number {
   const codePoint = char.codePointAt(0) ?? 0;
   return codePoint <= 0x7f ? 1 : 2;
@@ -98,7 +114,10 @@ function queryUnitWidth(char: string): number {
 
 const baiduDatePattern = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/;
 
-/** 把 "2025-4-24" / "2025-04-27 18:02" 等变体归一为零填充格式；无法识别时原样保留。 */
+/**
+ * Normalize "2025-4-24" / "2025-04-27 18:02" style variants into a zero-padded format; unrecognized values are kept as-is.
+ * 把 "2025-4-24" / "2025-04-27 18:02" 等变体归一为零填充格式；无法识别时原样保留。
+ */
 function normalizeBaiduDate(date: string): string {
   const match = baiduDatePattern.exec(date);
   if (!match) return date;
@@ -106,6 +125,7 @@ function normalizeBaiduDate(date: string): string {
   return `${match[1]}-${pad(match[2])}-${pad(match[3])} ${pad(match[4])}:${pad(match[5])}:${pad(match[6])}`;
 }
 
+/** Raw Baidu AI Search response shape; fields stay unknown for defensive parsing / 百度 AI Search 原始响应结构；字段保持 unknown 以便防御式解析 */
 interface BaiduSearchResponse {
   references?: Array<{ id?: unknown; title?: unknown; url?: unknown; content?: unknown; date?: unknown; type?: unknown }>;
   request_id?: unknown;

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Group, Paper, Stack, Text } from '@mantine/core';
-import type { OnboardingState } from '../../../shared/onboarding';
-import { t, useI18n } from '../../i18n';
+import type { OnboardingState } from '../../../shared/onboarding.ts';
+import { t, useI18n } from '../../i18n/index.ts';
 
 /** Resume the same progress; completed users can review without resetting it. */
 export default function FirstRunGuide({ onOpen }: { onOpen: () => void }) {

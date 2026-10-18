@@ -1,6 +1,6 @@
 import { BaseEdge, type Edge, type EdgeProps } from '@xyflow/react';
 import type { CSSProperties } from 'react';
-import { createWikiCurvePath } from '../../wiki/wikiLayout';
+import { createWikiCurvePath } from './data/wikiLayout.ts';
 
 export type WikiCurveEdgeData = {
   branchColor: string;

@@ -1,4 +1,13 @@
-"""库级图装配阶段（graph-v3）：消费已提交的 entities 产物，构建加权无向图并跑层级社区检测。
+"""
+Module: graph_stage
+Library-level graph assembly stage (graph-v3). Consumes committed entity
+products, builds a weighted undirected graph, and runs hierarchical community detection.
+
+Worker only reads each document's 09-entities product and writes to Electron's
+assigned output directory; it does not touch SQLite, keys, or model configuration.
+
+模块：graph_stage
+库级图装配阶段（graph-v3）：消费已提交的 entities 产物，构建加权无向图并跑层级社区检测。
 
 Worker 只读各文档的 09-entities 产物，写 Electron 分配的输出目录；
 不接触 SQLite、密钥或模型配置（方案 §3.2）。
@@ -17,15 +26,20 @@ from typing import Any, Callable
 from .graph_leiden import hierarchical_communities, normalize_leiden_config
 from .stage_errors import StageCancelled, StageError
 
+# Schema version for graph stage / 图阶段的 schema 版本
 GRAPH_SCHEMA_VERSION = 3
+# Maximum characters for node descriptions / 节点描述的最大字符数
 DESCRIPTION_LIMIT = 2000
+# Maximum characters for edge descriptions / 边描述的最大字符数
 EDGE_DESCRIPTION_LIMIT = 500
 
+# Edge weight = PMI co-occurrence + LLM strength, normalized to 1~10 (inspired by WeKnora, see P0-1).
 # 关系权重 = PMI 共现分量 + LLM 强度分量，归一化后压到 1~10（借鉴 WeKnora，见优化方案 P0-1）。
 PMI_WEIGHT = 0.6
 STRENGTH_WEIGHT = 0.4
 WEIGHT_MIN = 1
 WEIGHT_MAX = 10
+# Weight calculation configuration / 权重计算配置
 WEIGHT_CONFIG = {
     'version': 'pmi-v2',
     'formula': 'weight = 1 + 9 * (0.6 * norm(PMI) + 0.4 * norm(strengthMean))',
@@ -34,9 +48,11 @@ WEIGHT_CONFIG = {
     'strengthAggregation': 'mean',
     'scale': [WEIGHT_MIN, WEIGHT_MAX],
 }
+# Chunk graph projection: skip when same-document chunk pairs exceed limit to prevent hub×hub edge explosion.
 # chunk 图投影：单条关系两端同文档 chunk 对超过上限时跳过，防止 hub×hub 边爆炸。
 CHUNK_EDGE_PAIR_LIMIT = 200
 
+# Type alias for progress callback / 进度回调的类型别名
 ProgressFn = Callable[[int, int | None, str, str], None]
 
 

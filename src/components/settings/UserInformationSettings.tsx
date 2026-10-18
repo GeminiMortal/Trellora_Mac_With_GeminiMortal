@@ -1,4 +1,4 @@
-import { localizeOptions, t, useI18n } from '../../i18n';
+import { localizeOptions, t, useI18n } from '../../i18n/index.ts';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   ActionIcon,
@@ -21,9 +21,9 @@ import {
   Tooltip,
 } from '@mantine/core';
 import { Check, Database, FileDown, FileUp, Pencil, Plus, RefreshCw, Sparkles, Trash2, X } from 'lucide-react';
-import { MemoryProposalReviewDialog } from './MemoryProposalReviewDialog';
-import { reviewReasonLabel } from './memoryPresentation';
-import type { MemoryProposalContext, MemoryProposalReview, MemoryConsolidationPreview, MemoryPage, MemoryItemCounts } from '../../../electron/knowledge/memory/memoryTypes';
+import { MemoryProposalReviewDialog } from './MemoryProposalReviewDialog.tsx';
+import { reviewReasonLabel } from './memoryPresentation.ts';
+import type { MemoryProposalContext, MemoryProposalReview, MemoryConsolidationPreview, MemoryPage, MemoryItemCounts } from '../../../electron/knowledge/memory/memoryTypes.ts';
 import type {
   ManualMemoryInput,
   MemoryDocumentAffinity,

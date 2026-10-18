@@ -1,3 +1,7 @@
+/**
+ * Preload for the external web viewer: mounts an isolated navigation toolbar and bridges its IPC events.
+ * 外部网页查看器的 preload：挂载隔离的导航工具栏，并桥接其 IPC 事件。
+ */
 import { ipcRenderer } from 'electron';
 
 type ExternalWebNavigationAction = 'back' | 'forward' | 'reload' | 'close';
@@ -20,6 +24,8 @@ function updateNavigationButtons(): void {
   if (forwardButton) forwardButton.disabled = !navigationState.canGoForward;
 }
 
+// Navigation is forwarded to the main process; the renderer never drives the webContents itself.
+// 导航转发给主进程；渲染进程从不直接操作 webContents。
 function requestNavigation(action: ExternalWebNavigationAction): void {
   ipcRenderer.send('external-web-navigation', action);
 }
@@ -36,11 +42,15 @@ function createToolbarButton(action: ExternalWebNavigationAction, label: string,
 }
 
 function mountExternalWebToolbar(): void {
+  // Idempotent mount: repeated calls (e.g. DOMContentLoaded races) never duplicate the toolbar.
+  // 幂等挂载：重复调用（如 DOMContentLoaded 竞态）不会重复创建工具栏。
   if (document.getElementById('menghan-external-web-toolbar-host')) return;
 
   const host = document.createElement('div');
   host.id = 'menghan-external-web-toolbar-host';
   host.setAttribute('aria-label', '网页导航');
+  // Closed shadow root keeps the toolbar styles and DOM unreachable from the guest page's scripts.
+  // closed Shadow Root 使工具栏样式与 DOM 不可被访客页面脚本访问。
   const shadow = host.attachShadow({ mode: 'closed' });
   const style = document.createElement('style');
   style.textContent = `

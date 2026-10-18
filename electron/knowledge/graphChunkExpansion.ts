@@ -1,12 +1,19 @@
+/**
+ * Graph-based chunk expansion: expands retrieval seeds via graph neighbor edges.
+ * 基于图的块扩展：通过图邻居边扩展检索种子。
+ */
+
 import type Database from 'better-sqlite3';
 import { openGraphDatabase, searchGraphChunkEdgeNeighbors } from '../pipeline/graphProjection';
 import type { HybridChildFusion } from './hybridRetrievalFusion';
 
-/** 图扩展预算（优化方案 P0-2）：融合结果 Top-10 作种子，每种子最多 2 个邻居，总量封顶 6 条新块。 */
+/** Seed limit for graph expansion. / 图扩展的种子上限。 */
 export const GRAPH_EXPANSION_SEED_LIMIT = 10;
+/** Maximum neighbors per seed. / 每个种子的最大邻居数。 */
 export const GRAPH_EXPANSION_PER_SEED_LIMIT = 2;
+/** Total new chunks cap from graph expansion. / 图扩展的新块总上限。 */
 export const GRAPH_EXPANSION_TOTAL_LIMIT = 6;
-/** 一跳补充的距离衰减；补充块合成 rrf 分 = 种子 rrf × (边权/10) × 衰减。 */
+/** Distance decay for one-hop expansion. / 一跳扩展的距离衰减系数。 */
 export const GRAPH_EXPANSION_DECAY = 0.5;
 /** 图装配阶段已把关系权重归一化到 1~10（P0-1），chunk 边权同尺度。 */
 const GRAPH_WEIGHT_SCALE_MAX = 10;

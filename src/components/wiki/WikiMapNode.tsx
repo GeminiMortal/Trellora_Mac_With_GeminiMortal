@@ -1,9 +1,9 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import { ActionIcon, Badge, Tooltip } from '@mantine/core';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { ChevronDown, ChevronRight, FileText, Sparkles } from 'lucide-react';
 import { useLayoutEffect, useRef, type CSSProperties, type KeyboardEvent } from 'react';
-import type { WikiMapNode as WikiMapNodeModel } from '../../wiki/wikiTypes';
+import type { WikiMapNode as WikiMapNodeModel } from './data/wikiTypes.ts';
 
 export type WikiMapNodeData = {
   node: WikiMapNodeModel;

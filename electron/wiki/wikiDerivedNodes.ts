@@ -1,10 +1,10 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { assertInsideDirectory } from '../pathGuards';
-import { atomicWriteJson, safeSegment } from '../pipeline/pathLayout';
-import { getLibraryMetaDirectory } from '../treeOrder';
-import type { WikiDocumentOutline, WikiDocumentOutlineNode } from '../wikiOutline';
+import { assertInsideDirectory } from '../files/pathGuards.ts';
+import { atomicWriteJson, safeSegment } from '../pipeline/pathLayout.ts';
+import { getLibraryMetaDirectory } from '../files/treeOrder.ts';
+import type { WikiDocumentOutline, WikiDocumentOutlineNode } from './wikiOutline.ts';
 
 /**
  * Wiki 派生节点持久化（方案 §6）。
@@ -22,6 +22,10 @@ const MAX_DERIVED_FILE_BYTES = 4 * 1024 * 1024;
 const MAX_DERIVED_TITLE_CHARS = 200;
 const MAX_DERIVED_MARKDOWN_CHARS = 20_000;
 
+/**
+ * Error codes for Wiki derived-node operations.
+ * Wiki 派生节点操作的错误码。
+ */
 export type WikiDerivedErrorCode =
   | 'WIKI_DERIVED_INVALID'
   | 'WIKI_DERIVED_PARENT_NOT_FOUND'
@@ -61,14 +65,26 @@ export interface WikiDerivedNodeView {
   updatedAt: string;
 }
 
+/**
+ * Result type for creating or updating a derived node.
+ * 创建或更新派生节点的结果类型。
+ */
 export type WikiDerivedNodeResult =
   | { ok: true; node: WikiDerivedNodeView }
   | { ok: false; error: { code: WikiDerivedErrorCode; message: string; diagnostic?: string } };
 
+/**
+ * Result type for deleting derived nodes.
+ * 删除派生节点的结果类型。
+ */
 export type WikiDerivedDeleteResult =
   | { ok: true; deletedNodeIds: string[] }
   | { ok: false; error: { code: WikiDerivedErrorCode; message: string; diagnostic?: string } };
 
+/**
+ * Request payload for creating a derived node.
+ * 创建派生节点的请求载荷。
+ */
 export interface WikiDerivedNodeRequest {
   documentId: string;
   parentId: string;
@@ -76,12 +92,20 @@ export interface WikiDerivedNodeRequest {
   markdown?: string;
 }
 
+/**
+ * Request payload for renaming a derived node.
+ * 重命名派生节点的请求载荷。
+ */
 export interface WikiDerivedRenameRequest {
   documentId: string;
   nodeId: string;
   title: string;
 }
 
+/**
+ * Request payload for deleting a derived node.
+ * 删除派生节点的请求载荷。
+ */
 export interface WikiDerivedDeleteRequest {
   documentId: string;
   nodeId: string;

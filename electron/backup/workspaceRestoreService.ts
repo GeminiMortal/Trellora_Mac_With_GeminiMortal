@@ -1,25 +1,44 @@
+/**
+ * Workspace restore service: preview, staged extraction with path migration, publication and registration.
+ * 工作区恢复服务：预览、带路径迁移的暂存解压、发布与注册。
+ */
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import Database from 'better-sqlite3';
-import type { BackupFile, BackupManifest, RestorePreview, RestoreStatus } from '../../shared/workspaceBackup';
-import type { TrustedMemoryScopeContext } from '../knowledge/memory/memoryTypes';
-import { assertInsideDirectory } from '../pathGuards';
-import { assertSeparateBackupTarget, hashFile, safeBackupSettings } from './snapshot';
-import { readBackupManifest, validateManifest, verifyBackupArchive } from './archive';
-import { assertRestoredDatabase, migrateMetadataFile, migratePhysicalDatabase, type PhysicalRestoreContext } from './physicalRestore';
-import { writeRestorePause } from './restorePause';
-import { renameWithWindowsRetryAsync } from '../fileSystemRename';
-import { loadSqliteVec } from '../loadSqliteVec';
-import { QA_MEMORY_SCHEMA_VERSION } from '../knowledge/qaMemoryDatabase';
+import type { BackupFile, BackupManifest, RestorePreview, RestoreStatus } from '../../shared/workspaceBackup.ts';
+import type { TrustedMemoryScopeContext } from '../knowledge/memory/memoryTypes.ts';
+import { assertInsideDirectory } from '../files/pathGuards.ts';
+import { assertSeparateBackupTarget, hashFile, safeBackupSettings } from './snapshot.ts';
+import { readBackupManifest, validateManifest, verifyBackupArchive } from './archive.ts';
+import { assertRestoredDatabase, migrateMetadataFile, migratePhysicalDatabase, type PhysicalRestoreContext } from './physicalRestore.ts';
+import { writeRestorePause } from './restorePause.ts';
+import { renameWithWindowsRetryAsync } from '../files/fileSystemRename.ts';
+import { loadSqliteVec } from '../loadSqliteVec.ts';
+import { QA_MEMORY_SCHEMA_VERSION } from '../knowledge/qa/qaMemoryDatabase.ts';
 
 type Phase = 'preview' | 'extracting' | 'migrating' | 'validated' | 'published' | 'registered' | 'completed' | 'failed';
 interface Journal { version: 1; id: string; archive: string; parent: string; manifest: BackupManifest; phase: Phase; warnings: string[]; stagedFiles?: BackupFile[]; settings?: Record<string, unknown>; importPreferences?: boolean; error?: string }
-/** Publication and registration are separate durable commits; recovery never merges into an existing root. */
+/**
+ * Publication and registration are separate durable commits; recovery never merges into an existing root.
+ * 发布与注册是各自独立的持久提交；恢复绝不合并进已有的根目录。
+ */
 export class WorkspaceRestoreService {
   private readonly operations = new Map<string, Journal>();
   private controller?: AbortController;
   private running?: Promise<RestoreStatus>;
+  /**
+   * Creates the restore service, loading any persisted journals on startup.
+   * 创建恢复服务，启动时加载已持久化的日志。
+   *
+   * @param options.userDataPath - Application user data root / 应用用户数据根目录
+   * @param options.version - Current application version / 当前应用版本
+   * @param options.protectedRoots - Returns directories that must not be overwritten / 返回不可覆盖的受保护目录
+   * @param options.resolveTarget - Resolves final trusted memory scope for the restored workspace / 为恢复的工作区解析最终可信记忆范围
+   * @param options.register - Registers restored libraries and optional preferences / 注册已恢复的库和可选偏好
+   * @param options.acquireRoots - Claims exclusive access to target roots / 声明对目标根目录的独占访问
+   * @param options.onStatus - Publishes restore status updates / 发布恢复状态更新
+   */
   constructor(private readonly options: {
     userDataPath: string; version: string; protectedRoots: () => string[];
     resolveTarget: (finalWorkspace: string) => TrustedMemoryScopeContext;
@@ -27,6 +46,10 @@ export class WorkspaceRestoreService {
     acquireRoots: (roots: string[]) => void;
     onStatus: (status: RestoreStatus) => void;
   }) { this.loadJournals(); }
+  /**
+   * Whether a restore task is currently running.
+   * 恢复任务是否正在运行。
+   */
   get busy(): boolean { return Boolean(this.running); }
   private paths(journal: Journal) {
     const parent = path.resolve(journal.parent);
@@ -72,7 +95,21 @@ export class WorkspaceRestoreService {
     validateManifest({ ...journal.manifest, files: files.filter(file => original.has(key(file))) });
     validateManifest({ ...journal.manifest, files: files.filter(file => !original.has(key(file))) });
   }
+  /**
+   * Returns previews of all non-completed, non-preview restore operations.
+   * 返回所有未完成、非预览状态的恢复操作预览。
+   *
+   * @returns Pending restore previews / 待处理的恢复预览列表
+   */
   pending(): RestorePreview[] { return [...this.operations.values()].filter(item => !['completed', 'preview'].includes(item.phase)).map(item => this.previewOf(item)); }
+  /**
+   * Creates a restore preview by reading and validating the backup manifest.
+   * 通过读取和校验备份清单创建恢复预览。
+   *
+   * @param archive - Path to the backup zip file / 备份 zip 文件路径
+   * @param parent - Target parent directory for the restore / 恢复的目标父目录
+   * @returns Restore preview with warnings and target layout / 含警告和目标布局的恢复预览
+   */
   async preview(archive: string, parent: string): Promise<RestorePreview> {
     if (this.busy) throw new Error('请先等待当前恢复任务结束。');
     const selectedParent = assertSeparateBackupTarget(parent, this.options.protectedRoots());
@@ -83,6 +120,14 @@ export class WorkspaceRestoreService {
     const journal: Journal = { version: 1, id: randomUUID(), archive: path.resolve(archive), parent: selectedParent, manifest, phase: 'preview', warnings: [...manifest.omitted, '远程处理任务保持暂停，密钥与远程授权需要重新设置。'] };
     this.save(journal); return this.previewOf(journal);
   }
+  /**
+   * Starts the staged restore for a previously created preview.
+   * 为先前创建的预览启动暂存恢复。
+   *
+   * @param id - Restore operation id from preview / 从预览获得的恢复操作标识
+   * @param importPreferences - Whether to import backed-up settings / 是否导入备份的设置
+   * @returns Promise resolving to final restore status / 兑现为最终恢复状态的 Promise
+   */
   start(id: string, importPreferences = false): Promise<RestoreStatus> {
     if (this.busy) return Promise.reject(new Error('已有恢复任务正在执行。'));
     const journal = this.operations.get(id); if (!journal) return Promise.reject(new Error('恢复预览已经失效，请重新选择备份。'));
@@ -90,7 +135,15 @@ export class WorkspaceRestoreService {
     journal.importPreferences = importPreferences === true;
     const task = this.execute(journal, controller.signal).finally(() => { this.running = undefined; this.controller = undefined; }); this.running = task; return task;
   }
+  /**
+   * Cancels the currently running restore via its abort controller.
+   * 通过中止控制器取消当前正在运行的恢复。
+   */
   cancel(): void { this.controller?.abort(); }
+  /**
+   * Cancels any running restore and waits for it to settle.
+   * 取消正在运行的恢复并等待其结束。
+   */
   async shutdown(): Promise<void> { this.cancel(); await this.running?.catch(() => undefined); }
   private async execute(journal: Journal, signal: AbortSignal): Promise<RestoreStatus> {
     const preview = this.previewOf(journal), { stage, final } = this.paths(journal);

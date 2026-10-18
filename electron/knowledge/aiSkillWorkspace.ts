@@ -1,11 +1,21 @@
+/**
+ * AI skill workspace synchronization: keeps assistant skills as readable workspace files.
+ * AI 技能工作区同步：将助手技能保持为可读的工作区文件。
+ */
+
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AiExtensionsSettings, AiSkill } from './aiTypes';
 import { ensureBundledSkills } from './bundledSkills';
 
+/** Directory name for AI skill workspace files. / AI 技能工作区文件的目录名。 */
 export const aiSkillWorkspaceDirectoryName = 'AI-Skill';
 const managedBy = 'menghan-notes';
 
+/**
+ * Get the absolute path to the AI skill workspace directory.
+ * 获取 AI 技能工作区目录的绝对路径。
+ */
 export function getAiSkillWorkspacePath(workspacePath: string): string {
   return path.join(path.resolve(workspacePath), aiSkillWorkspaceDirectoryName);
 }
@@ -14,6 +24,10 @@ export function getAiSkillWorkspacePath(workspacePath: string): string {
  * Keep assistant skills as readable workspace files. The Electron store remains
  * the validated runtime configuration; these files are a stable discovery
  * surface for later local AI capabilities and for users to inspect or back up.
+ */
+/**
+ * Synchronize AI skill definitions to the workspace as markdown files.
+ * 将 AI 技能定义同步为工作区中的 markdown 文件。
  */
 export function syncAiSkillsToWorkspace(workspacePath: string, settings: AiExtensionsSettings, builtinSkillsPath?: string): void {
   if (builtinSkillsPath) ensureBundledSkills(workspacePath, builtinSkillsPath);
@@ -35,6 +49,10 @@ export function syncAiSkillsToWorkspace(workspacePath: string, settings: AiExten
   }
 }
 
+/**
+ * Get the workspace file name for a skill.
+ * 获取技能的工作区文件名。
+ */
 export function getAiSkillFileName(skill: Pick<AiSkill, 'id'>): string {
   if (!/^skill_(builtin_[a-z]+|[A-Za-z0-9_-]{8,80})$/.test(skill.id)) throw new Error('AI 助手技能标识无效，无法写入工作区。');
   return `${skill.id}.md`;

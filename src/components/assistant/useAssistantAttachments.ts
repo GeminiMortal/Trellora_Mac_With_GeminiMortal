@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ClipboardEvent, DragEvent } from 'react';
 import type { AssistantAttachment } from '../../electron';
-import { relocateWorkspacePath, type WorkspaceDataChange } from '../../utils/workspaceDataEvents';
+import { relocateWorkspacePath, type WorkspaceDataChange } from '../../utils/wiki/workspaceDataEvents.ts';
 
 // 镜像 electron/knowledge/assistantTurnTypes.ts 的 Phase 1 常量。
 // 渲染进程不直接引入主进程模块，避免把校验逻辑打进浏览器 bundle；如需调整上限/大小请双侧同步。

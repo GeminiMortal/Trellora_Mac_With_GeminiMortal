@@ -1,11 +1,11 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import { Drawer, Text } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AssistantAiOptions, AssistantAttachment, MaterialsLibrarySummary, WikiAiMemory } from '../../electron';
-import { copyPlainText } from '../../utils/clipboard';
-import type { ResolvedTheme } from '../../utils/theme';
-import { relocateWorkspacePath, type WorkspaceDataChange } from '../../utils/workspaceDataEvents';
+import { copyPlainText } from '../../utils/editor/clipboard.ts';
+import type { ResolvedTheme } from '../../utils/ui/theme.ts';
+import { relocateWorkspacePath, type WorkspaceDataChange } from '../../utils/wiki/workspaceDataEvents.ts';
 import {
   listWikiKnowledgeBases,
   listWikiLibraryDocuments,
@@ -13,10 +13,10 @@ import {
   isWikiSiblingOrderConflict,
   reorderElectronWikiSiblingNodes,
   type WikiLibraryDocument,
-} from '../../wiki/wikiElectronDataSource';
-import { createMockWikiDataSource } from '../../wiki/wikiMockDataSource';
-import { ElectronWikiDataSource } from '../../wiki/wikiElectronAgentDataSource';
-import type { WikiActionKind, WikiBuildMode, WikiDataSource, WikiEvent, WikiMapInteractionMode, WikiMapNode, WikiNodeAiRequestOptions, WikiWorkspaceSnapshot } from '../../wiki/wikiTypes';
+} from './data/wikiElectronDataSource.ts';
+import { createMockWikiDataSource } from './data/wikiMockDataSource.ts';
+import { ElectronWikiDataSource } from './data/wikiElectronAgentDataSource.ts';
+import type { WikiActionKind, WikiBuildMode, WikiDataSource, WikiEvent, WikiMapInteractionMode, WikiMapNode, WikiNodeAiRequestOptions, WikiWorkspaceSnapshot } from './data/wikiTypes.ts';
 import {
   createEmptyNodeAiState,
   collectWikiSiblingOrderChanges,
@@ -25,18 +25,18 @@ import {
   reorderWikiSiblings,
   replaceWikiNodeAiState,
   updateWikiNode,
-} from '../../wiki/wikiViewState';
-import WikiDetailPane, { type WikiDetailTab } from './WikiDetailPane';
-import WikiDocumentListPane from './WikiDocumentListPane';
-import WikiEmptyState from './WikiEmptyState';
-import WikiMapCanvas from './WikiMapCanvas';
-import WikiNodeActionModal, { type WikiNodeAction } from './WikiNodeActionModal';
-import WikiNodeContextMenu from './WikiNodeContextMenu';
-import WikiOutlinePane from './WikiOutlinePane';
-import WikiOpenInNotesModal, { type WikiNoteSource } from './WikiOpenInNotesModal';
-import WikiSplitPane from './WikiSplitPane';
-import WikiStartModal from './WikiStartModal';
-import WikiToolbar from './WikiToolbar';
+} from './data/wikiViewState.ts';
+import WikiDetailPane, { type WikiDetailTab } from './WikiDetailPane.tsx';
+import WikiDocumentListPane from './WikiDocumentListPane.tsx';
+import WikiEmptyState from './WikiEmptyState.tsx';
+import WikiMapCanvas from './WikiMapCanvas.tsx';
+import WikiNodeActionModal, { type WikiNodeAction } from './WikiNodeActionModal.tsx';
+import WikiNodeContextMenu from './WikiNodeContextMenu.tsx';
+import WikiOutlinePane from './WikiOutlinePane.tsx';
+import WikiOpenInNotesModal, { type WikiNoteSource } from './WikiOpenInNotesModal.tsx';
+import WikiSplitPane from './WikiSplitPane.tsx';
+import WikiStartModal from './WikiStartModal.tsx';
+import WikiToolbar from './WikiToolbar.tsx';
 
 interface WikiViewProps {
   active: boolean;

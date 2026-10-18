@@ -1,7 +1,7 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import { ActionIcon, Badge, Group, Progress, Stack, Text, Tooltip } from '@mantine/core';
 import { CircleAlert, LoaderCircle, RotateCcw } from 'lucide-react';
-import type { WikiGenerationJob } from '../../wiki/wikiTypes';
+import type { WikiGenerationJob } from './data/wikiTypes.ts';
 
 interface WikiGenerationProgressProps {
   job: WikiGenerationJob;

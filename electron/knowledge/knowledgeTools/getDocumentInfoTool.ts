@@ -1,4 +1,4 @@
-import { listMaterialsDocuments } from '../../materialsLibrary';
+import { listMaterialsDocuments } from '../../library/materialsLibrary';
 import { readMaterialDocumentIndexStats } from '../../pipeline/materialChunkSearch';
 import type { ReActTool, ReActToolExecution } from '../reactAgent/toolRegistry';
 import { escapeXmlAttribute, escapeXmlText, type KnowledgeToolContext } from '../knowledgeToolContext';

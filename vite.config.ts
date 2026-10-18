@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { readFile } from 'node:fs/promises'
-import { startupSplashPlugin } from './scripts/startupSplashPlugin'
+import { startupSplashPlugin } from './scripts/build/startupSplashPlugin'
 
 const markdownExportFontQuery = '?markdown-export-inline'
 

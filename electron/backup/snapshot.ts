@@ -1,4 +1,8 @@
-import { editorPreferenceKeys } from '../../shared/editorPreferences';
+/**
+ * Backup snapshot creation: file inventory, consistent database backup, hashing, settings sanitization and zip packing.
+ * 备份快照创建：文件清单、一致性数据库备份、哈希计算、设置清洗与 zip 打包。
+ */
+import { editorPreferenceKeys } from '../../shared/editorPreferences.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -6,17 +10,33 @@ import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import Database from 'better-sqlite3';
 import * as yazl from 'yazl';
-import type { BackupManifest, BackupRegistration, BackupRoot } from '../../shared/workspaceBackup';
-import { assertInsideDirectory, resolveRealAncestors } from '../pathGuards';
-import { safeServiceEndpoint } from '../appLogger';
-import { validArchivePath, verifyBackupArchive, BACKUP_LIMITS } from './archive';
+import type { BackupManifest, BackupRegistration, BackupRoot } from '../../shared/workspaceBackup.ts';
+import { assertInsideDirectory, resolveRealAncestors } from '../files/pathGuards.ts';
+import { safeServiceEndpoint } from '../appLogger.ts';
+import { validArchivePath, verifyBackupArchive, BACKUP_LIMITS } from './archive.ts';
 
 const inside = (parent: string, child: string) => { const relative = path.relative(parent, child); return !relative || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)); };
+/**
+ * Validates that the backup target directory is outside all source roots (workspace and libraries).
+ * 校验备份目标目录位于所有源根目录（工作区和库）之外。
+ *
+ * @param target - Proposed backup target directory / 建议的备份目标目录
+ * @param sourceRoots - Source root directories to avoid overlap / 需要避免重叠的源根目录
+ * @returns Real path of the validated target / 校验通过的目标真实路径
+ */
 export function assertSeparateBackupTarget(target: string, sourceRoots: string[]): string {
   const real = resolveRealAncestors(target);
   for (const source of sourceRoots.map(resolveRealAncestors)) if (inside(source, real) || inside(real, source)) throw new Error('备份目标必须是源工作区和库之外的独立目录，且不能包含源目录。');
   return real;
 }
+/**
+ * Plans backup root entries and library registrations from the workspace path and library list.
+ * 根据工作区路径和库列表规划备份根条目与库注册关系。
+ *
+ * @param workspacePath - Absolute workspace path / 工作区绝对路径
+ * @param libraries - Registered libraries with kind, alias and path / 已注册的库（含类型、别名和路径）
+ * @returns Backup roots and registration entries / 备份根目录与注册条目
+ */
 export function planBackupRoots(workspacePath: string, libraries: Array<{ path: string; alias: string; kind: 'note' | 'materials'; icon?: string; origin?: 'created' | 'upgraded' }>): { roots: BackupRoot[]; registrations: BackupRegistration[] } {
   const workspace = resolveRealAncestors(workspacePath);
   const paths = [...new Set([workspace, ...libraries.map(library => resolveRealAncestors(library.path))])].sort((a, b) => a.length - b.length);
@@ -25,6 +45,13 @@ export function planBackupRoots(workspacePath: string, libraries: Array<{ path: 
   const registrations = libraries.map(library => { const real = resolveRealAncestors(library.path); const root = roots.find(candidate => inside(candidate.sourcePath, real))!; return { kind: library.kind, alias: library.alias, sourcePath: path.resolve(library.path), rootId: root.id, relativePath: path.relative(root.sourcePath, real).split(path.sep).join('/'), ...(library.icon ? { icon: library.icon } : {}), ...(library.origin ? { origin: library.origin } : {}) }; });
   return { roots, registrations };
 }
+/**
+ * Checks whether a relative path refers to an application database (index.db, assistant-memory.db, qa-memory.db, conversation-memory.db).
+ * 检查相对路径是否指向应用数据库（index.db、assistant-memory.db、qa-memory.db、conversation-memory.db）。
+ *
+ * @param relativePath - Relative file path from a backup root / 相对备份根的文件路径
+ * @returns Whether the path is an application database / 是否为应用数据库路径
+ */
 export const isApplicationDatabase = (relativePath: string) => /(?:^|\/)\.menghan-meta\/(?:index|assistant-memory)\.db$/u.test(relativePath) || /(?:^|\/)ConversationMemory\/(?:qa-memory|conversation-memory)\.db$/u.test(relativePath);
 const ignored = (relative: string) => /(?:^|\/)\.menghan-meta\/\.trellora-use\.lock(?:\/|$)/u.test(relative) || /(?:^|\/)\.menghan-meta\/restore-paused\.json$/u.test(relative);
 
@@ -46,12 +73,29 @@ async function inventory(root: string, signal: AbortSignal, directories?: string
   }
   await walk(root); return result.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 }
+/**
+ * Computes a SHA-256 hash of a file, reading it in streaming fashion with abort support.
+ * 以流式方式计算文件的 SHA-256 哈希，支持中止。
+ *
+ * @param file - Absolute file path / 绝对文件路径
+ * @param signal - Abort signal for the read / 读取中止信号
+ * @returns Hex-encoded SHA-256 digest / 十六进制编码的 SHA-256 摘要
+ */
 export async function hashFile(file: string, signal: AbortSignal): Promise<string> {
   const hash = crypto.createHash('sha256'); const stream = fs.createReadStream(file);
   try { for await (const chunk of stream) { signal.throwIfAborted(); hash.update(chunk); } } finally { stream.destroy(); }
   return hash.digest('hex');
 }
-/** Captures all application databases through SQLite's online backup API, never by live DB/WAL copying. */
+/**
+ * Captures all application databases through SQLite's online backup API, never by live DB/WAL copying.
+ * 通过 SQLite 在线备份 API 捕获所有应用数据库，绝不直接复制活跃的 DB/WAL 文件。
+ *
+ * @param options.manifest - Partial manifest to fill with file/directory entries / 要填充文件/目录条目的部分清单
+ * @param options.directory - Staging directory for snapshot files / 快照文件的暂存目录
+ * @param options.signal - Abort signal for the capture / 捕获中止信号
+ * @param options.onProgress - Optional progress callback (completed, total) / 可选的进度回调（已完成, 总计）
+ * @returns The completed manifest with all files / 含全部文件的完整清单
+ */
 export async function captureSnapshot(options: { manifest: Omit<BackupManifest, 'files' | 'directories' | 'omitted'>; directory: string; signal: AbortSignal; onProgress?: (completed: number, total: number) => void }): Promise<BackupManifest> {
   const manifest: BackupManifest = { ...options.manifest, files: [], directories: [], omitted: ['应用使用锁', '应用数据库对应 WAL/SHM', '远程凭据与 safeStorage 密文', '恢复任务暂停标记'] };
   const initial = new Map<string, SourceFile[]>();
@@ -99,7 +143,16 @@ export async function captureSnapshot(options: { manifest: Omit<BackupManifest, 
   }
   return manifest;
 }
-/** Only explicitly supported connection and preference fields leave userData. */
+/**
+ * Only explicitly supported connection and preference fields leave userData.
+ * 仅明确支持的连接字段和偏好设置字段会包含在用户数据中。
+ *
+ * @param preferences - User editor preferences / 用户编辑器偏好
+ * @param modelSettings - AI model configuration / AI 模型配置
+ * @param parsing - Parsing service endpoint config / 解析服务端点配置
+ * @param modelHub - Model hub / provider config / 模型中心/提供商配置
+ * @returns Sanitized settings safe for backup storage / 清洗后的设置，可安全存储于备份
+ */
 export function safeBackupSettings(preferences: Record<string, unknown>, modelSettings: unknown, parsing: { mineruEndpoint: string }, modelHub?: unknown): Record<string, unknown> {
   const allowed = [...editorPreferenceKeys, 'schemaVersion', 'theme', 'lightColorScheme', 'density', 'language', 'startupBehavior', 'externalLinkOpenMode', 'backupRetention', 'defaultEditorMode', 'autosaveDelayMs', 'previewPreference', 'leftSidebarWidth', 'knowledgePanelWidth'];
   const source = modelSettings as { defaultProfileId?: unknown; profiles?: Array<{ id: unknown; label?: unknown; name?: unknown; config: Record<string, unknown> }> } | undefined;
@@ -108,6 +161,17 @@ export function safeBackupSettings(preferences: Record<string, unknown>, modelSe
   const stringFields = (object: Record<string, unknown>, fields: string[]) => Object.fromEntries(fields.filter(key => typeof object[key] === 'string').map(key => [key, object[key]]));
   return { schemaVersion: 1, preferences: Object.fromEntries(allowed.filter(key => Object.hasOwn(preferences, key) && ['string', 'number', 'boolean'].includes(typeof preferences[key])).map(key => [key, preferences[key]])), aiModelSettings: { defaultProfileId: typeof source?.defaultProfileId === 'string' ? source.defaultProfileId : '', profiles: (Array.isArray(source?.profiles) ? source.profiles : []).flatMap(profile => typeof profile.id === 'string' && typeof (profile.label ?? profile.name) === 'string' && profile.config && typeof profile.config === 'object' ? [{ id: profile.id, label: profile.label ?? profile.name, config: { ...Object.fromEntries(configFields.filter(key => ['string', 'number', 'boolean'].includes(typeof profile.config[key])).map(key => [key, profile.config[key]])), endpoint: safeServiceEndpoint(String(profile.config.endpoint ?? '')), remoteContentConsent: false } }] : []) }, modelHub: { ollamaEndpoint: safeServiceEndpoint(typeof hub?.ollamaEndpoint === 'string' ? hub.ollamaEndpoint : ''), remoteConsent: false, providers: (Array.isArray(hub?.providers) ? hub.providers : []).map(provider => ({ ...stringFields(provider, ['id', 'label', 'api']), endpoint: safeServiceEndpoint(typeof provider.endpoint === 'string' ? provider.endpoint : '') })), slots: Object.fromEntries(['generation', 'embedding', 'rerank'].map(slot => [slot, stringFields(hub?.slots?.[slot] ?? {}, ['source', 'model'])])) }, parsing: { mineruEndpoint: safeServiceEndpoint(parsing.mineruEndpoint), cloudParsingConsent: false }, credentialsRequired: true };
 }
+/**
+ * Packs a verified snapshot directory into the final backup zip file.
+ * 将已验证的快照目录打包为最终备份 zip 文件。
+ *
+ * @param options.directory - Staged snapshot directory / 已暂存的快照目录
+ * @param options.target - Target zip file path / 目标 zip 文件路径
+ * @param options.manifest - Complete backup manifest / 完整备份清单
+ * @param options.settings - Sanitized settings object / 清洗后的设置对象
+ * @param options.signal - Abort signal / 中止信号
+ * @param options.onProgress - Optional progress callback / 可选的进度回调
+ */
 export async function packSnapshot(options: { directory: string; target: string; manifest: BackupManifest; settings: Record<string, unknown>; signal: AbortSignal; onProgress?: (completed: number, total: number) => void }): Promise<void> {
   const partial = `${options.target}.partial`; const zip = new yazl.ZipFile();
   const zipOutput = zip.outputStream as Readable;

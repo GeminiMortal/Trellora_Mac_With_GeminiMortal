@@ -1,5 +1,5 @@
 import MiniSearch from 'minisearch';
-import type { IndexedNote } from '../noteIndex';
+import type { IndexedNote } from '../note/noteIndex';
 import { normalizeTechnicalTerm, rejectsNumericVersionMismatch, resolveFuzzyRatio } from './lexicalMatchPolicy';
 
 export interface NoteSearchDocument {

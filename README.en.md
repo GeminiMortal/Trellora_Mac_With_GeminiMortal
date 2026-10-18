@@ -197,16 +197,11 @@ Gitee limits attachments to 100 MB. The DMG is split into two parts (`Trellora-1
 ```bash
 # macOS / Linux
 cat Trellora-1.2.0-arm64.dmg.part_* > Trellora-1.2.0-arm64.dmg
-
-# Windows
-copy /b Trellora-1.2.0-arm64.dmg.part_aa + Trellora-1.2.0-arm64.dmg.part_ab Trellora-1.2.0-arm64.dmg
 ```
 
 Open `Trellora-1.2.0-arm64.dmg` and drag Trellora.app into Applications.
 
 The app is distributed with an ad-hoc signature. If macOS Gatekeeper blocks it, right-click Trellora.app → Open, or allow it in System Settings → Privacy & Security.
-
-The upstream Windows x64 installer and portable package are available in the [original repository](https://gitee.com/eleven-lxs/trellora).
 
 ## Quick start
 
@@ -335,7 +330,7 @@ pnpm run build:mac
 pnpm run release:manifest
 ```
 
-The builder locates the interpreter through `python3`; set `MENGHAN_PIPELINE_PYTHON` to a specific Python 3 when necessary. Versions come from `package.json.version`. Output names are `trellora/Trellora-<version>-arm64.dmg` and `trellora/Trellora-<version>-arm64-mac.zip`. Packaging uses the `afterPack` hook for ad-hoc re-signing (avoids Gatekeeper "damaged" when no developer certificate is configured). Use `ELECTRON_MIRROR` when direct GitHub access is unreliable. The original Windows packaging workflow is preserved in `pnpm run build` (requires a Windows environment).
+The builder locates the interpreter through `python3`; set `MENGHAN_PIPELINE_PYTHON` to a specific Python 3 when necessary. Versions come from `package.json.version`. Output names are `trellora/Trellora-<version>-arm64.dmg` and `trellora/Trellora-<version>-arm64-mac.zip`. Packaging uses the `afterPack` hook for ad-hoc re-signing (avoids Gatekeeper "damaged" when no developer certificate is configured). Use `ELECTRON_MIRROR` when direct GitHub access is unreliable.
 
 ## Documentation and participation
 

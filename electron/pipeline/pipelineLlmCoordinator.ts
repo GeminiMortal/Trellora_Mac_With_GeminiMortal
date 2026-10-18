@@ -1,38 +1,84 @@
-import { generateAiText, getAiProviderConfig, getAiProviderStatus, getAiProviderStatusForConfig } from '../knowledge/aiProvider';
-import type { AiProviderConfig } from '../knowledge/aiTypes';
-import { PipelineStageError } from './stageErrors';
+/**
+ * Pipeline LLM coordinator: the single gateway for all LLM calls made by pipeline stages,
+ * with availability checks, bounded concurrency and stable error codes.
+ * 流水线 LLM 协调器：流水线各阶段发起 LLM 调用的唯一入口，提供可用性检查、有限并发与稳定错误码。
+ */
 
+import { generateAiText, getAiProviderConfig, getAiProviderStatus, getAiProviderStatusForConfig } from '../knowledge/ai/aiProvider.ts';
+import type { AiProviderConfig } from '../knowledge/ai/aiTypes.ts';
+import { PipelineStageError } from './stageErrors.ts';
+
+/**
+ * Kinds of LLM work the pipeline performs, each with its own error codes and prompts.
+ * 流水线执行的 LLM 工作类别，各有独立错误码与提示词。
+ */
 export type PipelineLlmCallKind = 'chunk-boundary' | 'graph-entities' | 'graph-community-summary' | 'graph-alias-arbitration';
 
+/**
+ * One LLM request prepared by a pipeline stage.
+ * 流水线阶段准备的一次 LLM 请求。
+ */
 export interface PipelineLlmRequest {
+  /** Correlation id echoed in the response / 响应回显的关联 ID */
   requestId: string;
+  /** Source document id / 源文档 ID */
   documentId: string;
+  /** Prompt payload text / 提示载荷文本 */
   text: string;
+  /** Hash of the input, used as a cache key / 作为缓存键的输入哈希 */
   inputHash: string;
+  /** Max characters of the payload / 载荷最大字符数 */
   maxChars: number;
+  /** Originating chunk id / 发起块 ID */
   chunkId?: string;
+  /** Originating parent chunk id / 发起父块 ID */
   parentChunkId?: string;
 }
 
+/**
+ * One LLM response matched to its request.
+ * 与请求配对的单条 LLM 响应。
+ */
 export interface PipelineLlmResponse {
+  /** Correlation id from the request / 来自请求的关联 ID */
   requestId: string;
+  /** Hash of the input, used as a cache key / 作为缓存键的输入哈希 */
   inputHash: string;
+  /** Raw model output text / 模型原始输出文本 */
   output: string;
 }
 
+/**
+ * Result of checking whether an LLM is ready for pipeline use.
+ * 检查 LLM 是否可用于流水线的结果。
+ */
 export interface PipelineLlmAvailability {
+  /** Whether the model is usable / 模型是否可用 */
   available: boolean;
+  /** Resolved model name / 解析出的模型名 */
   model: string;
+  /** Reason when unavailable / 不可用时的原因 */
   message?: string;
 }
 
-/** @deprecated 请使用 PipelineLlmRequest，保留别名仅为兼容既有导入。 */
+/**
+ * @deprecated Use PipelineLlmRequest; alias kept only for existing imports.
+ * @deprecated 请使用 PipelineLlmRequest，保留别名仅为兼容既有导入。
+ */
 export type ChunkLlmRequest = PipelineLlmRequest;
-/** @deprecated 请使用 PipelineLlmResponse。 */
+/**
+ * @deprecated Use PipelineLlmResponse.
+ * @deprecated 请使用 PipelineLlmResponse。
+ */
 export type ChunkLlmResponse = PipelineLlmResponse;
-/** @deprecated 请使用 PipelineLlmAvailability。 */
+/**
+ * @deprecated Use PipelineLlmAvailability.
+ * @deprecated 请使用 PipelineLlmAvailability。
+ */
 export type ChunkLlmAvailability = PipelineLlmAvailability;
 
+// Stable error codes per call kind, split by config / timeout / failure phase.
+// 按调用类别划分的稳定错误码，区分配置、超时与失败阶段。
 const callErrorCodes: Record<PipelineLlmCallKind, { config: string; timeout: string; failed: string }> = {
   'chunk-boundary': { config: 'CHUNK_LLM_CONFIG_REQUIRED', timeout: 'CHUNK_LLM_TIMEOUT', failed: 'CHUNK_LLM_REQUEST_FAILED' },
   'graph-entities': { config: 'GRAPH_LLM_CONFIG_REQUIRED', timeout: 'GRAPH_LLM_TIMEOUT', failed: 'GRAPH_LLM_REQUEST_FAILED' },
@@ -40,6 +86,8 @@ const callErrorCodes: Record<PipelineLlmCallKind, { config: string; timeout: str
   'graph-alias-arbitration': { config: 'GRAPH_ALIAS_LLM_CONFIG_REQUIRED', timeout: 'GRAPH_ALIAS_LLM_TIMEOUT', failed: 'GRAPH_ALIAS_LLM_REQUEST_FAILED' },
 };
 
+// User-facing labels used in error messages.
+// 错误信息中使用的面向用户的标签。
 const callLabels: Record<PipelineLlmCallKind, string> = {
   'chunk-boundary': '智能切块',
   'graph-entities': '实体关系抽取',
@@ -50,8 +98,17 @@ const callLabels: Record<PipelineLlmCallKind, string> = {
 /**
  * The only pipeline component allowed to call an LLM. It deliberately passes
  * no credentials to the Worker and never logs document content or model output.
+ * 流水线中唯一允许调用 LLM 的组件。它刻意不向 Worker 传递任何凭据，
+ * 也从不记录文档内容或模型输出。
  */
 export class PipelineLlmCoordinator {
+  /**
+   * Builds a stable fingerprint of the model configuration for cache keys.
+   * 为缓存键构建模型配置的稳定指纹。
+   *
+   * @param config - Optional provider config; falls back to the global config / 可选提供方配置；缺省时使用全局配置
+   * @returns Config fingerprint string / 配置指纹字符串
+   */
   fingerprint(config?: AiProviderConfig): string {
     const resolved = config ?? getAiProviderConfig();
     return [
@@ -63,6 +120,13 @@ export class PipelineLlmCoordinator {
     ].join('|');
   }
 
+  /**
+   * Checks whether the configured model is installed and reachable.
+   * 检查所配置模型是否已安装且可达。
+   *
+   * @param config - Optional provider config; falls back to the global config / 可选提供方配置；缺省时使用全局配置
+   * @returns Availability with model name and reason / 含模型名与原因的可用性结果
+   */
   async getAvailability(config?: AiProviderConfig): Promise<PipelineLlmAvailability> {
     const resolved = config ?? getAiProviderConfig();
     const model = String(resolved.model ?? '').trim();
@@ -75,6 +139,22 @@ export class PipelineLlmCoordinator {
     return { available: true, model };
   }
 
+  /**
+   * Runs a batch of LLM requests with bounded concurrency and fail-fast semantics.
+   * 以有限并发与快速失败语义执行一批 LLM 请求。
+   *
+   * @param input - Batch parameters / 批量参数
+   * @param input.requests - Requests to run / 待执行的请求
+   * @param input.callKind - Call kind selecting error codes and prompts / 选择错误码与提示词的调用类别
+   * @param input.timeoutMs - Per-request timeout in ms / 单次请求超时（毫秒）
+   * @param input.maxOutputTokens - Max output tokens per request / 单次请求最大输出 token 数
+   * @param input.signal - Abort signal for cancellation / 用于取消的中止信号
+   * @param input.providerConfig - Optional provider config / 可选提供方配置
+   * @param input.concurrency - Concurrency cap (default 1 serial); summary batches are capped at ≤3 (plan §3.3) / 并发上限（默认 1 串行）；社区摘要批量小调用限并发 ≤3（方案 §3.3）
+   * @param input.skipAvailabilityCheck - Skip per-call checks when the caller already verified availability, avoiding per-community probes for small batch calls (Ollama status is a network call) / 调用方已统一做过可用性检查时跳过逐次检查，避免批量小调用逐社区探测（Ollama 状态为网络调用）
+   * @param input.onProgress - Progress callback / 进度回调
+   * @returns Responses in request order / 按请求顺序返回的响应
+   */
   async completeRequests(input: {
     requests: PipelineLlmRequest[];
     callKind?: PipelineLlmCallKind;
@@ -82,9 +162,9 @@ export class PipelineLlmCoordinator {
     maxOutputTokens: number;
     signal: AbortSignal;
     providerConfig?: AiProviderConfig;
-    /** 并发上限（默认 1 串行）；社区摘要批量小调用限并发 ≤3（方案 §3.3）。 */
+    /** Concurrency cap (default 1 serial); summary batches are capped at ≤3 (plan §3.3). / 并发上限（默认 1 串行）；社区摘要批量小调用限并发 ≤3（方案 §3.3）。 */
     concurrency?: number;
-    /** 调用方已统一做过可用性检查时跳过逐次检查，避免批量小调用逐社区探测（Ollama 状态为网络调用）。 */
+    /** Skip per-call checks when the caller already verified availability, avoiding per-community probes for small batch calls (Ollama status is a network call). / 调用方已统一做过可用性检查时跳过逐次检查，避免批量小调用逐社区探测（Ollama 状态为网络调用）。 */
     skipAvailabilityCheck?: boolean;
     onProgress?: (completed: number, total: number) => void;
   }): Promise<PipelineLlmResponse[]> {
@@ -106,6 +186,8 @@ export class PipelineLlmCoordinator {
     let firstError: PipelineStageError | undefined;
     let completedCount = 0;
     let cursor = 0;
+    // Worker pool: each runner pulls the next request until the batch ends or an error aborts the pool.
+    // 工作池：每个 runner 依次领取下一个请求，直到批次结束或出错中止整个池。
     const runOne = async (): Promise<void> => {
       while (cursor < input.requests.length) {
         if (firstError || input.signal.aborted) return;
@@ -116,6 +198,8 @@ export class PipelineLlmCoordinator {
             model,
             prompt: buildPrompt(callKind, request.text),
             // 流水线结构化抽取默认非思考：避免推理模型把输出预算耗尽在思考链上导致 content 为空。
+            // Pipeline structured extraction defaults to non-thinking so reasoning
+            // models do not burn the output budget on chains of thought and return empty content.
             thinkingMode: 'simple',
             timeoutMs: input.timeoutMs,
             maxOutputTokens: input.maxOutputTokens,
@@ -126,6 +210,8 @@ export class PipelineLlmCoordinator {
           completedCount += 1;
           input.onProgress?.(completedCount, input.requests.length);
         } catch (error) {
+          // Keep the first error only; later failures must not overwrite it.
+          // 只保留第一个错误；后续失败不得覆盖它。
           if (firstError) return;
           if (input.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
             firstError = new PipelineStageError('STAGE_CANCELLED', '处理任务已取消。', true);
@@ -144,9 +230,14 @@ export class PipelineLlmCoordinator {
   }
 }
 
-/** @deprecated 请使用 PipelineLlmCoordinator。 */
+/**
+ * @deprecated Use PipelineLlmCoordinator.
+ * @deprecated 请使用 PipelineLlmCoordinator。
+ */
 export const ChunkLlmCoordinator = PipelineLlmCoordinator;
 
+// Builds the strict-JSON prompt for each call kind; payloads are wrapped so models treat text as data.
+// 为各类调用构建严格 JSON 提示词；载荷被包装，使模型把文本视为数据而非指令。
 function buildPrompt(callKind: PipelineLlmCallKind, text: string): string {
   if (callKind === 'chunk-boundary') {
     return [

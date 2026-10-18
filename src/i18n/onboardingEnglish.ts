@@ -1,3 +1,12 @@
+/**
+ * English translation map for the first-run onboarding guide UI copy.
+ * 首次使用引导界面文案的英文翻译映射。
+ */
+
+/**
+ * Maps Chinese onboarding strings to English translations.
+ * 将引导流程的中文文案映射为英文翻译。
+ */
 export const onboardingEnglish: Record<string, string> = {
   '使用引导暂时无法读取，可在设置中重试': 'The guide is temporarily unavailable. Try again in Settings.',
   '认识菜单': 'Explore menus', '配置 AI': 'Set up AI', '第一次提问': 'Ask a question', '引导步骤': 'Getting started steps',

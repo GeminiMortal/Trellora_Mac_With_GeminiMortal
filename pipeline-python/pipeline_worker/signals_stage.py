@@ -1,3 +1,12 @@
+"""
+Module: signals_stage
+Rule-based signal classification stage. Classifies each logical line into
+structural types (HEADING, BODY, LIST_ITEM, etc.) using pattern matching.
+模块：signals_stage
+基于规则的信号分类阶段。使用模式匹配将每个逻辑行分类为
+结构类型（HEADING、BODY、LIST_ITEM 等）。
+"""
+
 from __future__ import annotations
 
 import json
@@ -12,15 +21,22 @@ from .stage_errors import StageCancelled, StageError
 from .lines_stage import normalize_text
 
 
+# Schema version for signal output / 信号输出的 schema 版本
 SIGNAL_SCHEMA_VERSION = 1
+# Rule version identifier / 规则版本标识
 RULE_VERSION = 'p3-rules-7'
+# Batch size for signal processing / 信号处理的批次大小
 BATCH_SIZE = 800
+# Context text limit for batches / 批次的上下文文本限制
 CONTEXT_LIMIT = 8_000
+# Limit for title scanning / 标题扫描限制
 TITLE_SCAN_LIMIT = 50
+# Confidence thresholds for classification / 分类的置信度阈值
 LIST_CONFIDENCE_THRESHOLD = 0.35
 HEADING_CONFIDENCE_THRESHOLD = 0.85
 BASE_HEADING_CONFIDENCE = 0.50
 
+# All supported signal types / 所有支持的信号类型
 SIGNAL_TYPES = (
     'DOCUMENT_TITLE', 'HEADING', 'HEADING_CANDIDATE', 'STEP_ITEM', 'LIST_ITEM',
     'TABLE_ROW', 'QUOTE', 'BODY', 'BLANK', 'NOISE', 'SEPARATOR',
@@ -58,6 +74,10 @@ def run_signals_stage(
     progress: Callable[[int, int | None, str, str], None],
     stage_key: str = '',
 ) -> dict[str, Any]:
+    """
+    Execute the signal classification stage on logical lines.
+    对逻辑行执行信号分类阶段。
+    """
     lines_path = Path(input_path)
     output = Path(output_dir)
     if not lines_path.is_file():
@@ -161,6 +181,10 @@ def classify_line(
     previous_line: dict[str, Any] | None = None,
     next_line: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """
+    Classify a single logical line into a structural signal type.
+    将单个逻辑行分类为结构信号类型。
+    """
     raw_text = str(line.get('rawText') or '')
     normalized_text = str(line.get('normalizedText') or normalize_text(raw_text))
     line_no = int(line.get('lineNo', 0))
@@ -209,6 +233,10 @@ def _classify_type_with_evidence(
     next_line: dict[str, Any] | None = None,
     current_line: dict[str, Any] | None = None,
 ) -> tuple[str, str, float, str | None, dict[str, Any] | None]:
+    """
+    Classify line type with evidence and score breakdown.
+    使用证据和分数分解对行类型进行分类。
+    """
     if bool((current_line or {}).get('inCodeFence')):
         return 'BODY', 'fenced-code', 1.0, None, {'inCodeFence': True}
     if not text:
@@ -236,7 +264,7 @@ def _classify_type_with_evidence(
         return 'HEADING_CANDIDATE', 'ambiguous-outline-score', score, 'score-inconclusive', breakdown
     if _is_table_row(text):
         return 'TABLE_ROW', 'table-row', 0.96, None, None
-    if re.match(r'^\s*>\s?', text) or text.startswith(('“', '”')):
+    if re.match(r'^\s*>\s?', text) or text.startswith(('"', '"')):
         return 'QUOTE', 'quote', 0.95, None, None
     if re.match(r'^\s*(?:[-*+]\s+)?\[[ xX]\]\s+\S+', text):
         return 'LIST_ITEM', 'checkbox', 0.99, None, None
@@ -248,11 +276,16 @@ def _classify_type_with_evidence(
 
 
 def _parse_ambiguous_outline_marker(text: str) -> dict[str, Any] | None:
+    """
+    Parse ambiguous outline markers (e.g., "1.", "（一）", "第一").
+    解析模糊大纲标记（如 "1."、"（一）"、"第一"）。
+    """
     value = text.strip()
     arabic = re.match(r'^(?P<number>\d+)(?P<delimiter>[、.)．.])(?P<body>\s*\S.*)$', value)
     if arabic:
         body = str(arabic.group('body')).strip()
         # 1.2 is a hierarchical heading and is handled by numeric-heading above.
+        # 1.2 是层级标题，由上面的 numeric-heading 处理。
         if arabic.group('delimiter') in {'.', '．'} and body[:1].isdigit():
             return None
         return {
@@ -280,6 +313,10 @@ def _parse_ambiguous_outline_marker(text: str) -> dict[str, Any] | None:
 
 
 def _chinese_number_to_int(value: str) -> int | None:
+    """
+    Convert Chinese number string to integer.
+    将中文数字字符串转换为整数。
+    """
     if value.isdigit():
         return int(value)
     digits = {'零': 0, '〇': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9}
@@ -306,12 +343,14 @@ def _chinese_number_to_int(value: str) -> int | None:
 
 
 def _line_text(line: dict[str, Any] | None) -> str:
+    """Extract normalized text from a line dict. / 从行字典中提取标准化文本。"""
     if not isinstance(line, dict):
         return ''
     return str(line.get('normalizedText') or line.get('rawText') or '').strip()
 
 
 def _line_number(line: dict[str, Any] | None) -> int | None:
+    """Extract line number from a line dict. / 从行字典中提取行号。"""
     if not isinstance(line, dict):
         return None
     try:
@@ -321,12 +360,14 @@ def _line_number(line: dict[str, Any] | None) -> int | None:
 
 
 def _are_adjacent(left: dict[str, Any] | None, right: dict[str, Any] | None) -> bool:
+    """Check if two lines are adjacent (consecutive line numbers). / 检查两行是否相邻（连续行号）。"""
     left_no = _line_number(left)
     right_no = _line_number(right)
     return left_no is not None and right_no is not None and left_no + 1 == right_no
 
 
 def _looks_like_plain_heading_body(text: str) -> bool:
+    """Check if text looks like a plain heading body (short, no punctuation). / 检查文本是否像普通标题体（短、无标点）。"""
     if len(text) < 2 or len(text) > 80:
         return False
     if text.endswith(('。', '！', '？', '；', ':', '：', '，', ',', '.', '。')):
@@ -341,6 +382,10 @@ def _score_ambiguous_outline(
     next_line: dict[str, Any] | None,
     current_line: dict[str, Any] | None = None,
 ) -> tuple[float, dict[str, Any]]:
+    """
+    Score an ambiguous outline marker to determine if it's a heading or list item.
+    对模糊大纲标记进行评分，判断是标题还是列表项。
+    """
     marker = _parse_ambiguous_outline_marker(text) or {'family': 'unknown', 'number': None, 'body': text, 'marker': ''}
     previous_text = _line_text(previous_line)
     next_text = _line_text(next_line)
@@ -384,8 +429,12 @@ def _score_ambiguous_outline(
 
 
 def _is_separator(text: str) -> bool:
-    # Symbol-only lines (---, ***, - - -, ———) and bare heading markers with
-    # no following text are visual dividers, not heading candidates.
+    """
+    Check if text is a visual separator line (---, ***, - - -, ———).
+    Symbol-only lines and bare heading markers are visual dividers.
+    检查文本是否为视觉分隔线（---、***、- - -、———）。
+    纯符号行和裸标题标记是视觉分隔符。
+    """
     if re.match(r'^ {0,3}#{1,6}\s*$', text):
         return True
     stripped = text.replace(' ', '')
@@ -393,9 +442,12 @@ def _is_separator(text: str) -> bool:
 
 
 def _has_explicit_heading_syntax(text: str) -> bool:
-    # Explicit structural markers win over the repeated running-head
-    # heuristic so template documents (job posts, contracts) keep their
-    # repeated section headings.
+    """
+    Check for explicit structural markers (Markdown heading, CN chapter, appendix).
+    Explicit markers win over repeated running-head heuristic.
+    检查显式结构标记（Markdown 标题、中文章节、附录）。
+    显式标记优先于重复页眉启发式。
+    """
     return bool(
         MARKDOWN_HEADING_PATTERN.match(text)
         or CN_CHAPTER_PATTERN.match(text)
@@ -404,6 +456,10 @@ def _has_explicit_heading_syntax(text: str) -> bool:
 
 
 def _is_noise(text: str, line_no: int, total_lines: int, frequencies: Counter[str], first_lines: set[int], last_lines: set[int]) -> bool:
+    """
+    Detect noise lines: page numbers, copyright notices, repeated headers/footers.
+    检测噪声行：页码、版权声明、重复的页眉/页脚。
+    """
     if _has_explicit_heading_syntax(text):
         return False
     if re.match(r'^[-—]?\s*(?:第\s*)?\d+\s*(?:/\s*\d+\s*)?(?:页|page)?\s*[-—]?$', text, re.IGNORECASE):
@@ -414,6 +470,7 @@ def _is_noise(text: str, line_no: int, total_lines: int, frequencies: Counter[st
 
 
 def _is_table_row(text: str) -> bool:
+    """Check if text is a Markdown table row. / 检查文本是否为 Markdown 表格行。"""
     if not (text.startswith('|') and text.endswith('|')):
         return False
     cells = [cell.strip() for cell in text.strip('|').split('|')]
@@ -421,6 +478,10 @@ def _is_table_row(text: str) -> bool:
 
 
 def _looks_like_heading_candidate(text: str) -> bool:
+    """
+    Check if text looks like a potential heading candidate (short, no punctuation).
+    检查文本是否像潜在的标题候选（短、无标点）。
+    """
     if len(text) < 2 or len(text) > 80:
         return False
     if text.endswith(('。', '！', '？', '；', ':', '：', '，', ',', '.', '。')):
@@ -431,6 +492,10 @@ def _looks_like_heading_candidate(text: str) -> bool:
 
 
 def _profile_lines(path: Path, cancel_event: Event) -> tuple[dict[str, int], Counter[str], set[int], set[int], list[dict[str, Any]]]:
+    """
+    Profile logical lines to gather statistics for classification.
+    分析逻辑行以收集用于分类的统计信息。
+    """
     frequencies: Counter[str] = Counter()
     first_lines: set[int] = set()
     explicit_h1_lines: list[dict[str, Any]] = []
@@ -458,6 +523,10 @@ def _select_title(
     first_lines: set[int],
     last_lines: set[int],
 ) -> dict[str, Any] | None:
+    """
+    Select document title from explicit H1 headings.
+    从显式 H1 标题中选择文档标题。
+    """
     candidates: list[tuple[int, dict[str, Any]]] = []
     explicit_h1_count = 0
     for line in lines:
@@ -483,12 +552,18 @@ def _select_title(
     # A lone explicit Markdown H1 can represent the document title. Once the
     # document contains peer H1 headings, their source hierarchy is stronger
     # evidence: promoting the first one would make every later H1 its child.
+    # 单独的显式 Markdown H1 可以代表文档标题。一旦文档包含同级 H1 标题，
+    # 它们的来源层次结构是更强的证据：提升第一个会使每个后续 H1 成为其子标题。
     if explicit_h1_count != 1 or len(candidates) != 1:
         return None
     return candidates[0][1]
 
 
 def _make_title_selection(line: dict[str, Any], text: str, signal_type: str, rule_id: str, confidence: float) -> dict[str, Any]:
+    """
+    Create a title selection dict from a line and its classification.
+    从行及其分类创建标题选择字典。
+    """
     source = dict(line.get('source')) if isinstance(line.get('source'), dict) else {}
     if line.get('blockId'):
         source['blockId'] = line['blockId']
@@ -508,6 +583,10 @@ def _make_title_selection(line: dict[str, Any], text: str, signal_type: str, rul
 
 
 def _clean_title_text(text: str) -> str:
+    """
+    Clean title text by removing Markdown heading markers and wrappers.
+    通过移除 Markdown 标题标记和包装器来清理标题文本。
+    """
     value = re.sub(r'^\s*#{1,6}\s+', '', text).strip()
     wrappers = ('**', '__', '~~', '`')
     changed = True
@@ -522,17 +601,26 @@ def _clean_title_text(text: str) -> str:
 
 
 def _restore_title_selection(value: Any) -> dict[str, Any] | None:
+    """
+    Restore title selection from checkpoint data.
+    从检查点数据恢复标题选择。
+    """
     if isinstance(value, dict):
         text = str(value.get('text') or '').strip()
         return {**value, 'text': text} if text else None
     if isinstance(value, str) and value.strip():
         # Accept checkpoints written by p3-rules-1 so an interrupted task can resume safely.
+        # 接受 p3-rules-1 写入的检查点，以便中断的任务可以安全恢复。
         text = value.strip()
         return {'text': text, 'rawText': text, 'lineNo': 0, 'source': {}, 'confidence': 0.82}
     return None
 
 
 def _write_batch(destination: Any, document_id: str, content_hash: str, batch_index: int, signals: list[dict[str, Any]], texts: list[str], title: dict[str, Any] | None) -> None:
+    """
+    Write a batch of signals to the output JSONL file.
+    将一批信号写入输出 JSONL 文件。
+    """
     context = '\n'.join(texts)
     if len(context) > CONTEXT_LIMIT:
         context = context[:CONTEXT_LIMIT // 2] + '\n…\n' + context[-CONTEXT_LIMIT // 2:]
@@ -569,6 +657,10 @@ def _write_batch(destination: Any, document_id: str, content_hash: str, batch_in
 
 
 def _count_signal_type(path: Path, types: set[str]) -> int:
+    """
+    Count signals of specified types in the output file.
+    统计输出文件中指定类型的信号数量。
+    """
     count = 0
     for batch in _iter_jsonl(path):
         signals = batch.get('signals') if isinstance(batch.get('signals'), list) else []
@@ -577,6 +669,10 @@ def _count_signal_type(path: Path, types: set[str]) -> int:
 
 
 def _iter_line_context(path: Path) -> Iterable[tuple[dict[str, Any] | None, dict[str, Any], dict[str, Any] | None]]:
+    """
+    Iterate over lines with previous/next context for classification.
+    遍历带有前/后上下文的行以进行分类。
+    """
     iterator = iter(_iter_jsonl(path))
     previous: dict[str, Any] | None = None
     current = next(iterator, None)
@@ -587,6 +683,10 @@ def _iter_line_context(path: Path) -> Iterable[tuple[dict[str, Any] | None, dict
 
 
 def _iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
+    """
+    Iterate over JSONL file, yielding parsed dicts.
+    遍历 JSONL 文件，生成解析后的字典。
+    """
     with path.open('r', encoding='utf-8', errors='replace') as stream:
         for value in stream:
             try:
@@ -598,6 +698,10 @@ def _iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
 
 
 def _read_checkpoint(path: Path, stage_key: str) -> dict[str, Any] | None:
+    """
+    Read checkpoint state for resumable processing.
+    读取检查点状态以支持可恢复处理。
+    """
     try:
         value = json.loads(path.read_text(encoding='utf-8'))
         if not isinstance(value, dict) or value.get('stageKey') != stage_key or value.get('complete'):
@@ -608,6 +712,10 @@ def _read_checkpoint(path: Path, stage_key: str) -> dict[str, Any] | None:
 
 
 def _write_checkpoint(path: Path, stage_key: str, last_line_no: int, batch_index: int, signals: int, title: dict[str, Any] | None, complete: bool) -> None:
+    """
+    Write checkpoint state for resumable processing.
+    写入检查点状态以支持可恢复处理。
+    """
     _write_json(path, {
         'schemaVersion': SIGNAL_SCHEMA_VERSION,
         'stage': 'signals',
@@ -622,11 +730,16 @@ def _write_checkpoint(path: Path, stage_key: str, last_line_no: int, batch_index
 
 
 def _write_json(path: Path, value: dict[str, Any]) -> None:
+    """
+    Atomic JSON file write using temporary file + rename.
+    使用临时文件 + 重命名的原子 JSON 文件写入。
+    """
     temporary = path.with_name(f'.{path.name}.tmp')
     temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding='utf-8')
     temporary.replace(path)
 
 
 def _raise_if_cancelled(cancel_event: Event) -> None:
+    """Raise StageCancelled if cancel event is set. / 如果取消事件已设置则抛出 StageCancelled。"""
     if cancel_event.is_set():
         raise StageCancelled()

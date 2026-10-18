@@ -1,10 +1,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { watch as watchDirectory, type FSWatcher } from 'node:fs';
-import { buildNoteIndex, type FileNode, type IndexedNote, type NoteIndex } from '../noteIndex';
+import { buildNoteIndex, type FileNode, type IndexedNote, type NoteIndex } from '../note/noteIndex';
 import { readNoteBytes } from '../atomicTextWrite';
-import { getFileTypeInfo } from '../fileTypes';
-import { loadTreeOrder, sortEntriesByTreeOrder } from '../treeOrder';
+import { getFileTypeInfo } from '../files/fileTypes';
+import { loadTreeOrder, sortEntriesByTreeOrder } from '../files/treeOrder';
 import { KnowledgeProjectionDatabase, synchronizeKnowledgeIndex } from './metaDatabase';
 import { NoteIndexWorkerClient } from './noteIndexWorkerClient';
 import { toNoteSearchDocument, type NoteSearchDocument } from './noteLexicalIndex';
@@ -151,7 +151,7 @@ export class KnowledgeIndexCoordinator {
     return { noteIndex: this.index, fileTree: this.index.fileTree, database };
   }
   private async watch(library: string, generation: number): Promise<void> {
-    // Windows recursive fs.watch reports relative paths without rescanning every sibling after an atomic rename.
+    // fs.watch may report relative paths without rescanning every sibling after an atomic rename.
     const watcher = watchDirectory(library, { recursive: true, encoding: 'utf8' });
     this.watcher = watcher;
     const queue = (filePath: string) => {

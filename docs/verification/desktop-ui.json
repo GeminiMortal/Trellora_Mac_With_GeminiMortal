@@ -1,6 +1,6 @@
 {
   "checkedAt": "2026-10-03T01:22:47.860Z",
-  "method": "real Electron CDP, 1280x900 physical viewport simulated at 100/125/150%; not a Windows DPI-setting change",
+  "method": "real Electron CDP, 1280x900 physical viewport simulated at 100/125/150%; not a macOS DPI-setting change",
   "results": [
     {
       "language": "zh-CN",

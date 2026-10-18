@@ -1,11 +1,19 @@
+/**
+ * Workspace-level backup service: scheduling, configuration, manual/daily snapshot execution and daily retention.
+ * 工作区级备份服务：调度、配置、手动/每日快照执行与每日保留。
+ */
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { BackupConfiguration, BackupManifest, BackupSource, BackupStatus } from '../../shared/workspaceBackup';
-import { assertInsideDirectory } from '../pathGuards';
-import { assertSeparateBackupTarget, captureSnapshot, packSnapshot, planBackupRoots } from './snapshot';
-import { readBackupManifest } from './archive';
+import type { BackupConfiguration, BackupManifest, BackupSource, BackupStatus } from '../../shared/workspaceBackup.ts';
+import { assertInsideDirectory } from '../files/pathGuards.ts';
+import { assertSeparateBackupTarget, captureSnapshot, packSnapshot, planBackupRoots } from './snapshot.ts';
+import { readBackupManifest } from './archive.ts';
 
+/**
+ * Context provided by the application for backup planning.
+ * 由应用提供的备份规划上下文。
+ */
 export interface BackupServiceContext {
   workspacePath: string;
   sourceScope: BackupManifest['sourceScope'];
@@ -16,19 +24,58 @@ interface SettingsStore { get(key: string): unknown; set(key: string, value: unk
 const day = () => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; };
 const defaults: BackupConfiguration = { enabled: false, targetDirectory: '', externalLibraries: [] };
 
-/** One snapshot at a time; successful automatic archives alone participate in retention. */
+/**
+ * One snapshot at a time; successful automatic archives alone participate in retention.
+ * 同一时间只允许一个快照；仅成功的自动归档参与保留策略。
+ */
 export class WorkspaceBackupService {
   private controller?: AbortController;
   private running?: Promise<BackupStatus>;
   private state: Omit<BackupStatus, 'configuration' | 'workspacePath' | 'sources'> = { phase: 'idle', message: '', completed: 0, total: 0 };
+  /**
+   * Creates the backup service with application context and event callbacks.
+   * 创建备份服务，需提供应用上下文和事件回调。
+   *
+   * @param options.store - Settings store for persisting backup configuration / 用于持久化备份配置的设置存储
+   * @param options.userDataPath - Application user-data root / 应用用户数据根目录
+   * @param options.version - Current application version string / 当前应用版本字符串
+   * @param options.context - Returns current backup service context / 返回当前备份服务上下文
+   * @param options.capture - Wraps an action inside a maintenance-barrier capture / 在维护屏障捕获中包装操作
+   * @param options.acquireRoots - Claims exclusive access to source roots / 声明对源根目录的独占访问
+   * @param options.onStatus - Publishes backup status updates / 发布备份状态更新
+   * @param options.onError - Reports backup errors by code / 按错误码报告备份错误
+   */
   constructor(private readonly options: { store: SettingsStore; userDataPath: string; version: string; context: () => BackupServiceContext; capture: <T>(signal: AbortSignal, action: () => Promise<T>) => Promise<T>; acquireRoots: (roots: string[]) => void; onStatus: (status: BackupStatus) => void; onError: (code: string) => void }) {}
+  /**
+   * Whether a backup task is currently running.
+   * 备份任务是否正在运行。
+   */
   get busy(): boolean { return Boolean(this.running); }
+  /**
+   * Returns the persisted backup configuration merged with defaults.
+   * 返回与默认值合并后的持久化备份配置。
+   *
+   * @returns The current backup configuration / 当前备份配置
+   */
   configuration(): BackupConfiguration {
     const raw = this.options.store.get('desktopBackup') as Partial<BackupConfiguration> | undefined;
     return { ...defaults, enabled: raw?.enabled === true, targetDirectory: typeof raw?.targetDirectory === 'string' ? raw.targetDirectory : '', externalLibraries: Array.isArray(raw?.externalLibraries) ? raw.externalLibraries.filter(value => typeof value === 'string') : [], ...(typeof raw?.lastSuccessfulAt === 'string' ? { lastSuccessfulAt: raw.lastSuccessfulAt } : {}), ...(typeof raw?.lastSuccessfulPath === 'string' ? { lastSuccessfulPath: raw.lastSuccessfulPath } : {}), ...(typeof raw?.lastDailyDate === 'string' ? { lastDailyDate: raw.lastDailyDate } : {}), ...(typeof raw?.lastError === 'string' ? { lastError: raw.lastError } : {}) };
   }
+  /**
+   * Returns the current backup status including configuration and sources.
+   * 返回当前备份状态，包含配置和源信息。
+   *
+   * @returns Current backup status / 当前备份状态
+   */
   status(): BackupStatus { const context = this.options.context(); return { ...this.state, configuration: this.configuration(), workspacePath: context.workspacePath, sources: context.sources }; }
   private publish(patch: Partial<typeof this.state>): void { this.state = { ...this.state, ...patch }; this.options.onStatus(this.status()); }
+  /**
+   * Updates the backup configuration after validating target and sources.
+   * 校验目标与源后更新备份配置。
+   *
+   * @param patch - Partial configuration to apply / 要应用的部分配置
+   * @returns Updated backup status / 更新后的备份状态
+   */
   configure(patch: Pick<BackupConfiguration, 'enabled' | 'targetDirectory' | 'externalLibraries'>): BackupStatus {
     if (this.busy) throw new Error('请等待当前备份任务结束后再修改快照设置。');
     if (!patch || typeof patch.enabled !== 'boolean' || typeof patch.targetDirectory !== 'string' || !Array.isArray(patch.externalLibraries) || patch.externalLibraries.some(value => typeof value !== 'string')) throw new Error('快照配置无效。');
@@ -43,13 +90,29 @@ export class WorkspaceBackupService {
     const sources = context.sources.filter(source => source.internal ? source.exists : selected.some(file => path.resolve(file) === path.resolve(source.path)));
     if (sources.some(source => !source.exists)) throw new Error('选中的库已经不存在，请在备份范围中明确取消该库后重试。'); return sources;
   }
+  /**
+   * Starts a backup (manual or daily). Rejects if another backup is already running.
+   * 启动备份（手动或每日）。已有备份运行时拒绝。
+   *
+   * @param request - Optional target directory and library overrides / 可选的目标目录与库覆盖
+   * @param kind - Backup kind: 'manual' or 'daily' / 备份类型：'manual' 或 'daily'
+   * @returns Promise resolving to final backup status / 兑现为最终备份状态的 Promise
+   */
   start(request?: { targetDirectory?: string; externalLibraries?: string[] }, kind: 'manual' | 'daily' = 'manual'): Promise<BackupStatus> {
     if (this.running) return Promise.reject(new Error('已有备份任务正在执行。'));
     const controller = new AbortController(); this.controller = controller;
     const task = this.execute(controller.signal, request, kind).finally(() => { if (this.running === task) { this.running = undefined; this.controller = undefined; } });
     this.running = task; return task;
   }
+  /**
+   * Cancels the currently running backup via its abort controller.
+   * 通过中止控制器取消当前正在运行的备份。
+   */
   cancel(): void { this.controller?.abort(); }
+  /**
+   * Cancels any running backup and waits for it to settle.
+   * 取消正在运行的备份并等待其结束。
+   */
   async shutdown(): Promise<void> { this.cancel(); await this.running?.catch(() => undefined); }
   private async execute(signal: AbortSignal, request: { targetDirectory?: string; externalLibraries?: string[] } | undefined, kind: 'manual' | 'daily'): Promise<BackupStatus> {
     const operationId = randomUUID(); const directory = assertInsideDirectory(path.join(this.options.userDataPath, 'backup-staging', operationId), this.options.userDataPath);
@@ -85,6 +148,10 @@ export class WorkspaceBackupService {
     } finally { if (fs.existsSync(directory)) await fs.promises.rm(assertInsideDirectory(directory, this.options.userDataPath), { recursive: true, force: true }); }
     return this.status();
   }
+  /**
+   * Runs a daily backup if enabled, not already done today, and not too many retries.
+   * 在启用且今天尚未完成且重试未超限时运行每日备份。
+   */
   async runDaily(): Promise<void> {
     const config = this.configuration(); if (!config.enabled || this.busy || config.lastDailyDate === day()) return;
     const record = this.options.store.get('desktopBackupAttempts') as { day?: string; count?: number; nextAt?: number } | undefined;

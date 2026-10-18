@@ -1,5 +1,5 @@
 import type { IpcMainInvokeEvent } from 'electron';
-import { listMaterialsDocuments } from '../materialsLibrary';
+import { listMaterialsDocuments } from '../library/materialsLibrary';
 import { readMaterialDocumentIndexStats } from '../pipeline/materialChunkSearch';
 import { resolveRerankRuntime } from './rerankAdapters';
 import { DEFAULT_REACT_BUDGET, KNOWLEDGE_SHADOW_MODEL_CALL_BUDGET } from './reactAgent/reactEngineTypes';

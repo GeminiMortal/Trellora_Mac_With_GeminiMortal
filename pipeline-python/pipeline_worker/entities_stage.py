@@ -1,4 +1,16 @@
-"""GraphRAG 实体关系抽取阶段（prepare/finalize 两相 LLM，Worker 不持密钥）。
+"""
+Module: entities_stage
+GraphRAG entity-relation extraction stage (prepare/finalize two-phase LLM,
+Worker does not hold API keys).
+
+v3 contract (graph-entities-v3):
+- Each `batchSize` (default 3) child chunks are packed into one request;
+- Batch text uses tag separators: `<chunks><chunk id="...">…</chunk>…</chunks>`;
+- Each entity/relation must carry retrievable evidence (chunkId + verbatim quote);
+  finalize validates each entry with substring checks.
+
+模块：entities_stage
+GraphRAG 实体关系抽取阶段（prepare/finalize 两相 LLM，Worker 不持密钥）。
 
 v3 契约（graph-entities-v3）：
 - 每 `batchSize`（默认 3）个子块为一批装入同一请求，子块原文不截断；
@@ -20,13 +32,21 @@ from typing import Any, Callable
 
 from .stage_errors import StageCancelled, StageError
 
+# Schema version for entities stage / 实体阶段的 schema 版本
 ENTITIES_SCHEMA_VERSION = 2
+# Default batch size for LLM requests / LLM 请求的默认批次大小
 DEFAULT_BATCH_SIZE = 3
+# Default max entities per chunk / 每块默认最大实体数
 DEFAULT_MAX_ENTITIES_PER_CHUNK = 20
+# Default max relations per chunk / 每块默认最大关系数
 DEFAULT_MAX_RELATIONS_PER_CHUNK = 30
+# Maximum characters for evidence quotes / 证据引用的最大字符数
 EVIDENCE_QUOTE_MAX_CHARS = 120
+# Maximum evidence entries per row / 每行最大证据条目数
 MAX_EVIDENCE_PER_ROW = 12
+# Known entity types for extraction / 已知的实体抽取类型
 KNOWN_ENTITY_TYPES = ('person', 'organization', 'project', 'technology', 'concept', 'event', 'artifact')
+# Whitespace normalization pattern / 空白字符标准化模式
 WHITESPACE = re.compile(r'\s+')
 
 

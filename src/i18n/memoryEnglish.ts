@@ -1,3 +1,12 @@
+/**
+ * English translation map for long-term memory and consolidation UI copy.
+ * 长期记忆与整理界面文案的英文翻译映射。
+ */
+
+/**
+ * Maps Chinese memory UI strings to English translations.
+ * 将记忆界面的中文文案映射为英文翻译。
+ */
 export const memoryEnglish: Record<string, string> = {
   '本次提供记忆': 'Memories provided',
   '记忆引用': 'Memory references',

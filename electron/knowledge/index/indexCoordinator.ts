@@ -1,0 +1,362 @@
+/**
+ * Coordinates the note library index: cold scans, watcher deltas, structural
+ * migrations and search-index publication behind one ordered publication gate.
+ * 协调笔记库索引：冷扫描、监听增量、结构迁移与搜索索引发布统一在一个有序发布门后执行。
+ */
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { watch as watchDirectory, type FSWatcher } from 'node:fs';
+import { buildNoteIndex, type FileNode, type IndexedNote, type NoteIndex } from '../../note/noteIndex.ts';
+import { readNoteBytes } from '../../atomicTextWrite';
+import { getFileTypeInfo } from '../../files/fileTypes.ts';
+import { loadTreeOrder, sortEntriesByTreeOrder } from '../../files/treeOrder.ts';
+import { KnowledgeProjectionDatabase, synchronizeKnowledgeIndex } from '../metaDatabase.ts';
+import { NoteIndexWorkerClient } from '../noteAnalysis/noteIndexWorkerClient.ts';
+import { toNoteSearchDocument, type NoteSearchDocument } from '../noteAnalysis/noteLexicalIndex.ts';
+import type { IndexSyncResult, PersistedKnowledgeNote } from '../types.ts';
+import type { NoteIndexChanged } from '../../../shared/noteSave.ts';
+
+/**
+ * Minimal adapter over the in-memory search index consumed by the coordinator.
+ * 协调器所依赖的内存搜索索引的最小适配接口。
+ */
+export interface SearchIndexAdapter {
+  removeAll(): void; add(document: NoteSearchDocument): void;
+  has(id: string): boolean; replace(document: NoteSearchDocument): void; discard(id: string): void;
+}
+/** Kinds of filesystem changes tracked by the coordinator. / 协调器跟踪的文件系统变更类型。 */
+export type LibraryChangeKind = 'add' | 'change' | 'unlink' | 'addDir' | 'unlinkDir';
+/** One filesystem change event. / 一条文件系统变更事件。 */
+export interface LibraryChange { kind: LibraryChangeKind; path: string }
+/** Aggregated result of an index publication. / 一次索引发布的聚合结果。 */
+export interface CoordinatedIndexResult { noteIndex: NoteIndex; fileTree: FileNode[]; database: IndexSyncResult }
+/** Listener invoked after each successful index publication. / 每次索引成功发布后调用的监听器。 */
+export type IndexChangeListener = (result: CoordinatedIndexResult, changes: LibraryChange[], delta?: NoteIndexChanged) => void;
+/** Directory names that never enter the index. / 永不进入索引的目录名。 */
+const ignoredDirectoryNames = new Set(['.git', '.menghan-backups', '.menghan-meta', 'node_modules']);
+
+/**
+ * One publication gate orders cold scans, watcher deltas and structural migrations.
+ * 单一发布门统一排序冷扫描、监听增量与结构迁移。
+ */
+export class KnowledgeIndexCoordinator {
+  private watcher?: FSWatcher;
+  private library?: string;
+  private generation = 0;
+  private revision = 0;
+  private gate: Promise<unknown> = Promise.resolve();
+  private debounce?: ReturnType<typeof setTimeout>;
+  private reconcileTimer?: ReturnType<typeof setTimeout>;
+  private queued = new Map<string, LibraryChange>();
+  private index?: NoteIndex;
+  private database?: KnowledgeProjectionDatabase;
+  private search?: SearchIndexAdapter | null;
+  private listener?: IndexChangeListener;
+  private initializing?: Promise<CoordinatedIndexResult>;
+  private active = false;
+  private hashes = new Map<string, string>();
+  private retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private failures = new Map<string, number>();
+  readonly metrics = { fullScans: 0, parses: 0, searchResets: 0, deltaWrites: 0, retries: 0 };
+  constructor(private readonly log: (message: string) => void = () => undefined, private readonly parser = new NoteIndexWorkerClient()) {}
+  /** The latest installed note index, if any. / 最近一次安装的笔记索引（如有）。 */
+  get current(): NoteIndex | undefined { return this.index; }
+
+  /**
+   * Compatibility for isolated legacy consumers. Application startup uses initialize().
+   * 供孤立遗留调用方使用的兼容入口；应用启动应使用 initialize()。
+   *
+   * @param libraryPath - Library root path. / 笔记库根路径。
+   * @param searchIndex - Optional search index to repopulate. / 可选的待重建搜索索引。
+   * @returns The freshly built coordinated index result. / 新构建的协调索引结果。
+   */
+  synchronize(libraryPath: string, searchIndex?: SearchIndexAdapter | null): CoordinatedIndexResult {
+    this.metrics.fullScans++;
+    const index = buildNoteIndex(libraryPath);
+    const database = synchronizeKnowledgeIndex(libraryPath, index.notes.map((note) => persist(libraryPath, note)));
+    this.library = path.resolve(libraryPath); this.search = searchIndex; this.active = true;
+    this.install(index);
+    this.log(`SQLite index synchronized: ${database.indexed} updated, ${database.skipped} unchanged, ${database.removed} removed`);
+    return { noteIndex: index, fileTree: index.fileTree, database };
+  }
+
+  /**
+   * Full startup path: watch, cold scan, persist projections and publish once ready.
+   * 完整启动路径：开启监听、冷扫描、持久化投影并在就绪后发布一次。
+   */
+  async initialize(libraryPath: string, search: SearchIndexAdapter | null, listener: IndexChangeListener): Promise<CoordinatedIndexResult> {
+    const library = path.resolve(libraryPath);
+    if (this.library === library && this.initializing) return this.initializing;
+    if (this.library === library && this.index && this.watcher) { this.listener = listener; return this.result(); }
+    await this.stopWatching();
+    const generation = ++this.generation;
+    this.library = library; this.search = search; this.listener = listener; this.active = true;
+    const task = this.enqueue(async () => {
+      await this.watch(library, generation);
+      this.metrics.fullScans++;
+      const index = await this.parser.scan(library);
+      if (generation !== this.generation) throw new Error('笔记库已切换。');
+      this.install(index);
+      const database = synchronizeKnowledgeIndex(library, index.notes.map((note) => persist(library, note)));
+      this.database = new KnowledgeProjectionDatabase(library);
+      if (this.queued.size) { const changes = [...this.queued.values()]; this.queued.clear(); await this.applyNow(changes, 'external'); }
+      return this.result(database);
+    });
+    this.initializing = task;
+    try { return await task; } finally { if (this.initializing === task) this.initializing = undefined; }
+  }
+
+  /**
+   * Starts the directory watcher without a cold scan; used after a hot reload.
+   * 启动目录监听但不做冷扫描；用于热重载之后。
+   */
+  startWatching(libraryPath: string, search: SearchIndexAdapter | null | undefined, listener: IndexChangeListener): void {
+    this.search = search; this.listener = listener;
+    if (this.watcher) return;
+    this.library = path.resolve(libraryPath); this.active = true;
+    this.database ??= new KnowledgeProjectionDatabase(this.library);
+    void this.watch(this.library, ++this.generation);
+  }
+  /**
+   * Enqueues an external change batch for delta indexing.
+   * 将外部变更批次入队进行增量索引。
+   */
+  update(changes: LibraryChange[], source: NoteIndexChanged['source'] = 'application'): Promise<void> {
+    if (!this.active) return Promise.reject(new Error('内容已保存，索引正在切换或关闭。'));
+    const generation = this.generation;
+    return this.enqueue(async () => { if (generation === this.generation) await this.applyNow(changes, source); });
+  }
+  /**
+   * Hold watcher publication while a rename migrates metadata.
+   * 在重命名迁移元数据期间挂起监听发布。
+   */
+  mutate<T>(action: () => Promise<{ value: T; changes: LibraryChange[]; moves?: Array<{ from: string; to: string }>; rollback?: () => Promise<void> }> | { value: T; changes: LibraryChange[]; moves?: Array<{ from: string; to: string }>; rollback?: () => Promise<void> }): Promise<T> {
+    return this.enqueue(async () => {
+      const result = await action();
+      try { await this.applyNow(result.changes, 'application', result.moves); }
+      catch (error) {
+        if (!(error as Error & { projectionCommitted?: boolean }).projectionCommitted && result.rollback) { await result.rollback(); throw error; }
+  // A completed filesystem operation remains completed while its projections recover. / 文件系统操作一旦完成即保持完成，投影稍后恢复即可。
+        this.log(`文件操作已完成，索引稍后恢复：${String(error)}`);
+      }
+      return result.value;
+    });
+  }
+  /** Re-sorts one directory's children by persisted tree order and republishes. / 按持久化的树顺序重排某目录的子项并重新发布。 */
+  reorder(directory: string): Promise<void> {
+    return this.enqueue(async () => {
+      if (!this.index || !this.library) return;
+      const children = directory === this.library ? this.index.fileTree : findNode(this.index.fileTree, directory)?.children;
+      if (!children) return;
+      children.splice(0, children.length, ...sortEntriesByTreeOrder(children, this.library, directory, loadTreeOrder(this.library)));
+      this.listener?.(this.result(), [], { libraryPath: this.library, libraryGeneration: this.generation, indexRevision: ++this.revision,
+        source: 'application', changedFields: ['tree'], changes: [], nodes: [], orders: { [directory]: children.map((node) => node.path) } });
+    });
+  }
+  /** Clears a file's failure state and requeues it as a change. / 清除某文件的失败状态并以 change 重新入队。 */
+  /**
+   * Clears failure state for a file and re-queues it for indexing.
+   * 清除某文件的失败状态并重新入队索引。
+   *
+   * @param filePath - Absolute path to the file to retry. / 待重试文件的绝对路径。
+   * @returns Promise that resolves when the re-index is enqueued. / 重索引入队后 resolve 的 Promise。
+   */
+  retry(filePath: string): Promise<void> { this.failures.delete(filePath); return this.update([{ kind: 'change', path: filePath }], 'reconcile'); }
+  /**
+   * Waits until the file's current disk hash is indexed, or reports why not.
+   * 等待某文件的当前磁盘哈希被索引，或报告未能索引的原因。
+   *
+   * @returns 'current' when indexed, 'superseded' when outdated, 'missing' when deleted. / 已索引返回 'current'，过期返回 'superseded'，已删除返回 'missing'。
+   */
+  /**
+   * Waits until the index reflects the given disk hash for a file, with a 5-second timeout.
+   * 等待索引反映指定文件的给定磁盘哈希，超时 5 秒。
+   *
+   * @param filePath - Absolute path to the file. / 文件绝对路径。
+   * @param diskHash - Expected content hash on disk. / 期望的磁盘内容哈希。
+   * @returns 'current' if indexed hash matches, 'superseded' if disk changed, 'missing' if file gone. / 哈希匹配返回 'current'，磁盘已变更返回 'superseded'，文件不存在返回 'missing'。
+   */
+  async awaitIndexedVersion(filePath: string, diskHash: string): Promise<'current' | 'superseded' | 'missing'> {
+    const generation = this.generation;
+    try {
+      if ((await readNoteBytes(filePath)).version.diskHash !== diskHash) return 'superseded';
+      const update = this.update([{ kind: 'change', path: filePath }], 'reconcile');
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try { await Promise.race([update, new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error('内容已保存，索引尚未更新，请稍后重试。')), 5_000); })]); }
+      finally { if (timer) clearTimeout(timer); }
+      return generation === this.generation && this.hashes.get(filePath) === diskHash ? 'current' : 'superseded';
+    } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 'missing'; throw error; }
+  }
+  /** Waits for the publication gate; throws if any file is stuck failing. / 等待发布门放行；若有文件持续失败则抛错。 */
+  /**
+   * Waits for all pending index operations to complete; throws if failures remain.
+   * 等待所有挂起的索引操作完成；若有残留失败则抛出异常。
+   */
+  async awaitCurrent(): Promise<void> { await this.gate; if (this.failures.size) throw new Error('内容已保存，索引暂不可用，请重试索引。'); }
+  /**
+   * Tears down the watcher and re-initializes from cold scan to recover from lost events.
+   * 销毁监听器并从冷扫描重新初始化，以恢复丢失的事件。
+   */
+  async reconcile(): Promise<void> { const library = this.library, search = this.search, listener = this.listener; if (!library || !listener) return; await this.stopWatching(); await this.initialize(library, search ?? null, listener); }
+  /**
+   * Waits for the current publication gate to settle without re-initializing.
+   * 等待当前发布门稳定，不做重新初始化。
+   */
+  async drain(): Promise<void> { await this.gate; }
+  /**
+   * Gracefully shuts down the coordinator: stops watching and closes the parser worker.
+   * 优雅关闭协调器：停止监听并关闭解析器 Worker。
+   */
+  async shutdown(): Promise<void> { await this.stopWatching(); await this.parser.close(); }
+  /**
+   * Stops the directory watcher, clears all timers and resets internal state.
+   * 停止目录监听，清除所有计时器并重置内部状态。
+   */
+  async stopWatching(): Promise<void> {
+    this.active = false;
+    ++this.generation;
+    const watcher = this.watcher; this.watcher = undefined;
+    if (this.debounce) clearTimeout(this.debounce); this.debounce = undefined;
+    if (this.reconcileTimer) clearTimeout(this.reconcileTimer); this.reconcileTimer = undefined;
+    for (const timer of this.retryTimers.values()) clearTimeout(timer);
+    this.retryTimers.clear(); this.failures.clear(); this.queued.clear();
+    if (watcher) await watcher.close();
+    await this.gate.catch(() => undefined);
+    this.gate = Promise.resolve();
+    this.database?.close(); this.database = undefined; this.library = undefined; this.index = undefined; this.hashes.clear();
+  }
+  private enqueue<T>(action: () => Promise<T>): Promise<T> { const task = this.gate.catch(() => undefined).then(action); this.gate = task; return task; }
+  private install(index: NoteIndex): void {
+    this.index = index;
+    if (this.search) { this.search.removeAll(); this.metrics.searchResets++; for (const note of index.notes) this.search.add(toNoteSearchDocument(note)); }
+  }
+  private result(database: IndexSyncResult = { indexed: 0, skipped: 0, removed: 0 }): CoordinatedIndexResult {
+    if (!this.index) throw new Error('笔记索引尚未就绪。');
+    return { noteIndex: this.index, fileTree: this.index.fileTree, database };
+  }
+  private async watch(library: string, generation: number): Promise<void> {
+    // fs.watch may report relative paths without rescanning every sibling after an atomic rename. / fs.watch 在原子重命名后可能报相对路径且不重扫兄弟节点。
+    const watcher = watchDirectory(library, { recursive: true, encoding: 'utf8' });
+    this.watcher = watcher;
+    const queue = (filePath: string) => {
+      if (generation !== this.generation || path.relative(library, filePath).split(path.sep).some((part) => part.startsWith('.') || ignoredDirectoryNames.has(part))) return;
+      const changedPath = path.resolve(filePath);
+      this.queued.set(changedPath, { kind: 'change', path: changedPath });
+      if (this.debounce) clearTimeout(this.debounce);
+      this.debounce = setTimeout(() => {
+        this.debounce = undefined;
+        if (generation !== this.generation || !this.index || this.initializing) return;
+        const changes = [...this.queued.values()]; this.queued.clear();
+        void this.update(changes, 'external').catch((error) => this.log(`索引增量更新失败：${String(error)}`));
+      }, 650);
+    };
+    const lostEvents = () => {
+      if (this.reconcileTimer) return;
+      this.reconcileTimer = setTimeout(() => { this.reconcileTimer = undefined; if (generation === this.generation) void this.reconcile().catch((error) => this.log(`监听校准失败：${String(error)}`)); }, 1_000);
+    };
+    watcher.on('change', (_event, filename) => { if (filename) queue(path.join(library, filename.toString())); else lostEvents(); });
+    watcher.on('error', (error) => { this.log(`Workspace watcher failed: ${String(error)}`); lostEvents(); });
+    // The native watch handle is installed synchronously before the cold parser starts. / 原生监听句柄在冷解析开始前同步安装。
+  }
+  private async applyNow(changes: LibraryChange[], source: NoteIndexChanged['source'], moves: Array<{ from: string; to: string }> = []): Promise<void> {
+    if (!this.index || !this.library) throw new Error('笔记索引尚未就绪。');
+    const library = this.library, generation = this.generation;
+    const candidates = new Map<string, { note: IndexedNote; hash: string }>();
+    const removed = new Set<string>(), nodes = new Map<string, FileNode>();
+    const actual: LibraryChange[] = [], fields = new Set<NoteIndexChanged['changedFields'][number]>();
+    const inspect = async (filePath: string): Promise<void> => {
+      const relative = path.relative(library, filePath);
+      if (!relative || relative.startsWith('..') || path.isAbsolute(relative) || relative.split(path.sep).some((part) => part.startsWith('.') || ignoredDirectoryNames.has(part))) return;
+      let stat;
+      try { stat = await fs.lstat(filePath); } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        for (const note of this.index!.notes) if (note.path === filePath || note.path.startsWith(`${filePath}${path.sep}`)) removed.add(note.path);
+        if (findNode(this.index!.fileTree, filePath)) { actual.push({ kind: 'unlink', path: filePath }); fields.add('tree'); }
+        return;
+      }
+      if (stat.isSymbolicLink()) return;
+      if (stat.isDirectory()) {
+        if (!findNode(this.index!.fileTree, filePath)) { nodes.set(filePath, { path: filePath, name: path.basename(filePath), kind: 'directory', isDirectory: true, children: [] }); actual.push({ kind: 'addDir', path: filePath }); fields.add('tree'); }
+        for (const entry of await fs.readdir(filePath)) await inspect(path.join(filePath, entry));
+        return;
+      }
+      if (!getFileTypeInfo(filePath)) return;
+      // Re-read up to 3 times to survive concurrent writers; the hash must be stable across the two reads. / 最多重读 3 次以应对并发写入；两次读取间的哈希必须保持稳定。
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const read = await readNoteBytes(filePath), previous = this.index!.notesByPath[filePath];
+        if (this.hashes.get(filePath) === read.version.diskHash && previous?.mtimeMs === read.version.mtimeMs) return;
+        let note: IndexedNote;
+        if (previous?.rawMarkdown === read.content) note = { ...previous, mtimeMs: read.version.mtimeMs };
+        else { this.metrics.parses++; note = await this.parser.parse(filePath, read.content, read.version.mtimeMs); }
+        if ((await readNoteBytes(filePath)).version.diskHash !== read.version.diskHash) continue;
+        candidates.set(filePath, { note, hash: read.version.diskHash });
+        if (!previous || previous.contentHash !== note.contentHash) {
+          actual.push({ kind: previous ? 'change' : 'add', path: filePath }); fields.add('content');
+          if (previous?.title !== note.title) fields.add('title');
+          if (JSON.stringify(previous?.tags) !== JSON.stringify(note.tags)) fields.add('tags');
+          if (JSON.stringify(previous?.outgoingLinks) !== JSON.stringify(note.outgoingLinks)) fields.add('links');
+          if (!previous || previous.title !== note.title) { nodes.set(filePath, { path: filePath, name: path.basename(filePath), title: note.title, isDirectory: false, kind: note.kind, extension: note.extension }); fields.add('tree'); }
+        }
+        return;
+      }
+      throw new Error('笔记仍在被其他程序修改，索引将稍后重试。');
+    };
+    let projectionCommitted = false;
+    try {
+      for (const changedPath of new Set(changes.map((change) => path.resolve(change.path)))) await inspect(changedPath);
+      if (generation !== this.generation) return;
+      if (!candidates.size && !removed.size && !moves.length && !actual.length) { this.clearFailures(changes); return; }
+      this.database ??= new KnowledgeProjectionDatabase(library);
+      const database = this.database.apply([...candidates.values()].map(({ note }) => persist(library, note)), [...removed], moves);
+      projectionCommitted = true;
+      this.metrics.deltaWrites += candidates.size + removed.size;
+      // Publish memory only after search succeeds; a failed search projection remains retryable. / 搜索投影成功后才发布内存索引；失败的搜索投影保持可重试。
+      for (const filePath of removed) if (this.search?.has(filePath)) this.search.discard(filePath);
+      for (const [filePath, { note }] of candidates) {
+        const previous = this.index.notesByPath[filePath];
+        if (!previous || previous.contentHash !== note.contentHash) { const document = toNoteSearchDocument(note); if (this.search?.has(filePath)) this.search.replace(document); else this.search?.add(document); }
+      }
+      for (const filePath of removed) { delete this.index.notesByPath[filePath]; this.hashes.delete(filePath); }
+      if (removed.size) this.index.notes = this.index.notes.filter((note) => !removed.has(note.path));
+      for (const [filePath, { note, hash }] of candidates) {
+        const previous = this.index.notesByPath[filePath]; this.index.notesByPath[filePath] = note; this.hashes.set(filePath, hash);
+        if (previous) this.index.notes[this.index.notes.indexOf(previous)] = note; else this.index.notes.push(note);
+      }
+      if (fields.has('tree')) {
+        for (const change of actual.filter((change) => change.kind === 'unlink')) removeNode(this.index.fileTree, change.path);
+        const order = loadTreeOrder(library); for (const node of nodes.values()) putNode(this.index.fileTree, node, library, order);
+      }
+      const orders: Record<string, string[]> = {};
+      for (const change of actual.filter((change) => change.kind === 'add' || change.kind === 'addDir')) {
+        const parent = path.dirname(change.path), children = parent === library ? this.index.fileTree : findNode(this.index.fileTree, parent)?.children;
+        if (children) orders[parent] = children.map((node) => node.path);
+      }
+      if (actual.length) this.listener?.(this.result(database), actual, { libraryPath: library, libraryGeneration: generation, indexRevision: ++this.revision, changes: actual, changedFields: [...fields], source, nodes: [...nodes.values()], orders });
+      this.clearFailures(changes);
+    } catch (error) { for (const change of changes) this.scheduleRetry(change.path); if (projectionCommitted && error instanceof Error) Object.assign(error, { projectionCommitted: true }); throw error; }
+  }
+  private clearFailures(changes: LibraryChange[]): void {
+    for (const change of changes) { this.failures.delete(change.path); const timer = this.retryTimers.get(change.path); if (timer) clearTimeout(timer); this.retryTimers.delete(change.path); }
+  }
+  private scheduleRetry(filePath: string): void {
+    if (this.retryTimers.has(filePath)) return;
+    const attempt = (this.failures.get(filePath) ?? 0) + 1;
+    this.failures.set(filePath, attempt);
+    if (attempt > 3) return;
+    const generation = this.generation;
+    this.retryTimers.set(filePath, setTimeout(() => { this.retryTimers.delete(filePath); if (generation !== this.generation) return; this.metrics.retries++; void this.update([{ kind: 'change', path: filePath }], 'reconcile').catch((error) => this.log(`索引重试失败：${String(error)}`)); }, [100, 300, 1_000][attempt - 1]));
+  }
+}
+function persist(library: string, note: IndexedNote): PersistedKnowledgeNote {
+  return { path: note.path, relativePath: path.relative(library, note.path).replace(/\\/g, '/'), title: note.title, kind: note.kind, extension: note.extension, mtimeMs: note.mtimeMs,
+    facts: { frontmatter: note.frontmatter, headings: note.headings, tags: note.tags, outgoingLinks: note.outgoingLinks, plainText: note.plainText, contentHash: note.contentHash } };
+}
+function findNode(nodes: FileNode[], filePath: string): FileNode | undefined { for (const node of nodes) { if (node.path === filePath) return node; const found = node.children && findNode(node.children, filePath); if (found) return found; } return undefined; }
+function removeNode(nodes: FileNode[], filePath: string): void { for (let index = nodes.length - 1; index >= 0; index--) { const node = nodes[index]; if (node.path === filePath) nodes.splice(index, 1); else if (node.children) removeNode(node.children, filePath); } }
+function putNode(nodes: FileNode[], node: FileNode, library: string, order: ReturnType<typeof loadTreeOrder>): void {
+  const parent = path.dirname(node.path), children = parent === library ? nodes : findNode(nodes, parent)?.children;
+  if (!children) return;
+  const previous = children.find((child) => child.path === node.path);
+  if (previous) Object.assign(previous, { ...node, ...(previous.children ? { children: previous.children } : {}) }); else children.push(node);
+  children.splice(0, children.length, ...sortEntriesByTreeOrder(children, library, parent, order));
+}

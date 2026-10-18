@@ -1,3 +1,12 @@
+"""
+Module: structure_stage
+Structure tree building and chunking stage. Converts classified signals into
+a hierarchical document tree and generates structure-aware chunks.
+模块：structure_stage
+结构树构建和切块阶段。将分类信号转换为层次化文档树，
+并生成结构感知的切块。
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -13,9 +22,12 @@ from typing import Any, Callable, Iterable
 from .stage_errors import StageCancelled, StageError
 
 
+# Schema versions / Schema 版本
 TREE_SCHEMA_VERSION = 1
 CHUNKS_SCHEMA_VERSION = 1
+# Checkpoint interval for processing / 处理的检查点间隔
 CHECKPOINT_INTERVAL = 200
+# Default chunking configuration / 默认切块配置
 DEFAULT_CHUNK_CONFIG = {
     'strategy': 'heading',
     'targetChars': 800,
@@ -34,6 +46,11 @@ def run_structure_tree_stage(
     progress: Callable[[int, int | None, str, str], None],
     stage_key: str = '',
 ) -> dict[str, Any]:
+    """
+    Execute the structure tree building stage. Converts classified signals
+    into a hierarchical document tree with parent-child relationships.
+    执行结构树构建阶段。将分类信号转换为具有父子关系的层次化文档树。
+    """
     source = Path(input_path) / 'ambiguity.jsonl'
     output = Path(output_dir)
     partial_path = output / 'structure.partial.jsonl'
@@ -171,6 +188,11 @@ def run_structure_chunks_stage(
     progress: Callable[[int, int | None, str, str], None],
     stage_key: str = '',
 ) -> dict[str, Any]:
+    """
+    Execute the structure-aware chunking stage. Generates chunks based on
+    document structure (headings, paragraphs, lists, etc.).
+    执行结构感知切块阶段。基于文档结构（标题、段落、列表等）生成切块。
+    """
     source = Path(input_path) / 'structure.jsonl'
     output = Path(output_dir)
     chunks_path = output / 'chunks.jsonl'
@@ -335,6 +357,10 @@ def run_structure_chunks_stage(
 
 
 def _new_tree_state() -> dict[str, Any]:
+    """
+    Create a new tree building state for tracking document structure.
+    创建新的树构建状态以跟踪文档结构。
+    """
     return {
         'initialized': False,
         'sectionOffset': 0,
@@ -351,6 +377,10 @@ def _new_tree_state() -> dict[str, Any]:
 
 
 def _root_node(document_id: str, content_hash: str) -> dict[str, Any]:
+    """
+    Create the root node of the document tree.
+    创建文档树的根节点。
+    """
     return {
         'schemaVersion': TREE_SCHEMA_VERSION,
         'nodeId': 'n-root',
@@ -368,6 +398,10 @@ def _root_node(document_id: str, content_hash: str) -> dict[str, Any]:
 
 
 def _make_title_node(signal: dict[str, Any], document_id: str, content_hash: str) -> dict[str, Any]:
+    """
+    Create a document title node from a signal.
+    从信号创建文档标题节点。
+    """
     text = str(signal.get('normalizedText') or signal.get('rawText') or '').strip()
     signal_source = dict(signal.get('source')) if isinstance(signal.get('source'), dict) else {}
     source_ref = {
@@ -395,6 +429,10 @@ def _make_title_node(signal: dict[str, Any], document_id: str, content_hash: str
 
 
 def _build_tree_node(signal: dict[str, Any], state: dict[str, Any], document_id: str, content_hash: str) -> dict[str, Any]:
+    """
+    Build a tree node from a signal, maintaining tree state for parent-child relationships.
+    从信号构建树节点，维护父子关系的树状态。
+    """
     signal_id = str(signal.get('signalId') or f"s-{int(signal.get('lineNo') or 0):06d}")
     line_no = int(signal.get('lineNo') or 0)
     signal_type = str(signal.get('type') or 'BODY')
@@ -486,6 +524,10 @@ def _build_tree_node(signal: dict[str, Any], state: dict[str, Any], document_id:
 
 
 def _heading_parent(state: dict[str, Any], level: int, numeric_path: str | None, root: dict[str, Any]) -> dict[str, Any]:
+    """
+    Determine the parent node for a heading based on its level and numeric path.
+    根据标题级别和数字路径确定其父节点。
+    """
     if numeric_path and '.' in numeric_path:
         numeric_parent = state['latestHeadingByNumericPath'].get(numeric_path.rsplit('.', 1)[0])
         if isinstance(numeric_parent, dict):
@@ -494,6 +536,9 @@ def _heading_parent(state: dict[str, Any], level: int, numeric_path: str | None,
         # A same-level heading is a sibling, never a child of the current
         # heading. When an author skips a Markdown level, attach to the nearest
         # preceding lower level instead of growing an artificial deep chain.
+        # 同级标题是兄弟节点，永远不会是当前标题的子节点。
+        # 当作者跳过 Markdown 级别时，附加到最近的前一个较低级别，
+        # 而不是生成人工深链。
         for parent_level in range(level - 1, 0, -1):
             depth_parent = state['latestHeadingByDepth'].get(str(parent_level))
             if isinstance(depth_parent, dict):
@@ -510,6 +555,10 @@ def _heading_parent(state: dict[str, Any], level: int, numeric_path: str | None,
 
 
 def _make_ref(node: dict[str, Any], section_path: list[dict[str, Any]]) -> dict[str, Any]:
+    """
+    Create a lightweight reference to a tree node for state tracking.
+    创建树节点的轻量级引用以进行状态跟踪。
+    """
     return {
         'nodeId': node['nodeId'],
         'path': node['path'],
@@ -520,15 +569,27 @@ def _make_ref(node: dict[str, Any], section_path: list[dict[str, Any]]) -> dict[
 
 
 def _root_ref() -> dict[str, Any]:
+    """
+    Create a reference to the root node.
+    创建根节点的引用。
+    """
     return {'nodeId': 'n-root', 'path': '/', 'depth': 0, 'type': 'DOCUMENT_ROOT', 'sectionPath': []}
 
 
 def _child_path(parent_path: str, line_no: int, node_id: str) -> str:
+    """
+    Generate a child path for a tree node.
+    为树节点生成子路径。
+    """
     base = parent_path if parent_path.endswith('/') else f'{parent_path}/'
     return f'{base}{line_no}-{node_id[2:]}/'
 
 
 def _heading_info(text: str, rule_id: str) -> tuple[int, str | None]:
+    """
+    Extract heading level and numeric path from heading text.
+    从标题文本中提取标题级别和数字路径。
+    """
     markdown = re.match(r'^\s*(#{1,6})\s+', text)
     if markdown:
         return len(markdown.group(1)), None
@@ -542,6 +603,10 @@ def _heading_info(text: str, rule_id: str) -> tuple[int, str | None]:
 
 
 def _clean_heading_text(text: str) -> str:
+    """
+    Clean heading text by removing Markdown heading markers and wrappers.
+    通过移除 Markdown 标题标记和包装器来清理标题文本。
+    """
     value = re.sub(r'^\s*#{1,6}\s+', '', text).strip()
     wrappers = ('**', '__', '~~', '`')
     changed = True
@@ -556,16 +621,28 @@ def _clean_heading_text(text: str) -> str:
 
 
 def _list_indent(text: str) -> int:
+    """
+    Calculate indentation level for a list item.
+    计算列表项的缩进级别。
+    """
     match = re.match(r'^(\s*)', text)
     prefix = match.group(1) if match else ''
     return len(prefix.expandtabs(4))
 
 
 def _is_consecutive(state: dict[str, Any], line_no: int) -> bool:
+    """
+    Check if a line is consecutive to the previous line (not separated by blank/noise).
+    检查一行是否与前一行连续（未被空行/噪声分隔）。
+    """
     return int(state.get('previousLineNo', 0)) + 1 == line_no and state.get('previousType') not in {'BLANK', 'NOISE', 'SEPARATOR'}
 
 
 def _finalize_tree(partial_path: Path, nodes_path: Path, output: Path, stage_key: str, document_id: str, content_hash: str, stats: Counter[str]) -> dict[str, int]:
+    """
+    Finalize the tree by validating structure, updating child counts, and writing the final output.
+    通过验证结构、更新子节点计数和写入最终输出来完成树构建。
+    """
     child_counts: Counter[str] = Counter()
     counts: Counter[str] = Counter()
     parent_map: dict[str, str | None] = {}
@@ -652,6 +729,10 @@ def _finalize_tree(partial_path: Path, nodes_path: Path, output: Path, stage_key
 
 
 def _new_builder(max_chars: int = DEFAULT_CHUNK_CONFIG['maxChars']) -> dict[str, Any]:
+    """
+    Create a new chunk builder for accumulating text and metadata.
+    创建新的切块构建器以累积文本和元数据。
+    """
     return {
         'parts': [],
         'nodeIds': [],
@@ -669,6 +750,10 @@ def _new_builder(max_chars: int = DEFAULT_CHUNK_CONFIG['maxChars']) -> dict[str,
 
 
 def _next_builder(previous: dict[str, Any], config: dict[str, Any], allow_overlap: bool) -> dict[str, Any]:
+    """
+    Create the next chunk builder, optionally carrying over overlap text.
+    创建下一个切块构建器，可选择携带重叠文本。
+    """
     builder = _new_builder(config['maxChars'])
     if allow_overlap and config['overlapChars'] > 0 and previous.get('hasBody'):
         tail = _builder_text(previous)[-config['overlapChars']:]
@@ -680,6 +765,10 @@ def _next_builder(previous: dict[str, Any], config: dict[str, Any], allow_overla
 
 
 def _normalize_chunk_config(value: dict[str, Any] | None) -> dict[str, Any]:
+    """
+    Normalize chunking configuration with defaults and bounds.
+    使用默认值和边界标准化切块配置。
+    """
     source = value if isinstance(value, dict) else {}
     strategy = str(source.get('strategy') or DEFAULT_CHUNK_CONFIG['strategy'])
     if strategy not in {'heading', 'fixed'}:
@@ -692,6 +781,10 @@ def _normalize_chunk_config(value: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def _bounded_int(value: Any, fallback: int, minimum: int, maximum: int) -> int:
+    """
+    Parse an integer value with fallback and bounds clamping.
+    解析整数值，带后备值和边界钳制。
+    """
     try:
         number = int(value)
     except (TypeError, ValueError):
@@ -700,6 +793,10 @@ def _bounded_int(value: Any, fallback: int, minimum: int, maximum: int) -> int:
 
 
 def _append_node(builder: dict[str, Any], node: dict[str, Any], text: str, config: dict[str, Any]) -> dict[str, Any]:
+    """
+    Append a node's text to the current chunk builder.
+    将节点的文本追加到当前切块构建器。
+    """
     if builder['firstLineNo'] is None:
         builder['firstLineNo'] = int(node.get('firstLineNo') or 0)
         builder['sectionPath'] = list(node.get('sectionPath') or [])
@@ -722,6 +819,10 @@ def _append_node(builder: dict[str, Any], node: dict[str, Any], text: str, confi
 
 
 def _builder_text(builder: dict[str, Any]) -> str:
+    """
+    Get the full text content from a chunk builder.
+    从切块构建器获取完整文本内容。
+    """
     prefix = str(builder.get('prefixText') or '')
     body = ''.join(str(part) for part in builder.get('parts', []))
     if prefix and body:
@@ -730,19 +831,26 @@ def _builder_text(builder: dict[str, Any]) -> str:
 
 
 def _builder_has_content(builder: dict[str, Any]) -> bool:
+    """Check if builder has any content. / 检查构建器是否有内容。"""
     return bool(_builder_text(builder).strip())
 
 
 def _builder_has_body(builder: dict[str, Any]) -> bool:
+    """Check if builder has body content (not just title). / 检查构建器是否有正文内容（不仅仅是标题）。"""
     return bool(builder.get('hasBody'))
 
 
 def _would_exceed(builder: dict[str, Any], text: str, maximum: int) -> bool:
+    """Check if adding text would exceed the maximum chunk size. / 检查添加文本是否会超过最大切块大小。"""
     current = len(_builder_text(builder))
     return current > 0 and current + 1 + len(text) > maximum
 
 
 def _should_close_fixed(builder: dict[str, Any], config: dict[str, Any], node_type: str) -> bool:
+    """
+    Determine if a chunk should be closed based on fixed-size strategy.
+    根据固定大小策略确定是否应关闭切块。
+    """
     if not _builder_has_body(builder) or node_type in {'HEADING', 'LIST_ITEM', 'TABLE_ROW'}:
         return False
     if config['strategy'] == 'heading':
@@ -751,6 +859,10 @@ def _should_close_fixed(builder: dict[str, Any], config: dict[str, Any], node_ty
 
 
 def _emit_chunk(destination: Any, builder: dict[str, Any], ordinal: int, document_id: str, content_hash: str, reason: str) -> int:
+    """
+    Emit a completed chunk to the output file.
+    将完成的切块发送到输出文件。
+    """
     text = _builder_text(builder).strip()
     if not text:
         return ordinal
@@ -783,10 +895,12 @@ def _emit_chunk(destination: Any, builder: dict[str, Any], ordinal: int, documen
 
 
 def _split_text(text: str, maximum: int) -> list[str]:
+    """Split text into chunks of maximum size. / 将文本分割为最大大小的块。"""
     return [text[index:index + maximum] for index in range(0, len(text), maximum)] or ['']
 
 
 def _max_chunk_chars(path: Path) -> int:
+    """Find the maximum chunk character count in the output file. / 查找输出文件中的最大切块字符数。"""
     maximum = 0
     for chunk in _iter_jsonl(path):
         maximum = max(maximum, int(chunk.get('charCount') or 0))
@@ -794,10 +908,12 @@ def _max_chunk_chars(path: Path) -> int:
 
 
 def _count_oversize(path: Path, maximum: int) -> int:
+    """Count chunks that exceed the maximum size. / 统计超过最大大小的切块数量。"""
     return sum(1 for chunk in _iter_jsonl(path) if int(chunk.get('charCount') or 0) > maximum)
 
 
 def _read_report_count(path: Path, key: str) -> int:
+    """Read a count value from a report JSON file. / 从报告 JSON 文件读取计数值。"""
     try:
         value = json.loads(path.read_text(encoding='utf-8'))
         counts = value.get('counts') if isinstance(value, dict) else {}
@@ -807,6 +923,7 @@ def _read_report_count(path: Path, key: str) -> int:
 
 
 def _count_jsonl(path: Path) -> int:
+    """Count lines in a JSONL file. / 统计 JSONL 文件中的行数。"""
     try:
         with path.open('rb') as stream:
             return sum(1 for _ in stream)
@@ -815,6 +932,10 @@ def _count_jsonl(path: Path) -> int:
 
 
 def _iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
+    """
+    Iterate over JSONL file, yielding parsed dicts.
+    遍历 JSONL 文件，生成解析后的字典。
+    """
     with path.open('r', encoding='utf-8', errors='replace') as stream:
         for value in stream:
             try:
@@ -826,6 +947,10 @@ def _iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
 
 
 def _read_checkpoint(path: Path, stage_key: str, stage: str) -> dict[str, Any] | None:
+    """
+    Read checkpoint state for resumable processing.
+    读取检查点状态以支持可恢复处理。
+    """
     try:
         value = json.loads(path.read_text(encoding='utf-8'))
         if not isinstance(value, dict) or value.get('stage') != stage or value.get('stageKey') != stage_key or value.get('complete'):
@@ -836,29 +961,38 @@ def _read_checkpoint(path: Path, stage_key: str, stage: str) -> dict[str, Any] |
 
 
 def _write_checkpoint(path: Path, value: dict[str, Any]) -> None:
+    """Write checkpoint state. / 写入检查点状态。"""
     _write_json(path, value)
 
 
 def _write_json(path: Path, value: dict[str, Any]) -> None:
+    """
+    Atomic JSON file write using temporary file + rename.
+    使用临时文件 + 重命名的原子 JSON 文件写入。
+    """
     temporary = path.with_name(f'.{path.name}.tmp')
     temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding='utf-8')
     temporary.replace(path)
 
 
 def _append_json_line(path: Path, value: dict[str, Any]) -> None:
+    """Append a JSON line to a file. / 向文件追加 JSON 行。"""
     with path.open('ab') as destination:
         destination.write((json.dumps(value, ensure_ascii=False, separators=(',', ':')) + '\n').encode('utf-8'))
 
 
 def _truncate_bytes(path: Path, size: int) -> None:
+    """Truncate a file to the specified size. / 将文件截断到指定大小。"""
     with path.open('r+b') as stream:
         stream.truncate(max(0, size))
 
 
 def _raise_if_cancelled(cancel_event: Event) -> None:
+    """Raise StageCancelled if cancel event is set. / 如果取消事件已设置则抛出 StageCancelled。"""
     if cancel_event.is_set():
         raise StageCancelled()
 
 
 def _now() -> str:
+    """Get current UTC timestamp in ISO format. / 获取当前 UTC 时间戳的 ISO 格式。"""
     return datetime.now(timezone.utc).isoformat()

@@ -1,7 +1,7 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import { Button, Group, Modal, Text, TextInput } from '@mantine/core';
 import { useEffect, useState } from 'react';
-import type { WikiMapNode } from '../../wiki/wikiTypes';
+import type { WikiMapNode } from './data/wikiTypes.ts';
 
 export type WikiNodeAction = 'add' | 'rename' | 'delete';
 

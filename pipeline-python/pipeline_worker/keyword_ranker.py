@@ -1,3 +1,12 @@
+"""
+Module: keyword_ranker
+Hybrid keyword ranking using TextRank, TF-IDF, and structural features.
+Implements the kw-1 algorithm for keyword extraction and scoring.
+模块：keyword_ranker
+使用 TextRank、TF-IDF 和结构特征的混合关键词排序。
+实现 kw-1 算法用于关键词提取和评分。
+"""
+
 from __future__ import annotations
 
 import math
@@ -12,24 +21,42 @@ from .keyword_candidates import CandidateGenerationResult, KeywordCandidate
 from .keyword_contract import KEYWORD_OUTPUT_SCHEMA_VERSION, KeywordChunkInput, chunk_content_hash, normalize_term, validate_keyword_output
 
 
+# Hybrid keyword algorithm version / 混合关键词算法版本
 HYBRID_KEYWORD_ALGORITHM_VERSION = 'kw-1'
+# Default boilerplate document frequency ratio / 默认样板文档频率比
 DEFAULT_BOILERPLATE_DF_RATIO = 0.65
+# Default TextRank window size / 默认 TextRank 窗口大小
 DEFAULT_TEXT_RANK_WINDOW = 4
+# Default TextRank damping factor / 默认 TextRank 阻尼因子
 DEFAULT_TEXT_RANK_DAMPING = 0.85
+# Default TextRank iterations / 默认 TextRank 迭代次数
 DEFAULT_TEXT_RANK_ITERATIONS = 30
+# Default TextRank convergence tolerance / 默认 TextRank 收敛容差
 DEFAULT_TEXT_RANK_TOLERANCE = 1e-6
+# Maximum chunks for ranking / 排序的最大块数
 MAX_RANKING_CHUNKS = 50_000
+# Maximum nodes for TextRank graph / TextRank 图的最大节点数
 MAX_TEXT_RANK_NODES = 2_048
+# Maximum edges for TextRank graph / TextRank 图的最大边数
 MAX_TEXT_RANK_EDGES = 10_000
+# Maximum section text length / 最大章节文本长度
 MAX_SECTION_TEXT = 20_000
+# Chinese-only character pattern / 纯中文字符模式
 CHINESE_ONLY_RE = re.compile(r'^[\u3400-\u9fff]+$')
+# Technical term pattern / 技术术语模式
 TECHNICAL_TERM_RE = re.compile(r'^[A-Za-z][A-Za-z0-9]*(?:[._+#/-][A-Za-z0-9]+)*(?:\s+\d+(?:\.\d+)?)?$')
+# Repeated character detection pattern / 重复字符检测模式
 REPEATED_CHARACTER_RE = re.compile(r'(.)\1{3,}')
+# General token pattern / 通用 token 模式
 TOKEN_RE = re.compile(r'[\u3400-\u9fff]|[A-Za-z0-9]+(?:[._+#/-][A-Za-z0-9]+)*')
 
 
 @dataclass(frozen=True)
 class HybridRankingConfig:
+    """
+    Configuration for hybrid keyword ranking algorithm.
+    混合关键词排序算法的配置。
+    """
     min_score: float = 0.28
     min_keywords: int = 1
     max_keywords: int = 10

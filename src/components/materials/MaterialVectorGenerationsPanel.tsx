@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Badge, Button, Group, Modal, Paper, Progress, Select, Stack, Text, TextInput } from '@mantine/core';
-import type { MaterialVectorGeneration } from '../../../shared/materialVectorGenerations';
+import type { MaterialVectorGeneration } from '../../../shared/materialVectorGenerations.ts';
 import type { MaterialEmbeddingCandidate, MaterialEmbeddingProfileStatus, MaterialEmbeddingProfileTestResult, ModelHub } from '../../electron';
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 
 const stateLabels = { BUILDING: '正在构建', INTERRUPTED: '构建已中断', CANCELLED: '已取消', FAILED: '构建失败', READY: '已验证，待切换', ACTIVE: '当前使用', RETIRED: '已保留，可回滚' };
 

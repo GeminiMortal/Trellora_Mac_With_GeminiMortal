@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { findMaterialsDocument } from '../../materialsLibrary';
+import { findMaterialsDocument } from '../../library/materialsLibrary';
 import { readMaterialParentWindow, searchMaterialChunks } from '../../pipeline/materialChunkSearch';
 import type { MaterialEmbeddingAdapter } from '../../pipeline/materialEmbeddingAdapters';
 import { retrieveKnowledgeBaseEvidence } from '../knowledgeBaseRag';

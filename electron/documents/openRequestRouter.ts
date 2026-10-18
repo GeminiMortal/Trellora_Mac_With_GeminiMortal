@@ -1,10 +1,23 @@
+/**
+ * Startup open-request routing: parses CLI file arguments and defers document opens until the session service is ready.
+ * 启动打开请求路由：解析命令行文件参数，并将文档打开延迟到会话服务就绪后执行。
+ */
 import path from 'node:path';
-import { getFileTypeInfo } from '../fileTypes';
-import type { DocumentOpenRequest } from '../../shared/documentSession';
+import { getFileTypeInfo } from '../files/fileTypes.ts';
+import type { DocumentOpenRequest } from '../../shared/documentSession.ts';
 
 const valueSwitches = new Set(['user-data-dir', 'remote-debugging-port', 'remote-debugging-address', 'inspect', 'inspect-brk', 'lang', 'log-file', 'js-flags', 'app', 'type', 'enable-features', 'disable-features', 'trace-startup-file', 'profile-directory']);
 const booleanSwitches = new Set(['no-sandbox', 'disable-gpu', 'disable-dev-shm-usage', 'enable-logging', 'trace-warnings', 'trace-startup']);
-/** 开发入口和参数值不作为文档；相对路径始终使用该次启动的工作目录。 */
+/**
+ * Development entry and switch values are not treated as documents; relative paths always resolve against this launch's working directory.
+ * 开发入口和参数值不作为文档；相对路径始终使用该次启动的工作目录。
+ *
+ * @param argv - Process command-line arguments / 进程命令行参数
+ * @param cwd - Working directory of the current launch / 本次启动的工作目录
+ * @param packaged - Whether the app runs packaged (production) / 应用是否以打包（生产）方式运行
+ * @param entryPath - Development entry script path to exclude / 需排除的开发入口脚本路径
+ * @returns Absolute paths of candidate document files / 候选文档文件的绝对路径列表
+ */
 export function parseDocumentArguments(argv: string[], cwd: string, packaged: boolean, entryPath?: string): string[] {
   const files: string[] = []; let literal = false;
   const entry = !packaged ? path.resolve(cwd, entryPath ?? argv[1] ?? '') : undefined;
@@ -21,7 +34,10 @@ export function parseDocumentArguments(argv: string[], cwd: string, packaged: bo
   return files;
 }
 
-/** 启动请求在服务就绪前保留；所有来源复用会话服务的真实文件和边界校验。 */
+/**
+ * Startup requests are held until the service is ready; every source reuses the session service's real-file and boundary validation.
+ * 启动请求在服务就绪前保留；所有来源复用会话服务的真实文件和边界校验。
+ */
 export class OpenRequestRouter {
   private waiting: string[] = [];
   private ready = false;

@@ -1,17 +1,36 @@
+/**
+ * Chunking configuration: per-library v2 chunking config persistence, normalization with
+ * strict/lenient validation, legacy migration, and cache-key hashing.
+ * 切块配置：资料库级 v2 切块配置持久化、严格/宽松归一化校验、旧版迁移与缓存键哈希。
+ */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { assertExistingDirectory } from '../pathGuards';
-import { atomicWriteJson } from './pathLayout';
-import { normalizePipelineStructureConfig, type ConfigStore } from './structureConfig';
+import { assertExistingDirectory } from '../files/pathGuards.ts';
+import { atomicWriteJson } from './pathLayout.ts';
+import { normalizePipelineStructureConfig, type ConfigStore } from './structureConfig.ts';
 import type {
   ChunkStrategyCode,
   ChunkingMode,
   LibraryChunkingConfig,
-} from './types';
+} from './types.ts';
 
+/**
+ * Schema version of the chunking v2 config format.
+ * 切块 v2 配置格式的 schema 版本号。
+ */
 export const CHUNKING_CONFIG_SCHEMA_VERSION = 2;
+
+/**
+ * File name used to persist the library chunking config under `.menghan-meta/config/`.
+ * 在 `.menghan-meta/config/` 下持久化资料库切块配置的文件名。
+ */
 export const CHUNKING_CONFIG_FILE_NAME = 'chunking-v2.json';
+
+/**
+ * Engine version included in the chunking config hash for cache invalidation.
+ * 包含在切块配置哈希中用于缓存失效的引擎版本。
+ */
 export const CHUNKING_CONFIG_ENGINE_VERSION = 'chunking-v2-config-1';
 
 /**
@@ -19,10 +38,24 @@ export const CHUNKING_CONFIG_ENGINE_VERSION = 'chunking-v2-config-1';
  * MENGHAN_PIPELINE_CHUNKING_V2=0 to immediately return to the legacy path;
  * an explicit 1 remains supported for controlled rollout environments.
  */
+/**
+ * Whether the phase-5 v2 Parent/Child chunking pipeline is enabled.
+ * Set `MENGHAN_PIPELINE_CHUNKING_V2=0` to immediately return to the legacy path;
+ * an explicit `1` remains supported for controlled rollout environments.
+ * 第 5 阶段 v2 Parent/Child 切块流水线是否启用。
+ * 设置 `MENGHAN_PIPELINE_CHUNKING_V2=0` 可立即回退到旧路径；显式 `1` 仍可用于受控灰度环境。
+ *
+ * @returns True when v2 chunking is active / v2 切块处于启用状态时返回 true
+ */
 export function pipelineChunkingV2Enabled(): boolean {
   return process.env.MENGHAN_PIPELINE_CHUNKING_V2 !== '0';
 }
 
+/**
+ * Recommended default chunking config for new libraries: STRUCTURE + RECURSIVE parent strategies,
+ * 2400-char target, LLM disabled, semantic thresholds at defaults.
+ * 新资料库的推荐默认切块配置：STRUCTURE + RECURSIVE 父策略，目标 2400 字符，LLM 关闭，语义阈值为默认值。
+ */
 export const DEFAULT_RECOMMENDED_CHUNKING_CONFIG: LibraryChunkingConfig = {
   schemaVersion: CHUNKING_CONFIG_SCHEMA_VERSION,
   mode: 'recommended',
@@ -54,6 +87,10 @@ export const DEFAULT_RECOMMENDED_CHUNKING_CONFIG: LibraryChunkingConfig = {
   childFixedOverlapChars: 100,
 };
 
+/**
+ * Typed error for chunking config validation and persistence failures.
+ * 切块配置校验与持久化失败的类型化错误。
+ */
 export class ChunkingConfigError extends Error {
   readonly code: 'CHUNK_CONFIG_INVALID' | 'CHUNK_CONFIG_WRITE_FAILED';
 
@@ -64,10 +101,25 @@ export class ChunkingConfigError extends Error {
   }
 }
 
+/**
+ * Return the absolute path to the library chunking config file.
+ * 返回资料库切块配置文件的绝对路径。
+ *
+ * @param libraryPath - Absolute path to the materials library / 资料库绝对路径
+ * @returns Absolute config file path / 配置文件绝对路径
+ */
 export function chunkingConfigPath(libraryPath: string): string {
   return path.join(path.resolve(libraryPath), '.menghan-meta', 'config', CHUNKING_CONFIG_FILE_NAME);
 }
 
+/**
+ * Read the library chunking config from disk, migrating from legacy store if present.
+ * 从磁盘读取资料库切块配置，如存在旧版存储则自动迁移。
+ *
+ * @param libraryPath - Absolute path to the materials library / 资料库绝对路径
+ * @param legacyStore - Optional legacy Electron Store for migration / 可选的旧版 Electron Store，用于迁移
+ * @returns Normalized library chunking config / 归一化的资料库切块配置
+ */
 export function readLibraryChunkingConfig(libraryPath: string, legacyStore?: ConfigStore): LibraryChunkingConfig {
   const normalizedLibraryPath = assertExistingDirectory(libraryPath);
   const configPath = chunkingConfigPath(normalizedLibraryPath);
@@ -96,6 +148,15 @@ export function readLibraryChunkingConfig(libraryPath: string, legacyStore?: Con
   return cloneConfig(DEFAULT_RECOMMENDED_CHUNKING_CONFIG);
 }
 
+/**
+ * Merge a partial patch into the library chunking config, validate, and persist to disk.
+ * 将局部补丁合并进资料库切块配置，校验后持久化到磁盘。
+ *
+ * @param libraryPath - Absolute path to the materials library / 资料库绝对路径
+ * @param patch - Partial config object to merge / 要合并的局部配置对象
+ * @param legacyStore - Optional legacy Electron Store for migration / 可选的旧版 Electron Store，用于迁移
+ * @returns The normalized configuration actually persisted / 实际写入的归一化配置
+ */
 export function saveLibraryChunkingConfig(libraryPath: string, patch: unknown, legacyStore?: ConfigStore): LibraryChunkingConfig {
   const normalizedLibraryPath = assertExistingDirectory(libraryPath);
   if (!isRecord(patch) || Array.isArray(patch)) {
@@ -114,6 +175,17 @@ export function saveLibraryChunkingConfig(libraryPath: string, patch: unknown, l
   return next;
 }
 
+/**
+ * Coerce an unknown value into a valid LibraryChunkingConfig, clamping numeric fields
+ * and validating strategy arrays. In strict mode, invalid fields throw; in lenient mode,
+ * they fall back to defaults.
+ * 将未知值强制转换为合法的 LibraryChunkingConfig，夹取数值字段并校验策略数组。
+ * 严格模式下无效字段抛异常；宽松模式下回退到默认值。
+ *
+ * @param value - Raw stored value, may be null or malformed / 原始存储值，可能为 null 或格式错误
+ * @param strict - When true, throw on invalid fields; when false, use defaults / 为 true 时无效字段抛异常；为 false 时使用默认值
+ * @returns Normalized library chunking config / 归一化的资料库切块配置
+ */
 export function normalizeLibraryChunkingConfig(value: unknown, strict = false): LibraryChunkingConfig {
   const record = isRecord(value) ? value : {};
   const mode = normalizeMode(record.mode, strict);
@@ -179,6 +251,13 @@ export function normalizeLibraryChunkingConfig(value: unknown, strict = false): 
   return next;
 }
 
+/**
+ * Build a stable hash covering the chunking config, schema version, and engine version.
+ * 生成覆盖切块配置、schema 版本和引擎版本的稳定哈希。
+ *
+ * @param config - Library chunking config / 资料库切块配置
+ * @returns Prefixed hex hash string ('v2-...') / 带前缀的十六进制哈希字符串（'v2-...'）
+ */
 export function chunkingConfigHash(config: LibraryChunkingConfig): string {
   const normalized = normalizeLibraryChunkingConfig(config);
   const hashInput = {

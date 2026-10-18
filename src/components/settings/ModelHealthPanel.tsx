@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Alert, Badge, Button, Group, Loader, Paper, Stack, Text } from '@mantine/core';
 import { ArrowRight, CheckCircle2, Sparkles, XCircle } from 'lucide-react';
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import type { AiModelSettings, ModelHub } from '../../electron';
-import { evaluateModelHealth, findZombieProfiles } from './modelHealth';
+import { evaluateModelHealth, findZombieProfiles } from './modelHealth.ts';
 
 interface ModelHealthPanelProps {
   settings: AiModelSettings;

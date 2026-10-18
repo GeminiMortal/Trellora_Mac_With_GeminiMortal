@@ -1,15 +1,15 @@
 import type { IpcMainInvokeEvent } from 'electron';
-import { findMaterialsDocument } from '../materialsLibrary';
-import { readMaterialDocumentIndexStats } from '../pipeline/materialChunkSearch';
-import { resolveRerankRuntime } from '../knowledge/rerankAdapters';
-import { runReActLoop } from '../knowledge/reactAgent/reactEngine';
-import { createReActChatTransport, type ReActChatMessage, type ReActChatTransport } from '../knowledge/reactAgent/reactChatTransport';
-import { projectReActModelRoundEvent } from '../knowledge/reactAgent/reactPublicModelTrace';
-import type { ReActCitationLedgerEntry } from '../knowledge/reactAgent/reactEngineTypes';
-import { ReActToolRegistry } from '../knowledge/reactAgent/toolRegistry';
-import { KnowledgeAgentSessionState } from '../knowledge/knowledgeTools/knowledgeSessionState';
-import type { KnowledgeToolRetrievalContext } from '../knowledge/knowledgeToolContext';
-import { streamKnowledgeAnswer } from '../knowledge/assistantTurn';
+import { findMaterialsDocument } from '../library/materialsLibrary.ts';
+import { readMaterialDocumentIndexStats } from '../pipeline/materialChunkSearch.ts';
+import { resolveRerankRuntime } from '../knowledge/rerankAdapters.ts';
+import { runReActLoop } from '../knowledge/reactAgent/reactEngine.ts';
+import { createReActChatTransport, type ReActChatMessage, type ReActChatTransport } from '../knowledge/reactAgent/reactChatTransport.ts';
+import { projectReActModelRoundEvent } from '../knowledge/reactAgent/reactPublicModelTrace.ts';
+import type { ReActCitationLedgerEntry } from '../knowledge/reactAgent/reactEngineTypes.ts';
+import { ReActToolRegistry } from '../knowledge/reactAgent/toolRegistry.ts';
+import { KnowledgeAgentSessionState } from '../knowledge/tools/knowledgeTools/knowledgeSessionState.ts';
+import type { KnowledgeToolRetrievalContext } from '../knowledge/tools/knowledgeToolContext.ts';
+import { streamKnowledgeAnswer } from '../knowledge/assistant/assistantTurn.ts';
 import type {
   AssistantKnowledgeBaseCitation,
   AssistantPublicModelEvent,
@@ -22,20 +22,20 @@ import type {
   AssistantWikiScopeProgress,
   AssistantWikiScopeResult,
   CurrentNotePublicToolEvent,
-} from '../knowledge/assistantTurnTypes';
-import { maxAssistantImageTotalBytes } from '../knowledge/assistantTurnTypes';
-import type { AssistantDetailedTraceSink } from '../knowledge/assistantDetailedTrace';
-import { ModelCallPreparationError, type ModelCallCoordinator } from '../knowledge/modelCallCoordinator';
-import type { AiProviderConfig, AiProviderKind } from '../knowledge/aiTypes';
-import type { AiTransportImage } from '../knowledge/aiGenerationTransport';
-import { resolveAssistantAnswerTemperature } from '../knowledge/assistantGenerationPolicy';
-import { collectAiTransportImageHashes, materializeAssistantDocumentImages, parseAssistantDocumentAttachments } from '../knowledge/assistantDocumentAttachmentParser';
-import { AttachmentContextProvider, renderAttachmentMetadata, renderAttachmentRange, renderDocumentImageTransportIndex } from '../knowledge/attachmentContextProvider';
-import { KnowledgeBaseImageResolver, renderKnowledgeBaseImageTransportIndex } from '../knowledge/knowledgeBaseImageResolver';
-import type { MineruRuntimeConfig } from '../pipeline/types';
-import { estimateTokenCount, type AssistantContextUsage } from '../knowledge/tokenEstimator';
+} from '../knowledge/assistant/assistantTurnTypes.ts';
+import { maxAssistantImageTotalBytes } from '../knowledge/assistant/assistantTurnTypes.ts';
+import type { AssistantDetailedTraceSink } from '../knowledge/assistant/assistantDetailedTrace.ts';
+import { ModelCallPreparationError, type ModelCallCoordinator } from '../knowledge/ai/modelCallCoordinator.ts';
+import type { AiProviderConfig, AiProviderKind } from '../knowledge/ai/aiTypes.ts';
+import type { AiTransportImage } from '../knowledge/ai/aiGenerationTransport.ts';
+import { resolveAssistantAnswerTemperature } from '../knowledge/assistant/assistantGenerationPolicy.ts';
+import { collectAiTransportImageHashes, materializeAssistantDocumentImages, parseAssistantDocumentAttachments } from '../knowledge/assistant/assistantDocumentAttachmentParser.ts';
+import { AttachmentContextProvider, renderAttachmentMetadata, renderAttachmentRange, renderDocumentImageTransportIndex } from '../knowledge/context/attachmentContextProvider.ts';
+import { KnowledgeBaseImageResolver, renderKnowledgeBaseImageTransportIndex } from '../knowledge/knowledgeBaseImageResolver.ts';
+import type { MineruRuntimeConfig } from '../pipeline/types.ts';
+import { estimateTokenCount, type AssistantContextUsage } from '../knowledge/model/tokenEstimator.ts';
 import type { HubStore } from '../store';
-import type { WikiDocumentOutline } from '../wikiOutline';
+import type { WikiDocumentOutline } from './wikiOutline.ts';
 import {
   collectSubtreeHeadingIds,
   collectWikiChildNodes,
@@ -43,7 +43,7 @@ import {
   formatWikiNodePath,
   getWikiNodeBreadcrumb,
   isWikiRootNode,
-} from './wikiNodeScope';
+} from './wikiNodeScope.ts';
 import {
   buildWikiAgentQuestion,
   buildWikiNodeAgentSystemPrompt,
@@ -51,16 +51,16 @@ import {
   buildWikiNodeFallbackSystemPrompt,
   buildWikiRuntimeContext,
   type WikiAgentCapabilities,
-} from './wikiNodeAgentPrompt';
-import { WIKI_NODE_REACT_BUDGET, WIKI_NODE_SUMMARY_REACT_BUDGET } from './wikiNodeBudget';
-import { resolveWikiSummaryPolicy, type WikiActionKind } from './wikiQuickActions';
+} from './wikiNodeAgentPrompt.ts';
+import { WIKI_NODE_REACT_BUDGET, WIKI_NODE_SUMMARY_REACT_BUDGET } from './wikiNodeBudget.ts';
+import { resolveWikiSummaryPolicy, type WikiActionKind } from './wikiQuickActions.ts';
 import {
   buildWikiQueryRewritePrompt,
   rewriteWikiQuestion,
   selectWikiRewriteHistory,
   shouldRewriteWikiQuestion,
   WikiQueryRewriteError,
-} from './wikiQueryRewrite';
+} from './wikiQueryRewrite.ts';
 import {
   createWikiScopePolicy,
   createWikiScopeState,
@@ -69,18 +69,21 @@ import {
   type WikiScopeState,
   type WikiRetrievalStopReason,
   type WikiSearchRange,
-} from './wikiScopePolicy';
-import { buildWikiFallbackQueries, createWikiScopedSearchTool } from './wikiRetrievalCycle';
-import type { WikiToolContext } from './wikiToolContext';
-import { wikiNodeSearchTool } from './wikiTools/wikiNodeSearchTool';
-import { wikiGrepNodeTool } from './wikiTools/wikiGrepNodeTool';
-import { wikiReadNodeTool } from './wikiTools/wikiReadNodeTool';
-import { wikiGetNodeInfoTool } from './wikiTools/wikiGetNodeInfoTool';
-import { wikiSearchDocumentTool } from './wikiTools/wikiSearchDocumentTool';
-import { generateWikiSplitProposal } from './wikiSplitProposal';
-import { assessWikiDirectEvidence } from './wikiDirectEvidenceGate';
+} from './wikiScopePolicy.ts';
+import { buildWikiFallbackQueries, createWikiScopedSearchTool } from './wikiRetrievalCycle.ts';
+import type { WikiToolContext } from './wikiToolContext.ts';
+import { wikiNodeSearchTool } from './wikiTools/wikiNodeSearchTool.ts';
+import { wikiGrepNodeTool } from './wikiTools/wikiGrepNodeTool.ts';
+import { wikiReadNodeTool } from './wikiTools/wikiReadNodeTool.ts';
+import { wikiGetNodeInfoTool } from './wikiTools/wikiGetNodeInfoTool.ts';
+import { wikiSearchDocumentTool } from './wikiTools/wikiSearchDocumentTool.ts';
+import { generateWikiSplitProposal } from './wikiSplitProposal.ts';
+import { assessWikiDirectEvidence } from './wikiDirectEvidenceGate.ts';
 
 /**
+ * Wiki tool name to public event name mapping (spec §4.2).
+ * CurrentNotePublicToolEvent's tool union collapses to existing knowledge_agent_* events so the
+ * renderer's debug track can reuse the same event types without adding new ones.
  * Wiki 工具名到对外公开事件名的映射（方案 §4.2）。
  * CurrentNotePublicToolEvent 的 tool 联合收敛到既有 knowledge_agent_* 事件，
  * 渲染进程调试轨道无需新增事件类型即可复用展示。
@@ -93,65 +96,115 @@ const WIKI_AGENT_TOOL_EVENT_NAMES: Record<string, CurrentNotePublicToolEvent['to
   wiki_get_node_info: 'knowledge_agent_doc_info',
 };
 
+/**
+ * Input parameters for one Wiki node ReAct agent turn.
+ * 单轮 Wiki 节点 ReAct Agent 的输入参数。
+ */
 export interface WikiNodeAgentTurnInput {
   event: IpcMainInvokeEvent;
   request: AssistantTurnRequest;
   controller: AbortController;
-  /** 本轮 Wiki 作用域目标（方案 §4.2）；由 main.ts 从已校验的 wikiTarget 注入。 */
+  /**
+   * This turn's Wiki scope target (spec §4.2); injected by main.ts from the already-validated wikiTarget.
+   * 本轮 Wiki 作用域目标（方案 §4.2）；由 main.ts 从已校验的 wikiTarget 注入。
+   */
   wikiTarget: { libraryPath: string; documentId: string; nodeId: string; actionKind: WikiActionKind };
-  /** 已投影并应用同级排序覆盖的文档目录树；由 main.ts 读取后注入。 */
+  /**
+   * Projected document outline with sibling order overrides already applied; read and injected by main.ts.
+   * 已投影并应用同级排序覆盖的文档目录树；由 main.ts 读取后注入。
+   */
   outline: WikiDocumentOutline;
   model: string;
   provider: AiProviderKind;
   providerConfig: AiProviderConfig;
   contextWindowTokens: number;
-  /** Wiki 本轮图片附件；沿 ReAct 当前 user 消息传给 VLM，不写入会话历史。 */
+  /**
+   * Wiki image attachments for this turn; forwarded to VLM with the current ReAct user message, not stored in session history.
+   * Wiki 本轮图片附件；沿 ReAct 当前 user 消息传给 VLM，不写入会话历史。
+   */
   images?: AiTransportImage[];
-  /** 主进程解析并注入的 MinerU 配置；授权后用于 PDF 正文/图片解析，不进入模型上下文。 */
+  /**
+   * MinerU config parsed and injected by the main process; used for PDF body/image parsing when authorized, never enters model context.
+   * 主进程解析并注入的 MinerU 配置；授权后用于 PDF 正文/图片解析，不进入模型上下文。
+   */
   mineru?: MineruRuntimeConfig;
   modelCallCoordinator: ModelCallCoordinator;
   onDetailedTrace: AssistantDetailedTraceSink;
   store: HubStore;
-  /** 事件下发；由 main.ts 注入以复用 emitAssistantTurnEvent 的销毁检查。 */
+  /**
+   * Event emitter; injected by main.ts to reuse emitAssistantTurnEvent's disposal check.
+   * 事件下发；由 main.ts 注入以复用 emitAssistantTurnEvent 的销毁检查。
+   */
   emitTurnEvent: (payload: AssistantTurnEvent) => void;
-  /** 按查询装配检索依赖；由 main.ts 注入 prepareMaterialSearchContext。 */
+  /**
+   * Assemble retrieval dependencies by query; injected by main.ts via prepareMaterialSearchContext.
+   * 按查询装配检索依赖；由 main.ts 注入 prepareMaterialSearchContext。
+   */
   prepareMaterialSearchContext: (libraryPath: string, query: string) => Promise<KnowledgeToolRetrievalContext>;
-  /** 传输层注入；仅验证脚本使用，缺省按线协议工厂创建。 */
+  /**
+   * Transport injection; only used by validation scripts, production defaults to the wire-protocol factory.
+   * 传输层注入；仅验证脚本使用，缺省按线协议工厂创建。
+   */
   transport?: ReActChatTransport;
-  /** 普通流式生成注入；仅验证脚本使用，生产缺省走 streamKnowledgeAnswer。 */
+  /**
+   * Streaming generation injection; only used by validation scripts, production defaults to streamKnowledgeAnswer.
+   * 普通流式生成注入；仅验证脚本使用，生产缺省走 streamKnowledgeAnswer。
+   */
   streamAnswer?: typeof streamKnowledgeAnswer;
-  /** Wiki 问题改写注入；仅验证脚本使用。 */
+  /**
+   * Wiki question rewrite injection; only used by validation scripts.
+   * Wiki 问题改写注入；仅验证脚本使用。
+   */
   rewriteQuestion?: typeof rewriteWikiQuestion;
 }
 
+/**
+ * Metrics collected during one Wiki node agent turn.
+ * 单轮 Wiki 节点 Agent 收集的度量指标。
+ */
 export interface WikiNodeAgentTurnMetrics {
   rounds: number;
   modelCalls: number;
   toolCalls: number;
   stopReason: string;
   stopDetail?: string;
-  /** 台账登记的去重证据父块数（不含直载 [0]）。 */
+  /** Deduplicated evidence parent-chunk count registered in the ledger (excludes direct-injected [0]). / 台账登记的去重证据父块数（不含直载 [0]）。 */
   evidenceParentChunks: number;
-  /** Wiki 检索类工具实际启动的受控周期数。 */
+  /** Number of controlled retrieval cycles actually launched by Wiki retrieval tools. / Wiki 检索类工具实际启动的受控周期数。 */
   retrievalCycles: number;
   maxRetrievalCycles: number;
   finalScope: WikiSearchRange;
   scopeStopReason?: WikiRetrievalStopReason;
 }
 
+/**
+ * Outcome returned by runWikiNodeAgentTurn.
+ * runWikiNodeAgentTurn 返回的执行结果。
+ */
 export interface WikiNodeAgentTurnOutcome {
   result: AssistantTurnResult | undefined;
-  /** true 表示原生工具链不可用或异常，本轮已由固定降级流水线完成。 */
+  /**
+   * True when the native tool chain was unavailable or failed and the fixed degraded pipeline completed the turn.
+   * true 表示原生工具链不可用或异常，本轮已由固定降级流水线完成。
+   */
   degraded?: boolean;
   metrics?: WikiNodeAgentTurnMetrics;
 }
 
 /**
+ * Wiki node ReAct Agent entry (spec §4): scope assembly → node direct-inject → tool registration →
+ * prompt & runtime context → runReActLoop main loop → AssistantTurnResult projection.
+ * Isomorphic to the knowledge-base agent; the differences are scope (locked to the current node subtree),
+ * budget profile (tighter) and node direct-inject (≤6,000 chars full-text inject with agreed citation [0]).
+ * Falls back to the fixed degraded pipeline when the transport layer is unavailable.
  * Wiki 节点 ReAct Agent 入口（方案 §4）：作用域装配 → 节点直载 → 工具注册
  * → 提示词与运行时上下文 → runReActLoop 主循环 → AssistantTurnResult 投影。
  *
  * 与知识库 Agent 同构，差异只在作用域（限定当前节点子树）、预算剖面（更紧）
  * 与节点直载（≤6,000 字符全文注入并约定引用 [0]）。传输层不可用时请求回退。
+ *
+ * @param input - Turn input parameters / 轮次输入参数
+ * @returns Outcome with result, degraded flag and metrics / 带结果、降级标记与度量的执行结果
  */
 export async function runWikiNodeAgentTurn(input: WikiNodeAgentTurnInput): Promise<WikiNodeAgentTurnOutcome> {
   const { request, controller, wikiTarget, outline } = input;
@@ -188,6 +241,7 @@ export async function runWikiNodeAgentTurn(input: WikiNodeAgentTurnInput): Promi
   const documentName = document?.name?.trim() || outline.title || '当前文档';
   const sourcePath = document?.absolutePath ?? wikiTarget.libraryPath;
   const isRoot = isWikiRootNode(node);
+  // Root node scope covers the entire document (no chapter filter passed); other nodes are limited to themselves + descendant heading subtree.
   // 根节点作用域为整篇文档（不下发章节过滤）；其余节点限定自身 + 后代标题子树。
   const sectionNodeIds = isRoot ? undefined : collectSubtreeHeadingIds(outline.nodes, wikiTarget.nodeId);
   const nodeBreadcrumb = getWikiNodeBreadcrumb(outline.nodes, wikiTarget.nodeId);
@@ -376,9 +430,11 @@ export async function runWikiNodeAgentTurn(input: WikiNodeAgentTurnInput): Promi
   const libraryStats = readMaterialDocumentIndexStats(wikiTarget.libraryPath, wikiTarget.documentId);
   const documentSearchAvailable = scopePolicy.documentSearchAvailable;
   const capabilities: WikiAgentCapabilities = {
+    // Semantic search is available when the document-level parent-chunk index exists; otherwise wiki_node_search degrades to keyword recall.
     // 文档级父块索引存在即认为语义检索可用；否则 wiki_node_search 退化为关键词召回。
     semanticSearch: libraryStats.parentChunks > 0,
     keywordSearch: true,
+    // Literal search operates on in-memory projected node markdown; no vector index needed, always available.
     // 字面检索基于内存投影的节点 markdown，无需向量索引，始终可用。
     literalSearch: true,
     deepRead: true,
@@ -444,6 +500,7 @@ export async function runWikiNodeAgentTurn(input: WikiNodeAgentTurnInput): Promi
   registry.register(wikiGetNodeInfoTool);
   if (documentSearchAvailable) registry.register(scopedDocumentSearchTool);
 
+  // Node direct-inject block (spec §3.3): ≤6,000 chars full-text inject (citation [0]), otherwise head/tail truncation forcing tool-based gap fill.
   // 节点直载块（方案 §3.3）：≤6,000 字符全文注入（引用 [0]），否则头尾节选并强制走工具。
   const contentBlock = buildWikiNodeContentBlock(nodeMarkdown);
   const summaryPolicy = wikiTarget.actionKind === 'summarize'
@@ -739,6 +796,7 @@ export async function runWikiNodeAgentTurn(input: WikiNodeAgentTurnInput): Promi
     return runFallback('transport-unavailable');
   }
 
+  // History: reuse the renderer-provided and already validated session context (≤6 turns), keeping multi-turn coherence.
   // 历史：复用渲染进程提供且已校验的会话上下文（≤6 条），保持多轮追问连续。
   const history: ReActChatMessage[] = request.conversation.map((message) => ({ role: message.role, content: message.content }));
   const question = buildWikiAgentQuestion({
@@ -752,6 +810,8 @@ export async function runWikiNodeAgentTurn(input: WikiNodeAgentTurnInput): Promi
   // Wiki has an evidence gate after each model response. Keep a candidate
   // answer private until that gate accepts it; otherwise a rejected candidate
   // appears complete in the UI, is cleared, and looks like a second generation.
+  // Wiki 在每次模型回复后设有证据闸门。候选回答在闸门通过前保持私有；
+  // 否则被拒绝的候选会在 UI 中显示为已完成，随后被清除，看起来像生成了两次。
   let pendingAnswerDeltas = '';
   let visibleStreamedAnswerChars = 0;
   let visibleAnswerPublished = false;
@@ -829,6 +889,8 @@ export async function runWikiNodeAgentTurn(input: WikiNodeAgentTurnInput): Promi
         // answer without performing the requested search. Permit only one such
         // correction at the same retrieval-cycle count; the deterministic
         // evidence guard below will then repair citations or return not-found.
+        // 模型提供方可能忽略纠正提示，未执行检索就再返回一次终答。
+        // 允许同一检索周期内仅一次此类重试；下方确定性证据守卫随后会修复引用或返回"未找到"。
         let boundedRepeatedFinalAnswer = false;
         if (!decision.accept) {
           if (lastRejectedFinalAnswerCycle === scopeState.retrievalCycleCount) {
@@ -953,6 +1015,7 @@ export async function runWikiNodeAgentTurn(input: WikiNodeAgentTurnInput): Promi
     evidenceToolSatisfied: scopeState.retrievalCycleCount > 0 || loopResult.citations.some(isWikiEvidenceEntry),
   });
   const answer = guardedAnswer.answer;
+  // Already stream-projected characters are not re-sent; when no streaming callback was provided, the full answer is sent.
   // 引擎已流式投影的部分不重发；未提供流式回调时全量补发。
   if (guardedAnswer.corrected) {
     resetPendingOrVisibleAnswer();
@@ -968,6 +1031,9 @@ export async function runWikiNodeAgentTurn(input: WikiNodeAgentTurnInput): Promi
     emitDelta(answer.slice(index, index + 64));
   }
 
+  // Citation projection (spec §4.6): [0] is the node direct-injected full text; tool evidence takes ledger [n] (n≥1).
+  // nodePath uses the current node breadcrumb: Wiki scope search defaults to this chapter subtree, evidence is attributed to that chapter path;
+  // cross-link cross-node evidence is also expanded against the anchor node path (P4 simplification, no per-chunk chapter attribution).
   // 引用投影（方案 §4.6）：[0] 为节点直载全文，工具证据取台账 [n]（n≥1）。
   // nodePath 取当前节点面包屑：Wiki 作用域检索默认锁定本章节子树，证据归属该章节路径；
   // cross-links 的跨节点证据亦以锚点节点路径展开（P4 简化，不做逐块章节归属）。
@@ -1009,6 +1075,7 @@ export async function runWikiNodeAgentTurn(input: WikiNodeAgentTurnInput): Promi
     anchorNodeId: wikiTarget.nodeId,
   });
 
+  // Context window usage: prefer provider-reported figures; fall back to last-prompt local estimate + answer estimate.
   // 上下文窗口用量：优先取服务商上报，否则回退末次 prompt 本地估算 + 回答估算。
   const lastUsage = loopResult.lastUsage;
   const estimatedInputTokens = loopResult.lastPromptTokens ?? 0;
@@ -1087,6 +1154,7 @@ export async function runWikiNodeAgentTurn(input: WikiNodeAgentTurnInput): Promi
   };
 }
 
+/** Build the wiki draft (split proposal) if the action is split-children. / 当动作为 split-children 时构造 wiki 草稿（拆分提案）。 */
 async function createWikiDraft(input: {
   input: WikiNodeAgentTurnInput;
   answer: string;
@@ -1191,6 +1259,11 @@ function projectWikiCitations(input: {
   return { knowledgeBaseCitations, sourceNotes };
 }
 
+/**
+ * Final evidence guard: assess direct evidence, check retrieved evidence alignment, and repair citations or
+ * return a not-found answer when the evidence chain is insufficient.
+ * 终态证据守卫：评估直载证据、检查检索证据对齐，证据链不足时修复引用或返回"未找到"回答。
+ */
 function guardWikiDirectEvidenceAnswer(input: {
   answer: string;
   question: string;
@@ -1258,6 +1331,11 @@ function hasQuestionAlignedRetrievedEvidence(input: {
   return selectQuestionAlignedRetrievedEvidence(input).length > 0;
 }
 
+/**
+ * Filter ledger entries to only those whose source text is individually aligned with the question; fall back
+ * to evaluating the combined source texts when no single entry passes.
+ * 过滤台账条目，仅保留来源文本与问题个体对齐的条目；无单条通过时回退评估合并文本。
+ */
 function selectQuestionAlignedRetrievedEvidence(input: {
   question: string;
   actionKind: WikiActionKind;
@@ -1292,6 +1370,7 @@ function appendWikiReferences(answer: string, references: string[]): string {
   return `${trimmed}${/[.!?。！？]$/u.test(trimmed) ? '' : '。'} ${missing.join('')}`;
 }
 
+/** Check whether entry is a wiki evidence entry (non-web, with reference and source text). / 判断条目是否为 wiki 证据条目（非 web，有引用和来源文本）。 */
 function isWikiEvidenceEntry(entry: ReActCitationLedgerEntry): boolean {
   return entry.kind !== 'web' && Boolean(entry.reference) && Boolean(entry.sourceText?.trim());
 }
@@ -1304,6 +1383,7 @@ function resolveWikiNodeIdForPath(outlineNodes: WikiDocumentOutline['nodes'], no
   })?.id;
 }
 
+/** Map wiki tool name to its search range for scope progress reporting. / 将 wiki 工具名映射到搜索范围，用于作用域进度上报。 */
 function resolveWikiToolSearchRange(toolName: string): WikiSearchRange | undefined {
   if (toolName === 'wiki_search_document') return 'document';
   if (toolName === 'wiki_node_search' || toolName === 'wiki_grep_node') return 'subtree';
@@ -1403,6 +1483,7 @@ function isWikiPathWithin(candidatePath: string[], anchorPath: string[]): boolea
   return anchorPath.length <= candidatePath.length && anchorPath.every((title, index) => candidatePath[index] === title);
 }
 
+/** Resolve the completeness label from citation count and stop reason. / 根据引用数和停止原因解析完整性标签。 */
 function resolveWikiCompleteness(
   citationCount: number,
   stopReason: WikiRetrievalStopReason | undefined,
@@ -1411,6 +1492,7 @@ function resolveWikiCompleteness(
   return stopReason === 'evidence-sufficient' ? 'complete' : 'partial';
 }
 
+/** Parse the chapter path from a citation's sectionContext field; falls back to the anchor breadcrumb when missing. / 从引用的 sectionContext 字段解析章节路径；缺失时回退到锚点面包屑。 */
 function parseWikiCitationPath(sectionContext: string | undefined, fallback: string[]): string[] {
   if (!sectionContext?.trim()) return fallback;
   const pathLine = sectionContext.split(/\r?\n/u).find((line) => line.startsWith('章节路径：'));
@@ -1427,6 +1509,7 @@ function parseWikiCitationPath(sectionContext: string | undefined, fallback: str
   return title ? [...fallback.slice(0, -1), title] : fallback;
 }
 
+/** Escape XML text so fallback reason/error strings cannot break the tag structure. / 转义 XML 文本，防止回退原因/错误字符串破坏标签结构。 */
 function escapeFallbackText(value: string): string {
   return value.replace(/&/gu, '&amp;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;');
 }

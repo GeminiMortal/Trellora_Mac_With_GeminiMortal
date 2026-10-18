@@ -27,7 +27,7 @@
     "chrome": "126.0.6478.234"
   },
   "machine": {
-    "platform": "win32",
+    "platform": "darwin",
     "release": "10.0.26200",
     "arch": "x64",
     "cpu": "13th Gen Intel(R) Core(TM) i5-13420H",

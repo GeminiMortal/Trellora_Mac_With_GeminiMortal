@@ -1,11 +1,14 @@
 /**
- * 问题时间敏感性识别：记忆装载后、prompt 装配前执行。
- * 相对时间 / 实时数据 / 日历类问题需要注入当前日期锚点，
- * 避免模型把“今天”当成无锚点词汇而答非所问；
- * 历史回顾类问题反而不需要锚定到今天。
+ * Question time-sensitivity detection: identifies whether a question needs a date anchor.
+ * 问题时间敏感性识别：判断问题是否需要日期锚点。
+ *
+ * Executed after memory loading and before prompt assembly.
+ * Relative time / real-time data / calendar questions need a current date anchor
+ * to prevent the model from interpreting "today" without context.
+ * 记忆装载后、prompt 装配前执行。相对时间/实时数据/日历类问题需要注入当前日期锚点。
  */
 
-/** 相对时间词：需要知道“今天”是哪天才能理解。 */
+/** Relative time keywords that require knowing "today". / 需要知道"今天"的相对时间词。 */
 const RELATIVE_TIME_KEYWORDS = [
   '今天', '今日', '明天', '明日', '后天', '昨天', '昨日', '前天',
   '本周', '这周', '上周', '下周', '本月', '这个月', '上个月', '下个月',
@@ -17,7 +20,7 @@ const RELATIVE_TIME_KEYWORDS = [
   'now', 'currently', 'recently', 'these days',
 ];
 
-/** 实时数据领域词：必须查最新数据，锚定日期的同时提示数据时效。 */
+/** Real-time data domain keywords requiring freshness awareness. / 需要时效感知的实时数据领域词。 */
 const FRESH_INFORMATION_KEYWORDS = [
   '天气', '气温', '下雨', '降雨', '降雪', '台风', '空气质量', '紫外线',
   '股价', '股票', '基金', '汇率', '行情', '油价', '金价',
@@ -25,19 +28,20 @@ const FRESH_INFORMATION_KEYWORDS = [
   'weather', 'forecast', 'stock', 'exchange rate', 'news', 'live', 'score', 'latest',
 ];
 
-/** 日历类词：需要日期锚定但不一定要搜索。 */
+/** Calendar keywords needing date anchoring. / 需要日期锚定的日历类词。 */
 const CALENDAR_KEYWORDS = [
   '星期几', '周几', '几号', '什么日子', '日期', '节假日', '假期', '放假',
   '农历', '阴历', '阳历', '节气', '周末', '除夕', '春节', '中秋', '端午', '重阳',
   'holiday', 'calendar', 'weekday', 'lunar',
 ];
 
-/** 历史回顾类词：这类问题反而不需要锚定到今天。 */
+/** Historical hints that do NOT need today's date anchor. / 不需要锚定到今天的历史回顾类词。 */
 const HISTORICAL_HINTS = [
   '历史上', '历史', '当年', '古代', '过去', '曾经', '回顾', '旧时',
   '那时候', '那时', '当时', '年代', 'historical', 'history', 'back then', 'in the past',
 ];
 
+/** Category of question time sensitivity. / 问题时间敏感性类别。 */
 export type QuestionTimeSensitivityCategory =
   | 'relative-time'
   | 'fresh-information'
@@ -45,6 +49,7 @@ export type QuestionTimeSensitivityCategory =
   | 'historical'
   | 'none';
 
+/** Result of time-sensitivity analysis on a question. / 问题时间敏感性分析结果。 */
 export interface QuestionTimeSensitivity {
   category: QuestionTimeSensitivityCategory;
   /** 是否需要在 prompt 中注入当前日期锚点。 */
@@ -57,9 +62,14 @@ function matchKeywords(text: string, keywords: readonly string[]): string[] {
 }
 
 /**
- * 识别顺序：历史回顾且不含相对时间词 → 不锚定；
- * 否则按 相对时间 → 实时数据 → 日历 的优先级锚定。
- * “历史上的今天”同时命中历史与相对时间，仍锚定到今天。
+ * Detect the time-sensitivity category of a question.
+ * 检测问题的时间敏感性类别。
+ *
+ * Priority: historical (no anchor) → relative-time → fresh-information → calendar.
+ * "历史上的今天" hits both historical and relative-time but still anchors.
+ *
+ * @param question - User question text / 用户问题文本
+ * @returns Time-sensitivity result / 时间敏感性结果
  */
 export function detectQuestionTimeSensitivity(question: string): QuestionTimeSensitivity {
   const text = question.toLocaleLowerCase('zh-Hans-CN');
@@ -77,8 +87,12 @@ export function detectQuestionTimeSensitivity(question: string): QuestionTimeSen
 }
 
 /**
- * 生成当前日期锚点行；非时间敏感问题返回 undefined。
- * 锚点随问题进入 Zone Q，跨轮不影响 S/M1/M2 前缀缓存。
+ * Build a date anchor line for time-sensitive questions; returns undefined otherwise.
+ * 为时间敏感问题生成日期锚点行；非时间敏感时返回 undefined。
+ *
+ * @param sensitivity - Time-sensitivity analysis result / 时间敏感性分析结果
+ * @param now - Current date / 当前日期
+ * @returns Date anchor string or undefined / 日期锚点字符串或 undefined
  */
 export function buildQuestionTimeAnchor(sensitivity: QuestionTimeSensitivity, now: Date = new Date()): string | undefined {
   if (!sensitivity.anchored) return undefined;

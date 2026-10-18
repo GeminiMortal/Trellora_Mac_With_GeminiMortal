@@ -1,23 +1,34 @@
+/**
+ * Graph vector index: builds cosine-distance vec0 virtual tables for entities
+ * and communities in a graph projection, with incremental vector caching.
+ * 图向量索引：在图谱投影中为实体和社区构建余弦距离 vec0 虚拟表，支持增量向量缓存。
+ */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
-import { estimateTokenCount } from '../knowledge/tokenEstimator';
-import { sqliteVecPackagedExtensionPath } from '../loadSqliteVec';
-import { PipelineStageError } from './stageErrors';
-import { openGraphDatabase } from './graphProjection';
+import { estimateTokenCount } from '../knowledge/model/tokenEstimator.ts';
+import { sqliteVecPackagedExtensionPath } from '../loadSqliteVec.ts';
+import { PipelineStageError } from './stageErrors.ts';
+import { openGraphDatabase } from './graphProjection.ts';
 
 const sqliteVec = require('sqlite-vec') as { load(database: Database.Database): void };
 
+/** Schema version of the graph vector index format. / 图向量索引格式的 Schema 版本号。 */
 export const GRAPH_VECTOR_SCHEMA_VERSION = 1;
-/** 实体向量文本 = 「mention」（type）：description，截断上限（与摘要同口径的 token 估算）。 */
+/** Entity vector text = "mention" (type): description, truncated to token budget (same estimator as summary). / 实体向量文本 = 「mention」（type）：description，截断上限（与摘要同口径的 token 估算）。 */
 export const GRAPH_ENTITY_VECTOR_TEXT_MAX_TOKENS = 800;
-/** 社区向量文本 = 摘要文本；摘要本身有预算，但仍截断以适配 embedding 模型上下文。 */
+/** Community vector text = summary; summary itself has a budget, but still truncated for embedding model context. / 社区向量文本 = 摘要文本；摘要本身有预算，但仍截断以适配 embedding 模型上下文。 */
 export const GRAPH_COMMUNITY_VECTOR_TEXT_MAX_TOKENS = 800;
+/** Batch size for embedding calls. / embedding 调用的批次大小。 */
 const GRAPH_VECTOR_BATCH_SIZE = 16;
 
 const entityVectorTableName = 'graph_entity_vec';
 const communityVectorTableName = 'graph_community_vec';
 /**
+ * Vector reuse cache (optimization P1-5 minimal scenario): when a single document
+ * re-parse triggers graph rebuild, unchanged entity/community vectors are reused
+ * from cache; only changed items call embedding, avoiding full re-embedding.
+ * Cache tables are plain (not vec0) and survive `replaceGraphProjection`; only cleared with projection cleanup.
  * 向量复用缓存（优化方案 P1-5 最小场景）：单文档重解析触发图重建时，
  * 未变化的实体/社区直接复用旧向量，只对变化项调 embedding，避免全量重嵌入。
  * 缓存是普通表，不随 replaceGraphProjection 的图重建清空；仅随投影清理删除。
@@ -25,29 +36,45 @@ const communityVectorTableName = 'graph_community_vec';
 const entityVectorCacheTableName = 'graph_entity_vec_cache';
 const communityVectorCacheTableName = 'graph_community_vec_cache';
 
+/**
+ * Input parameters for building the graph vector index.
+ * 构建图向量索引的输入参数。
+ */
 export interface GraphVectorIndexBuildInput {
   libraryPath: string;
   graphKey: string;
-  /** sha256(graphKey + 模型指纹)；图重建整体失效，模型指纹变化只失效向量。 */
+  /** sha256(graphKey + model fingerprint); graph rebuild invalidates all, fingerprint change invalidates vectors only. / sha256(graphKey + 模型指纹)；图重建整体失效，模型指纹变化只失效向量。 */
   vectorKey: string;
   modelFingerprint: string;
   vectorDimension: number;
-  /** 注入式批量 embedding（与向量阶段同模式，Worker 永不持钥）。 */
+  /** Injected batch embedding function (same pattern as vector stage; Worker never holds the key). / 注入式批量 embedding（与向量阶段同模式，Worker 永不持钥）。 */
   callEmbed: (texts: string[]) => Promise<number[][]>;
   signal?: AbortSignal;
 }
 
+/**
+ * Result returned after building the graph vector index.
+ * 构建图向量索引后返回的结果。
+ */
 export interface GraphVectorIndexBuildResult {
   vectorKey: string;
   entityVectors: number;
   communityVectors: number;
-  /** 命中缓存复用的向量数（优化方案 P1-5）；未命中的才实际调 embedding。 */
+  /** Vectors reused from cache (optimization P1-5); non-reused items actually called embedding. / 命中缓存复用的向量数（优化方案 P1-5）；未命中的才实际调 embedding。 */
   entityVectorsReused: number;
   communityVectorsReused: number;
   dimension: number;
   durationMs: number;
 }
 
+/**
+ * Entity vector KNN neighbor result row, joining back entity metadata.
+ * 实体向量 KNN 邻居结果行，回接实体元数据。
+ */
+/**
+ * A nearby entity returned by entity vector KNN search.
+ * 实体向量 KNN 检索返回的邻近实体。
+ */
 export interface GraphEntityVectorNeighbor {
   rowId: number;
   canonicalKey: string;
@@ -56,6 +83,14 @@ export interface GraphEntityVectorNeighbor {
   distance: number;
 }
 
+/**
+ * Community vector KNN neighbor result row, joining back community metadata.
+ * 社区向量 KNN 邻居结果行，回接社区元数据。
+ */
+/**
+ * A nearby community returned by community vector KNN search.
+ * 社区向量 KNN 检索返回的邻近社区。
+ */
 export interface GraphCommunityVectorNeighbor {
   rowId: number;
   communityId: string;
@@ -63,7 +98,14 @@ export interface GraphCommunityVectorNeighbor {
   distance: number;
 }
 
-/** 与 summaryKey 同口径：sha256 of JSON。 */
+/**
+ * Compute the graph vector index key as sha256 of schemaVersion + graphKey + modelFingerprint.
+ * Same hashing approach as summaryKey.
+ * 计算图向量索引键：sha256(schemaVersion + graphKey + modelFingerprint)，与 summaryKey 同口径。
+ *
+ * @param input - Object containing graphKey and modelFingerprint / 包含 graphKey 和 modelFingerprint 的对象
+ * @returns Hex hash key / 十六进制哈希键
+ */
 export function computeGraphVectorKey(input: { graphKey: string; modelFingerprint: string }): string {
   return crypto.createHash('sha256').update(JSON.stringify({
     schemaVersion: GRAPH_VECTOR_SCHEMA_VERSION,
@@ -72,12 +114,33 @@ export function computeGraphVectorKey(input: { graphKey: string; modelFingerprin
   })).digest('hex');
 }
 
+/**
+ * Build the embedding text for an entity: "「mention」（type）：description", truncated to token budget.
+ * 构建实体的嵌入文本：「mention」（type）：description，按 token 预算截断。
+ *
+ * @param input - Entity mention, type, and description / 实体提及、类型和描述
+ * @returns Truncated embedding text / 截断后的嵌入文本
+ */
+/**
+ * Build the entity vector text representation: 「mention」（type）：description, truncated to token budget.
+ * 构建实体向量文本表示：「mention」（type）：description，截断到 token 预算内。
+ *
+ * @param input - Entity mention, type, and description / 实体提及、类型和描述
+ * @returns Truncated entity vector text / 截断后的实体向量文本
+ */
 export function buildGraphEntityVectorText(input: { mention: string; type: string; description: string }): string {
   const text = `「${input.mention}」（${input.type}）：${input.description}`.trim();
   return truncateToTokenBudget(text, GRAPH_ENTITY_VECTOR_TEXT_MAX_TOKENS);
 }
 
-/** 缓存判定：投影内向量键一致且两张向量表存在即命中（向量本体就在投影库内）。 */
+/**
+ * Cache check: vector index is current if the stored vectorKey matches and both vector tables exist.
+ * 缓存判定：投影内向量键一致且两张向量表存在即命中（向量本体就在投影库内）。
+ *
+ * @param libraryPath - Absolute path to the materials library / 资料库绝对路径
+ * @param vectorKey - Expected vector cache key / 预期的向量缓存键
+ * @returns True if the existing vector index matches / 当现有向量索引匹配时返回 true
+ */
 export function isGraphVectorIndexCurrent(libraryPath: string, vectorKey: string): boolean {
   const database = openGraphDatabase(libraryPath, false);
   if (!database) return false;
@@ -93,8 +156,14 @@ export function isGraphVectorIndexCurrent(libraryPath: string, vectorKey: string
 }
 
 /**
- * 从投影读取实体与社区（摘要非空），批量 embedding 后整体重建两张向量表。
+ * Build (or rebuild) the graph vector index: read entities and communities from the projection,
+ * batch-embed them, and create two vec0 virtual tables with cosine distance.
+ * rowids align with graph_entities / graph_communities for alias-arbitration KNN joins.
+ * 构建（或重建）图向量索引：从投影读取实体与社区（摘要非空），批量 embedding 后整体重建两张向量表。
  * rowid 与 graph_entities / graph_communities 对齐，供别名裁决召回做 KNN join。
+ *
+ * @param input - Build parameters including library path, vector key, model fingerprint, and embed function / 构建参数，含资料库路径、向量键、模型指纹和嵌入函数
+ * @returns Build result with vector counts, reuse counts, dimension and duration / 构建结果，含向量计数、复用计数、维度与耗时
  */
 export async function buildGraphVectorIndex(input: GraphVectorIndexBuildInput): Promise<GraphVectorIndexBuildResult> {
   const startedAt = Date.now();
@@ -180,7 +249,17 @@ export async function buildGraphVectorIndex(input: GraphVectorIndexBuildInput): 
   }
 }
 
-/** 实体向量 KNN：join 投影实体表回读 canonicalKey/mention/type；索引缺失或维度不符返回空。 */
+/**
+ * Entity vector KNN: join projection entity table to read back canonicalKey/mention/type.
+ * Returns empty if the index is missing or dimension mismatches.
+ * 实体向量 KNN：join 投影实体表回读 canonicalKey/mention/type；索引缺失或维度不符返回空。
+ *
+ * @param libraryPath - Absolute path to the materials library / 资料库绝对路径
+ * @param queryVector - Float array to search against / 待搜索的浮点数组
+ * @param limit - Maximum number of neighbors / 最大邻居数
+ * @param profileHash - Optional model fingerprint to validate against / 可选的模型指纹校验值
+ * @returns Array of entity vector neighbors / 实体向量邻居数组
+ */
 export function queryGraphEntityVectorNeighbors(libraryPath: string, queryVector: number[], limit: number, profileHash?: string): GraphEntityVectorNeighbor[] {
   return queryGraphVectorNeighbors(database => database.prepare(`
     SELECT v.rowid AS rowid, v.distance AS distance, e.canonical_key, e.mention, e.type
@@ -198,7 +277,17 @@ export function queryGraphEntityVectorNeighbors(libraryPath: string, queryVector
   }));
 }
 
-/** 社区向量 KNN：join 投影社区表回读 communityId/level；索引缺失或维度不符返回空。 */
+/**
+ * Community vector KNN: join projection community table to read back communityId/level.
+ * Returns empty if the index is missing or dimension mismatches.
+ * 社区向量 KNN：join 投影社区表回读 communityId/level；索引缺失或维度不符返回空。
+ *
+ * @param libraryPath - Absolute path to the materials library / 资料库绝对路径
+ * @param queryVector - Float array to search against / 待搜索的浮点数组
+ * @param limit - Maximum number of neighbors / 最大邻居数
+ * @param profileHash - Optional model fingerprint to validate against / 可选的模型指纹校验值
+ * @returns Array of community vector neighbors / 社区向量邻居数组
+ */
 export function queryGraphCommunityVectorNeighbors(libraryPath: string, queryVector: number[], limit: number, profileHash?: string): GraphCommunityVectorNeighbor[] {
   return queryGraphVectorNeighbors(database => database.prepare(`
     SELECT v.rowid AS rowid, v.distance AS distance, c.community_id, c.level
@@ -238,7 +327,11 @@ function queryGraphVectorNeighbors(
   }
 }
 
-/** 待嵌入队列回填：只对未命中缓存的项分批调 embedding，结果写回对应槽位。 */
+/**
+ * Back-fill embedding queue: only call embedding for items that missed the cache;
+ * results are written into the corresponding buffer slots.
+ * 待嵌入队列回填：只对未命中缓存的项分批调 embedding，结果写回对应槽位。
+ */
 async function embedQueuedVectors(
   queue: Array<{ slot: number; item: { rowid: number; text: string } }>,
   buffers: Buffer[],
@@ -273,6 +366,9 @@ async function embedItems(items: Array<{ rowid: number; text: string }>, input: 
 }
 
 /**
+ * Cache reuse split (optimization P1-5): items whose cacheKey matches and whose
+ * text hash and byte-length match the current dimension are reused from cache;
+ * everything else enters the embedding queue. Cache table corruption degrades silently to full embedding.
  * 缓存复用拆分（优化方案 P1-5）：cacheKey 命中且向量文本哈希一致、字节数与当前维度
  * 匹配才复用；其余进待嵌入队列。缓存表缺失/损坏时静默降级为全量嵌入。
  */
@@ -315,7 +411,11 @@ function readVectorCache(database: Database.Database, cacheTableName: string): M
   return cache;
 }
 
-/** 事务内全量重写缓存：与当次索引内容对齐，已删除实体/社区的向量随之废弃。 */
+/**
+ * Rewrite the entire vector cache in a transaction: aligns with the current index;
+ * deleted entities/communities have their cached vectors discarded.
+ * 事务内全量重写缓存：与当次索引内容对齐，已删除实体/社区的向量随之废弃。
+ */
 function writeVectorCache(
   database: Database.Database,
   cacheTableName: string,
@@ -332,6 +432,8 @@ function hashVectorText(text: string): string {
 }
 
 function truncateToTokenBudget(text: string, maxTokens: number): string {
+  // Iteratively shrink: estimate token count, compute ratio, and slice proportionally.
+  // 迭代缩小：估算 token 数、计算比率并按比例截断。
   let slice = text;
   while (estimateTokenCount(slice) > maxTokens && slice.length > 0) {
     const ratio = maxTokens / Math.max(1, estimateTokenCount(slice));
@@ -340,12 +442,16 @@ function truncateToTokenBudget(text: string, maxTokens: number): string {
   return slice;
 }
 
+// Pack float array into a Buffer for sqlite-vec BLOB binding (4 bytes per float).
+// 将浮点数组打包为 Buffer 供 sqlite-vec BLOB 绑定（每浮点 4 字节）。
 function toVectorBuffer(values: number[]): Buffer {
   const floats = new Float32Array(values);
   return Buffer.from(floats.buffer, floats.byteOffset, floats.byteLength);
 }
 
 function loadGraphSqliteVec(database: Database.Database): void {
+  // Prefer the packaged extension; fall back to the require-loaded copy.
+  // 优先使用打包的扩展路径；回退到 require 加载的副本。
   const packagedExtensionPath = sqliteVecPackagedExtensionPath();
   if (packagedExtensionPath && fs.existsSync(packagedExtensionPath)) {
     database.loadExtension(packagedExtensionPath);

@@ -1,3 +1,11 @@
+"""
+Module: keyword_stage
+Keyword extraction stage. Extracts and ranks keywords from document chunks
+using Jieba tokenization and hybrid ranking algorithms.
+模块：keyword_stage
+关键词提取阶段。使用 Jieba 分词和混合排序算法从文档切块中提取和排序关键词。
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -37,10 +45,15 @@ from .keyword_tokenizer import (
 )
 
 
+# Schema version for keywords stage output / 关键词阶段输出的 schema 版本
 KEYWORDS_STAGE_SCHEMA_VERSION = 3
+# Checkpoint interval for processing / 处理的检查点间隔
 CHECKPOINT_INTERVAL = 50
+# Maximum document frequency keys / 最大文档频率键数
 MAX_DF_KEYS = 200_000
+# Maximum dictionary hash input size / 最大词典哈希输入大小
 MAX_DICTIONARY_HASH_INPUT = 5_000
+# Maximum checkpoint IDs to track / 最大检查点 ID 跟踪数
 MAX_CHECKPOINT_IDS = 50_000
 
 
@@ -52,7 +65,10 @@ def run_keywords_stage(
     progress: Callable[[int, int | None, str, str], None],
     stage_key: str = '',
 ) -> dict[str, Any]:
-    """Run the bounded two-pass keywords stage over a chunks JSONL artifact."""
+    """
+    Run the bounded two-pass keywords stage over a chunks JSONL artifact.
+    在 chunks JSONL 产物上运行有界的两遍关键词提取阶段。
+    """
     normalized_options = dict(options or {})
     output = Path(output_dir)
     source = _resolve_chunks_path(input_path)

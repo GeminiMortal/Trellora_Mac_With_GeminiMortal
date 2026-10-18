@@ -1,3 +1,8 @@
+/**
+ * Prompt segment context adapter: maps prompt zones to context runtime zones and strategies.
+ * 提示段上下文适配器：将提示区域映射到上下文运行时区域和压缩策略。
+ */
+
 import type { ContextCompressStrategy, ContextMaterial, ContextZone } from './contextRuntimeTypes';
 import type { PromptCompressionStrategy, PromptSegment, PromptZone } from './planAwarePromptProjector';
 

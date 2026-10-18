@@ -1,24 +1,35 @@
+/** Application color theme / 应用颜色主题 */
 export type AppTheme = 'system' | 'light' | 'dark';
+/** UI element spacing density / 界面元素间距密度 */
 export type InterfaceDensity = 'comfortable' | 'compact';
+/** Startup view behavior / 启动视图行为 */
 export type StartupBehavior = 'library' | 'last-note';
+/** Preferred editor mode / 首选编辑器模式 */
 export type PreferredEditorMode = 'wysiwyg' | 'preview' | 'source';
+/** Default note preview rendering mode / 笔记默认预览渲染模式 */
 export type PreviewPreference = 'rendered' | 'source';
+/** External link open behavior / 外部链接打开行为 */
 export type ExternalLinkOpenMode = 'in-app' | 'system-default';
-import { normalizeAssistantEvidenceModeConfig, normalizeAssistantKnowledgeAgentMode, type AdaptiveContextMode, type AssistantEvidenceProjectionMode, type AssistantKnowledgeAgentMode, type AssistantPlanMode, type EvidenceCompressionMode } from './knowledge/assistantMode';
-import type { AssistantContextRuntimeMode } from './knowledge/contextRuntimeTypes';
-import type { MemoryProjectionMode, MemoryProjectionRouteMode } from './knowledge/memory/memoryCutover';
-import { ASSISTANT_RELEASE_DEFAULTS } from '../shared/assistantReleaseDefaults';
-import { NOTE_BACKUP_RETENTION } from '../shared/noteBackup';
-import { normalizeAppLanguage, type AppLanguage } from '../shared/appLanguage';
-import { normalizeLightColorScheme, type LightColorScheme } from '../shared/lightColorSchemes';
+import { normalizeAssistantEvidenceModeConfig, normalizeAssistantKnowledgeAgentMode, type AdaptiveContextMode, type AssistantEvidenceProjectionMode, type AssistantKnowledgeAgentMode, type AssistantPlanMode, type EvidenceCompressionMode } from './knowledge/assistant/assistantMode.ts';
+import type { AssistantContextRuntimeMode } from './knowledge/context/contextRuntimeTypes.ts';
+import type { MemoryProjectionMode, MemoryProjectionRouteMode } from './knowledge/memory/memoryCutover.ts';
+import { ASSISTANT_RELEASE_DEFAULTS } from '../shared/assistantReleaseDefaults.ts';
+import { NOTE_BACKUP_RETENTION } from '../shared/noteBackup.ts';
+import { normalizeAppLanguage, type AppLanguage } from '../shared/appLanguage.ts';
+import { normalizeLightColorScheme, type LightColorScheme } from '../shared/lightColorSchemes.ts';
 
-export type { AdaptiveContextMode, AssistantEvidenceProjectionMode, AssistantKnowledgeAgentMode, AssistantPlanMode, EvidenceCompressionMode } from './knowledge/assistantMode';
-export type { AssistantContextRuntimeMode } from './knowledge/contextRuntimeTypes';
+/** Re-exported assistant mode types from knowledge subsystem / 从知识子系统重导出的助手模式类型 */
+export type { AdaptiveContextMode, AssistantEvidenceProjectionMode, AssistantKnowledgeAgentMode, AssistantPlanMode, EvidenceCompressionMode } from './knowledge/assistant/assistantMode.ts';
+/** Re-exported context runtime mode type / 重导出的上下文运行时模式类型 */
+export type { AssistantContextRuntimeMode } from './knowledge/context/contextRuntimeTypes.ts';
+/** Context runtime mode with 'inherit' fallback / 含 'inherit' 回退的上下文运行时模式 */
 export type AssistantContextRuntimeRouteMode = AssistantContextRuntimeMode | 'inherit';
-export type { MemoryProjectionMode, MemoryProjectionRouteMode } from './knowledge/memory/memoryCutover';
+/** Re-exported memory projection mode types / 重导出的记忆投影模式类型 */
+export type { MemoryProjectionMode, MemoryProjectionRouteMode } from './knowledge/memory/memoryCutover.ts';
 
-import { defaultEditorPreferences, normalizeEditorPreferences, type EditorPreferences } from '../shared/editorPreferences';
+import { defaultEditorPreferences, normalizeEditorPreferences, type EditorPreferences } from '../shared/editorPreferences.ts';
 
+/** Full application preferences schema persisted by Electron main process. / 由 Electron 主进程持久化的完整应用偏好设置模式。 */
 export interface AppPreferences extends EditorPreferences {
   schemaVersion: 1;
   theme: AppTheme;
@@ -52,6 +63,7 @@ export interface AppPreferences extends EditorPreferences {
   lastOpenedNote?: string;
 }
 
+/** Partial patch for updating application preferences / 用于更新应用偏好的部分补丁 */
 export type AppPreferencesPatch = Partial<Omit<AppPreferences, 'schemaVersion'>>;
 
 interface PreferenceStore {
@@ -59,6 +71,7 @@ interface PreferenceStore {
   set(key: string, value: unknown): void;
 }
 
+/** Factory default values for all application preferences / 所有应用偏好的出厂默认值 */
 export const defaultAppPreferences: AppPreferences = {
   schemaVersion: 1,
   ...defaultEditorPreferences,

@@ -1,7 +1,12 @@
+/**
+ * Materials library meta-database: SQLite store for note metadata, AI insights, and index sync.
+ * 资料库元数据库：笔记元数据、AI 洞察和索引同步的 SQLite 存储。
+ */
+
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import { getLibraryMetaDirectory } from '../treeOrder';
+import { getLibraryMetaDirectory } from '../files/treeOrder';
 import { sqliteVecPackagedExtensionPath } from '../loadSqliteVec';
 import type { AiInsight, AiInsightPayload } from './aiTypes';
 import type { AiProviderKind } from './aiTypes';

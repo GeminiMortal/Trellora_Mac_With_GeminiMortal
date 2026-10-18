@@ -1,8 +1,8 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import { Button, Group, Modal, Radio, Stack, Text, ThemeIcon, UnstyledButton } from '@mantine/core';
 import { ListTree, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { WikiBuildMode } from '../../wiki/wikiTypes';
+import type { WikiBuildMode } from './data/wikiTypes.ts';
 
 interface WikiStartModalProps {
   opened: boolean;

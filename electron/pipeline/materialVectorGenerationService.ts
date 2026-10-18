@@ -1,15 +1,23 @@
+/**
+ * Material vector generation service: builds isolated embedding snapshots for new models,
+ * validates them, and atomically switches the active semantic-search generation.
+ * 材料向量代际服务：为新模型构建隔离的嵌入快照、校验后原子切换当前语义检索代际。
+ */
+
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import { getLibraryMetaDirectory } from '../treeOrder';
-import { lockMaterialEmbeddingProfile, readMaterialEmbeddingProfileFromDatabase, testMaterialEmbeddingCandidate, type MaterialEmbeddingProbe } from './materialEmbeddingProfile';
-import type { MaterialEmbeddingAdapter } from './materialEmbeddingAdapters';
-import { ensureMaterialVectorCoordinatorSchema, recoverExpiredMaterialEmbeddingLeases, synchronizeMaterialVectors } from './materialVectorCoordinator';
-import { searchMaterialChunks } from './materialChunkSearch';
-import { ensureMaterialVectorGenerationSchema, generationProfile, generationVectorTable, generationView, getActiveMaterialVectorTable, readActiveGeneration, type GenerationRow } from './materialVectorGenerationStore';
-import type { MaterialVectorGeneration } from '../../shared/materialVectorGenerations';
+import { getLibraryMetaDirectory } from '../files/treeOrder.ts';
+import { lockMaterialEmbeddingProfile, readMaterialEmbeddingProfileFromDatabase, testMaterialEmbeddingCandidate, type MaterialEmbeddingProbe } from './materialEmbeddingProfile.ts';
+import type { MaterialEmbeddingAdapter } from './materialEmbeddingAdapters.ts';
+import { ensureMaterialVectorCoordinatorSchema, recoverExpiredMaterialEmbeddingLeases, synchronizeMaterialVectors } from './materialVectorCoordinator.ts';
+import { searchMaterialChunks } from './materialChunkSearch.ts';
+import { ensureMaterialVectorGenerationSchema, generationProfile, generationVectorTable, generationView, getActiveMaterialVectorTable, readActiveGeneration, type GenerationRow } from './materialVectorGenerationStore.ts';
+import type { MaterialVectorGeneration } from '../../shared/materialVectorGenerations.ts';
 
+// External collaborators injected so the service stays testable and free of app singletons.
+// 注入外部协作者，使服务保持可测试且不依赖应用单例。
 interface GenerationPorts {
   sourcesHash: (libraryPath: string, documents: Array<{ id: string; hash: string }>) => string;
   assertIdle: (libraryPath: string) => void;
@@ -18,16 +26,34 @@ interface GenerationPorts {
 }
 const sqliteVec = require('sqlite-vec') as { load: (database: Database.Database) => void };
 
-/** 新模型仅在隔离快照内重嵌入；验证完成后用一个 SQLite 事务切换 active 指针。 */
+/**
+ * Re-embeds into an isolated snapshot with the new model only; after validation
+ * the active pointer switches in a single SQLite transaction.
+ * 新模型仅在隔离快照内重嵌入；验证完成后用一个 SQLite 事务切换 active 指针。
+ */
 export class MaterialVectorGenerationService {
   private readonly running = new Map<string, { controller: AbortController; completion: Promise<void> }>();
   private readonly starting = new Set<string>();
   private readonly startControllers = new Set<AbortController>();
   private readonly startTasks = new Set<Promise<MaterialVectorGeneration>>();
   private stopping = false;
+  /**
+   * Creates the service with injected ports.
+   * 以注入的依赖创建服务。
+   *
+   * @param ports - External collaborators / 外部协作者
+   */
   constructor(private readonly ports: GenerationPorts) {}
+  /** Whether any build is starting or running / 是否有构建正在启动或运行 */
   get busy() { return this.running.size > 0 || this.starting.size > 0; }
 
+  /**
+   * Lists all generations, downgrading orphaned BUILDING rows to INTERRUPTED.
+   * 列出全部代际，并将孤儿 BUILDING 行降级为 INTERRUPTED。
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   * @returns Generation views newest first / 由新到旧的代际视图
+   */
   list(libraryPath: string): MaterialVectorGeneration[] {
     const database = this.open(libraryPath);
     try {
@@ -40,7 +66,17 @@ export class MaterialVectorGenerationService {
     } finally { database.close(); }
   }
 
-  /** 首次请求先探测并建立完整快照；返回后后台任务可取消，不改变当前检索空间。 */
+  /**
+   * Creates a new generation snapshot. The first request probes the model and
+   * registers the snapshot; once returned, the background build can be cancelled
+   * without changing the current search space.
+   * 创建新的代际快照。首次请求先探测并建立完整快照；返回后后台任务可取消，不改变当前检索空间。
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   * @param candidate - Candidate embedding model config / 候选嵌入模型配置
+   * @param probe - Probe used to verify the model / 用于验证模型的探针
+   * @returns The registered generation once the snapshot is ready / 快照就绪后返回已注册的代际
+   */
   create(libraryPath: string, candidate: unknown, probe: MaterialEmbeddingProbe): Promise<MaterialVectorGeneration> {
     if (this.stopping) throw new Error('应用正在退出，不能开始新的索引构建。');
     this.ports.assertIdle(libraryPath);
@@ -57,6 +93,9 @@ export class MaterialVectorGenerationService {
     return completion;
   }
 
+  // Probes the model, backs up the library DB into a staging root, locks the profile
+  // and registers the BUILDING generation; cleans up its own staging dir on failure.
+  // 探测模型、把资料库 DB 备份到暂存根目录、锁定配置并注册 BUILDING 代际；失败时清理自己的暂存目录。
   private async createSnapshot(libraryPath: string, candidate: unknown, probe: MaterialEmbeddingProbe, signal: AbortSignal): Promise<MaterialVectorGeneration> {
     let createdRoot: string | undefined;
     let registered = false;
@@ -77,11 +116,15 @@ export class MaterialVectorGenerationService {
         await source.backup(this.databasePath(root));
         signal.throwIfAborted();
         this.ports.assertIdle(libraryPath);
+        // Snapshot fingerprint must be unchanged after backup, otherwise sources moved mid-copy.
+        // 备份后快照指纹必须一致，否则说明复制期间源数据发生了变化。
         if (this.fingerprints(source, libraryPath).projection !== before.projection) throw new Error('资料正在更新，请完成后重新创建索引代际。');
       } finally { source.close(); }
       const shadow = this.open(root);
       try {
         // 只清理新快照：原数据库的 profile、vec0 和词法投影始终保留。
+        // Only the new snapshot is cleaned: the original DB keeps its profile,
+        // vec0 tables and lexical projection untouched.
         const tables = shadow.prepare("SELECT name FROM sqlite_master WHERE type='table' AND sql LIKE 'CREATE VIRTUAL TABLE%USING vec0%'").all() as Array<{ name: string }>;
         for (const table of tables) if (/^material_chunk_vectors(?:_g_[a-f0-9]{32})?$/u.test(table.name)) shadow.exec(`DROP TABLE ${table.name}`);
         shadow.exec('DROP TABLE material_vector_active_generation; DROP TABLE material_vector_generations; DELETE FROM material_embedding_profile; DELETE FROM material_chunk_vector_meta; DROP TABLE IF EXISTS material_chunk_embedding_state; DROP TABLE IF EXISTS material_embedding_jobs;');
@@ -102,11 +145,20 @@ export class MaterialVectorGenerationService {
       if (createdRoot && !registered) {
         const parent = path.join(getLibraryMetaDirectory(libraryPath), 'vector-generations');
         // 只移除本次分配的 UUID 目录；异常路径保留，不能覆盖原始创建错误。
+        // Remove only the UUID directory allocated here; anomalous paths are kept
+        // so the original creation error is never masked.
         if (path.dirname(createdRoot) === parent && /^[a-f0-9]{32}$/u.test(path.basename(createdRoot))) fs.rmSync(createdRoot, { recursive: true, force: true });
       }
     }
   }
 
+  /**
+   * Resumes a failed, cancelled or interrupted generation from pending chunks.
+   * 从待处理块继续失败、取消或中断的代际。
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   * @param id - Generation id / 代际 ID
+   */
   resume(libraryPath: string, id: string): void {
     if (this.stopping) throw new Error('应用正在退出，不能继续索引构建。');
     const row = this.row(libraryPath, id);
@@ -123,9 +175,27 @@ export class MaterialVectorGenerationService {
     this.run(libraryPath, id);
   }
 
+  /**
+   * Requests cancellation of a running build.
+   * 请求取消正在运行的构建。
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   * @param id - Generation id / 代际 ID
+   */
   cancel(libraryPath: string, id: string): void { this.running.get(this.key(libraryPath, id))?.controller.abort(); }
+  /**
+   * Waits for a running build to finish.
+   * 等待正在运行的构建结束。
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   * @param id - Generation id / 代际 ID
+   */
   async wait(libraryPath: string, id: string): Promise<void> { await this.running.get(this.key(libraryPath, id))?.completion; }
-  /** 连首次模型探测和 SQLite 快照也纳入退出等待，避免关闭窗口后继续注册构建。 */
+  /**
+   * Aborts all builds and waits for them, including first-time model probes and
+   * SQLite snapshots, so no build registers after the window closes.
+   * 连首次模型探测和 SQLite 快照也纳入退出等待，避免关闭窗口后继续注册构建。
+   */
   async shutdown(): Promise<void> {
     this.stopping = true;
     for (const controller of this.startControllers) controller.abort();
@@ -133,7 +203,16 @@ export class MaterialVectorGenerationService {
     await Promise.allSettled([...this.startTasks, ...[...this.running.values()].map(task => task.completion)]);
   }
 
-  /** 激活/回滚共用同一门：来源及 chunk 指纹一致、全量读回合格、所有旧写入已结束。 */
+  /**
+   * Promotes a READY/RETIRED generation to ACTIVE, or rolls the active pointer
+   * back. Activation and rollback share one gate: sources and chunk fingerprints
+   * must match, full read-back must pass, and all prior writes must be finished.
+   * 激活/回滚共用同一门：来源及 chunk 指纹一致、全量读回合格、所有旧写入已结束。
+   *
+   * @param libraryPath - Library root path / 资料库根路径
+   * @param id - Generation id to activate / 要激活的代际 ID
+   * @returns The now-active generation view / 当前 active 代际的视图
+   */
   activate(libraryPath: string, id: string): MaterialVectorGeneration {
     this.ports.assertIdle(libraryPath);
     if (this.busyFor(libraryPath)) throw new Error('索引构建尚未结束，不能切换。');
@@ -149,6 +228,9 @@ export class MaterialVectorGenerationService {
       if (target.state === 'READY') {
         database.prepare('ATTACH DATABASE ? AS generation_source').run(this.databasePath(this.stagingRoot(libraryPath, id))); attached = true;
       }
+      // Single IMMEDIATE transaction: re-verify fingerprints, swap vectors/state,
+      // validate read-back, then flip the active pointer — all-or-nothing.
+      // 单个 IMMEDIATE 事务：复核指纹、交换向量/状态、读回校验、翻转 active 指针——全成或全败。
       database.transaction(() => {
         this.assertCurrent(database, libraryPath, target);
         const current = readMaterialEmbeddingProfileFromDatabase(database).profile!;
@@ -183,6 +265,9 @@ export class MaterialVectorGenerationService {
     } finally { if (attached) database.exec('DETACH DATABASE generation_source'); database.close(); }
   }
 
+  // Background build: embed into the staging snapshot, validate, then run
+  // sample semantic searches that must return their own chunk as a hit.
+  // 后台构建：向暂存快照嵌入、校验，然后抽样语义检索，必须命中自身块。
   private run(libraryPath: string, id: string): void {
     const controller = new AbortController();
     const completion = Promise.resolve().then(async () => {
@@ -211,15 +296,21 @@ export class MaterialVectorGenerationService {
     this.running.set(this.key(libraryPath, id), { controller, completion });
   }
 
+  // Fingerprints the chunk projection and document sources used to detect mid-build changes.
+  // 对切块投影与文档来源做指纹，用于检测构建中途的数据变化。
   private fingerprints(database: Database.Database, libraryPath: string) {
     const chunks = database.prepare('SELECT * FROM material_chunks ORDER BY id').all();
     const documents = database.prepare('SELECT document_id AS id,source_content_hash AS hash FROM material_chunk_documents ORDER BY document_id').all() as Array<{ id: string; hash: string }>;
     return { projection: crypto.createHash('sha256').update(JSON.stringify({ chunks, documents })).digest('hex'), sources: this.ports.sourcesHash(libraryPath, documents) };
   }
+  // Rejects snapshot use when sources or chunks changed since the snapshot was registered.
+  // 当来源或切块自快照注册后发生变化时，拒绝使用该快照。
   private assertCurrent(database: Database.Database, libraryPath: string, row: GenerationRow) {
     const actual = this.fingerprints(database, libraryPath);
     if (actual.projection !== row.projection_hash || actual.sources !== row.sources_hash) throw new Error('资料或切块已经变化，不能切换或续跑这个快照。请创建新的索引代际。');
   }
+  // Full read-back: vector count, per-chunk state/identity, dimension and finiteness.
+  // 全量读回：向量数量、每块状态/身份、维度与有限性校验。
   private validate(database: Database.Database, row: GenerationRow, table: string, states: string) {
     const profile = generationProfile(row);
     const vectors = database.prepare(`SELECT rowid,embedding FROM ${table}`).all() as Array<{ rowid: number; embedding: Buffer }>;

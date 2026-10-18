@@ -1,4 +1,16 @@
-"""层级社区检测（Leiden 主引擎 + Louvain fallback）。
+"""
+Module: graph_leiden
+Hierarchical community detection (Leiden engine + Louvain fallback).
+
+Hand-written hierarchical recursion replicates hierarchical Leiden semantics
+(GraphRAG plan §3.2.1): the engine only handles single-level partitioning;
+recursion, MECE carry-down, and output logic are shared by both engines.
+
+Determinism trio: fixed node/edge ordering + fixed seed + leidenConfig version
+(participates in graphKey).
+
+模块：graph_leiden
+层级社区检测（Leiden 主引擎 + Louvain fallback）。
 
 手写层级递归复刻 hierarchical Leiden 语义（GraphRAG 方案 §3.2.1）：引擎只负责
 单层分区，递归、MECE carry-down 与产物逻辑两种引擎共享。确定性三件套：
@@ -12,6 +24,7 @@ from typing import Any, Callable, Sequence
 
 from .stage_errors import StageCancelled
 
+# Default Leiden community detection configuration / 默认 Leiden 社区检测配置
 DEFAULT_LEIDEN_CONFIG: dict[str, Any] = {
     'resolution': 1.0,
     'maxDepth': 4,
@@ -19,13 +32,22 @@ DEFAULT_LEIDEN_CONFIG: dict[str, Any] = {
     'seed': 42,
 }
 
+# Type alias for progress callback / 进度回调的类型别名
 ProgressFn = Callable[[int, int | None, str, str], None]
 
 
 class _LeidenEngine:
+    """
+    Leiden community detection engine using igraph + leidenalg.
+    使用 igraph + leidenalg 的 Leiden 社区检测引擎。
+    """
     name = 'leiden'
 
     def partition(self, node_count: int, edges: list[tuple[int, int, float]], resolution: float, seed: int) -> list[list[int]]:
+        """
+        Run Leiden partitioning on the graph.
+        在图上运行 Leiden 分区。
+        """
         import igraph as ig
         import leidenalg
 
@@ -41,6 +63,10 @@ class _LeidenEngine:
         return [sorted(group) for group in partition]
 
     def modularity(self, node_count: int, edges: list[tuple[int, int, float]], membership: list[int]) -> float | None:
+        """
+        Calculate modularity score for a partition.
+        计算分区的模块度分数。
+        """
         import igraph as ig
 
         graph = ig.Graph(n=node_count, edges=[(u, v) for u, v, _ in edges], directed=False)

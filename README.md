@@ -132,7 +132,7 @@ Wiki 提供节点分析与完整 Wiki 生成，支持引导式和自动模式。
 
 独立文件工作区显示文件路径、编码、换行格式、保存状态和字数，提供编辑 / 预览 / 源码、保存、另存为和加入笔记库。独立 Markdown 支持受控的本地图片访问、图片粘贴与文档 AI。**独立文件编辑先保存恢复草稿，原文件通过手动保存写回**，与库内笔记自动保存区分。
 
-Windows 由安装包注册 `.md`、`.markdown`、`.txt` 的可选打开方式；macOS 版通过右键 → 打开方式选择 Trellora。启动参数和拖放共用打开队列。
+macOS 版通过右键 → 打开方式选择 Trellora 打开 `.md`、`.markdown`、`.txt` 等受支持的文本文件。启动参数和拖放共用打开队列。
 
 ![无需建库即可编辑独立 Markdown 文件](docs/assets/screenshots/external-document-zh-light.png)
 
@@ -194,16 +194,11 @@ Windows 由安装包注册 `.md`、`.markdown`、`.txt` 的可选打开方式；
 ```bash
 # macOS / Linux
 cat Trellora-1.2.0-arm64.dmg.part_* > Trellora-1.2.0-arm64.dmg
-
-# Windows
-copy /b Trellora-1.2.0-arm64.dmg.part_aa + Trellora-1.2.0-arm64.dmg.part_ab Trellora-1.2.0-arm64.dmg
 ```
 
 合并后打开 `Trellora-1.2.0-arm64.dmg`，将 Trellora.app 拖入"应用程序"即可。
 
 应用使用 ad-hoc 签名分发。首次打开如被 macOS Gatekeeper 拦截，请右键点击 Trellora.app → "打开"，或到"系统设置 → 隐私与安全性"允许运行。
-
-原项目的 Windows x64 安装版与免安装版见[上游仓库](https://gitee.com/eleven-lxs/trellora)。
 
 ## 快速开始
 
@@ -332,7 +327,7 @@ pnpm run build:mac
 pnpm run release:manifest
 ```
 
-构建脚本通过 `python3` 定位解释器；必要时将 `MENGHAN_PIPELINE_PYTHON` 指向特定 Python 3。产物版本取自 `package.json.version`，输出格式为 `trellora/Trellora-<version>-arm64.dmg` 和 `trellora/Trellora-<version>-arm64-mac.zip`。打包经 `afterPack` 钩子自动做 ad-hoc 重签名（未配置开发者证书时，避免 Gatekeeper 报"已损坏"）。GitHub 直连不稳定时默认走 npmmirror 镜像下载 Electron，可用 `ELECTRON_MIRROR` 覆盖。原 Windows 打包流程保留在 `pnpm run build`（需在 Windows 环境执行）。
+构建脚本通过 `python3` 定位解释器；必要时将 `MENGHAN_PIPELINE_PYTHON` 指向特定 Python 3。产物版本取自 `package.json.version`，输出格式为 `trellora/Trellora-<version>-arm64.dmg` 和 `trellora/Trellora-<version>-arm64-mac.zip`。打包经 `afterPack` 钩子自动做 ad-hoc 重签名（未配置开发者证书时，避免 Gatekeeper 报"已损坏"）。GitHub 直连不稳定时默认走 npmmirror 镜像下载 Electron，可用 `ELECTRON_MIRROR` 覆盖。
 
 ## 文档与参与
 

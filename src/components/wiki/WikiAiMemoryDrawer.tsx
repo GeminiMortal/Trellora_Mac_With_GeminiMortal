@@ -1,4 +1,4 @@
-import { getAppLanguage, t, useI18n } from '../../i18n';
+import { getAppLanguage, t, useI18n } from '../../i18n/index.ts';
 import { Alert, Button, Drawer, Group, Menu, Modal, ScrollArea, Stack, Text, TextInput } from '@mantine/core';
 import { History, MessageSquareText, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';

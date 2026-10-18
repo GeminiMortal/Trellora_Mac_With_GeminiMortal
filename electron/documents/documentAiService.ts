@@ -1,9 +1,10 @@
+/** Document AI draft service: generates read-only frozen drafts via external model providers. / 文档 AI 草稿服务：通过外部模型提供方生成只读冻结草稿。 */
 import { randomUUID, createHash } from 'node:crypto';
-import type { DocumentSnapshot, DocumentDraftRequest, DocumentDraftResult } from '../../shared/documentSession';
-import type { DocumentAiRequest, DocumentAiResult, DocumentAiApplyRequest } from '../../shared/documentAi';
-import { estimateTokenCount } from '../knowledge/tokenEstimator';
-import type { AiProviderConfig } from '../knowledge/aiTypes';
-import type { AiGenerationTransportInput } from '../knowledge/aiGenerationTransport';
+import type { DocumentSnapshot, DocumentDraftRequest, DocumentDraftResult } from '../../shared/documentSession.ts';
+import type { DocumentAiRequest, DocumentAiResult, DocumentAiApplyRequest } from '../../shared/documentAi.ts';
+import { estimateTokenCount } from '../knowledge/model/tokenEstimator.ts';
+import type { AiProviderConfig } from '../knowledge/ai/aiTypes.ts';
+import type { AiGenerationTransportInput } from '../knowledge/ai/aiGenerationTransport.ts';
 
 /** 外部文档 AI 只读冻结草稿；结果仅在内存保留，写回再次验证会话、版本和选区。 */
 export class DocumentAiService {

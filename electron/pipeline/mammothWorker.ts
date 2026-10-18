@@ -1,34 +1,59 @@
+/**
+ * Module: mammothWorker
+ * Mammoth DOCX parser worker thread. Converts DOCX to Markdown with image extraction.
+ * Runs in an isolated Node.js Worker Thread to avoid blocking the Electron main process.
+ * 模块：mammothWorker
+ * Mammoth DOCX 解析器 Worker 线程。将 DOCX 转换为 Markdown 并提取图片。
+ * 在隔离的 Node.js Worker 线程中运行，避免阻塞 Electron 主进程。
+ */
+
 import fs from 'node:fs';
 import path from 'node:path';
 import { parentPort, workerData } from 'node:worker_threads';
 import mammoth from 'mammoth';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
-import { createParseImageSink, PARSE_IMAGES_DIRECTORY_NAME } from './parseImages';
+import { createParseImageSink, PARSE_IMAGES_DIRECTORY_NAME } from './parseImages.ts';
 
+// Maximum DOCX file size (128MB) / 最大 DOCX 文件大小（128MB）
 const MAX_DOCX_BYTES = 128 * 1024 * 1024;
+// Maximum output characters (64MB) / 最大输出字符数（64MB）
 const MAX_OUTPUT_CHARACTERS = 64 * 1024 * 1024;
 
 interface WorkerInput {
+  /** Input DOCX path / 输入 DOCX 路径 */
   inputPath: string;
+  /** Output directory / 输出目录 */
   outputDir: string;
+  /** Source file name / 源文件名 */
   sourceName: string;
 }
 
 interface ParseBlock {
+  /** Schema version / Schema 版本 */
   schemaVersion: 1;
+  /** Unique block ID / 唯一块 ID */
   blockId: string;
+  /** Block order / 块顺序 */
   order: number;
+  /** Block kind (paragraph, heading, etc.) / 块类型（段落、标题等） */
   kind: string;
+  /** Processed text / 处理后的文本 */
   text: string;
+  /** Raw text from DOCX / DOCX 原始文本 */
   rawText: string;
+  /** Source information / 来源信息 */
   source: { engine: 'mammoth'; line: number };
+  /** Parent block ID (null for top-level) / 父块 ID（顶层为 null） */
   parentBlockId: null;
+  /** Block attributes / 块属性 */
   attributes: Record<string, string | number | boolean>;
 }
 
 interface CompactMarkdownLine {
+  /** Line text / 行文本 */
   text: string;
+  /** Whether there's a blank line before / 前面是否有空行 */
   blankBefore: boolean;
 }
 

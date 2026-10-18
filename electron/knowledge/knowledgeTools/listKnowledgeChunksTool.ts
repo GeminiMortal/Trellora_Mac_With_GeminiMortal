@@ -1,5 +1,5 @@
 import { readMaterialParentWindow } from '../../pipeline/materialChunkSearch';
-import { findMaterialsDocument } from '../../materialsLibrary';
+import { findMaterialsDocument } from '../../library/materialsLibrary';
 import type { ReActTool, ReActToolExecution } from '../reactAgent/toolRegistry';
 import { compactObservationText, escapeXmlAttribute, escapeXmlText, toBoundedPublicToolResultText, type KnowledgeToolContext } from '../knowledgeToolContext';
 import { renderKnowledgeBaseImageTransportIndex } from '../knowledgeBaseImageResolver';

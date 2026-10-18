@@ -1,6 +1,6 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import { Text } from '@mantine/core';
-import type { SelectionContextReceipt, SelectionEditQualityReceipt } from '../../../electron/knowledge/selectionEditTypes';
+import type { SelectionContextReceipt, SelectionEditQualityReceipt } from '../../../electron/knowledge/selection/selectionEditTypes.ts';
 
 /** Both expansion entrypoints show measured length and actual admitted context. */
 export default function ExpansionReceipt({ context, quality }: { context?: SelectionContextReceipt; quality?: SelectionEditQualityReceipt }) {

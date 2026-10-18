@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { NumberInput, Select, Switch, Text, Paper } from '@mantine/core';
-import { t, useI18n } from '../../i18n';
-import { EDITOR_ZOOM_MIN, EDITOR_ZOOM_MAX, EDITOR_ZOOM_STEP, type EditorPreferences } from '../../../shared/editorPreferences';
+import { t, useI18n } from '../../i18n/index.ts';
+import { EDITOR_ZOOM_MIN, EDITOR_ZOOM_MAX, EDITOR_ZOOM_STEP, type EditorPreferences } from '../../../shared/editorPreferences.ts';
 
 function Field({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return <Paper withBorder radius="md" p="md" className="settings-field-card"><div className="settings-field-row"><div className="settings-field-copy"><Text fw={600} size="sm">{t(title)}</Text>{description && <Text size="xs" c="dimmed" mt={4}>{t(description)}</Text>}</div><div className="settings-field-control">{children}</div></div></Paper>;

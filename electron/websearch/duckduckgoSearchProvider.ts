@@ -1,26 +1,36 @@
-import type { WebSearchProviderAdapter, WebSearchResult } from './webSearchTypes';
-import { WEB_SEARCH_TIMEOUT_MS } from './webSearchTypes';
+import type { WebSearchProviderAdapter, WebSearchResult } from './webSearchTypes.ts';
+import { WEB_SEARCH_TIMEOUT_MS } from './webSearchTypes.ts';
 
 /**
+ * DuckDuckGo HTML-lite adapter (web search design §3.2 zero-config fallback).
+ * Parses the html.duckduckgo.com/html/ results page; redirect links must be restored from the uddg parameter.
+ * Overseas endpoint, reachability depends on the user's network.
  * DuckDuckGo HTML lite 适配器（联网搜索设计方案 §3.2 免配置兜底）。
  * 解析 html.duckduckgo.com/html/ 的结果页；跳转链接需还原 uddg 参数。
  * 境外端点，可达性依赖用户网络环境。
  */
 const DDG_HTML_ENDPOINT = 'https://html.duckduckgo.com/html/';
 
+/** Matches result anchors with class="result__a", capturing href and title markup / 匹配 class="result__a" 的结果链接，捕获 href 与标题标记 */
 const resultBlockPattern = /<a[^>]+class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+/** Matches snippet anchors with class="result__snippet" / 匹配 class="result__snippet" 的摘要链接 */
 const snippetPattern = /<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
 
+/**
+ * DuckDuckGo provider adapter, registered under id "duckduckgo"; needs no API key.
+ * DuckDuckGo 适配器，注册 id 为 "duckduckgo"；无需 API Key。
+ */
 export const duckduckgoSearchProvider: WebSearchProviderAdapter = {
   id: 'duckduckgo',
   label: 'DuckDuckGo',
   description: '免密钥的境外搜索引擎；无需配置，但网络可达性因环境而异。',
   requirements: 'none',
+  /** Scrapes the DuckDuckGo HTML results page / 抓取 DuckDuckGo HTML 结果页 */
   search: async ({ query, maxResults, signal }) => {
     const timeout = AbortSignal.timeout(WEB_SEARCH_TIMEOUT_MS);
     const url = `${DDG_HTML_ENDPOINT}?q=${encodeURIComponent(query)}`;
     const response = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36' },
       signal: AbortSignal.any([signal, timeout]),
     });
     if (!response.ok) throw new Error(`DuckDuckGo 搜索请求失败（HTTP ${response.status}）。`);
@@ -32,6 +42,7 @@ export const duckduckgoSearchProvider: WebSearchProviderAdapter = {
       if (!resolved) continue;
       links.push({ url: resolved, title: stripHtml(match[2]) });
     }
+    // Snippets are collected separately and aligned with links by match order / 摘要单独收集，按匹配顺序与链接对齐
     const snippets: string[] = [...html.matchAll(snippetPattern)].map((match) => stripHtml(match[1]));
 
     const results: WebSearchResult[] = [];
@@ -49,7 +60,10 @@ export const duckduckgoSearchProvider: WebSearchProviderAdapter = {
   },
 };
 
-/** DDG 结果链接多为 //duckduckgo.com/l/?uddg=<encoded> 跳转，需还原真实地址。 */
+/**
+ * DDG result links are mostly //duckduckgo.com/l/?uddg=<encoded> redirects; restore the real target URL.
+ * DDG 结果链接多为 //duckduckgo.com/l/?uddg=<encoded> 跳转，需还原真实地址。
+ */
 function resolveDuckDuckGoLink(href: string): string | undefined {
   const decodedHref = decodeHtmlEntities(href.trim());
   if (/uddg=/.test(decodedHref)) {

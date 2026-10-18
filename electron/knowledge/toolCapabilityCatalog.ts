@@ -1,7 +1,14 @@
+/**
+ * Tool capability catalog: defines available agent tools by phase and source.
+ * 工具能力目录：按阶段和来源定义可用的 Agent 工具。
+ */
+
 import type { ContextMaterial } from './contextRuntimeTypes';
 
+/** Phase of the agent tool lifecycle. / Agent 工具生命周期的阶段。 */
 export type ToolCapabilityPhase = 'navigation' | 'reading' | 'evidence-extension' | 'attachment-search' | 'attachment-read';
 
+/** Definition of a single agent tool. / 单个 Agent 工具的定义。 */
 export interface ToolCapabilityDefinition {
   name: string;
   description: string;
@@ -20,10 +27,18 @@ const definitions: readonly ToolCapabilityDefinition[] = Object.freeze([
   { name: 'read_attachment_range', description: '读取搜索命中或用户明确要求的附件行范围。', phase: 'attachment-read', source: 'attachment', arguments: 'attachmentId:string, lineFrom:integer, lineTo:integer' },
 ]);
 
+/**
+ * List tool capability definitions, optionally filtered by source.
+ * 列出工具能力定义，可按来源过滤。
+ */
 export function listToolCapabilities(source?: ToolCapabilityDefinition['source']): ToolCapabilityDefinition[] {
   return definitions.filter((definition) => !source || definition.source === source).map((definition) => ({ ...definition }));
 }
 
+/**
+ * Check whether a tool is active given the current set of active phases.
+ * 检查工具在当前活跃阶段集合下是否激活。
+ */
 export function isToolCapabilityActive(
   name: string,
   activePhases: ReadonlySet<ToolCapabilityPhase> | readonly ToolCapabilityPhase[],
@@ -32,6 +47,10 @@ export function isToolCapabilityActive(
   return definitions.some((definition) => definition.name === name && phases.has(definition.phase));
 }
 
+/**
+ * Render a tool capability prompt section for injection into the agent context.
+ * 渲染工具能力提示段以注入 Agent 上下文。
+ */
 export function renderToolCapabilityPrompt(input: {
   source: ToolCapabilityDefinition['source'];
   activePhases: readonly ToolCapabilityPhase[];
@@ -50,6 +69,10 @@ export function renderToolCapabilityPrompt(input: {
   ].join('\n');
 }
 
+/**
+ * Create context materials representing tool catalog and definitions.
+ * 创建表示工具目录和定义的上下文素材。
+ */
 export function createToolCapabilityMaterials(input: {
   source: ToolCapabilityDefinition['source'];
   activePhases: readonly ToolCapabilityPhase[];

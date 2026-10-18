@@ -1,8 +1,16 @@
+/**
+ * Module: materialEmbeddingProfile
+ * Material embedding profile management. Handles profile creation, locking,
+ * probing, and SQLite persistence for vector embedding configuration.
+ * 模块：materialEmbeddingProfile
+ * 资料嵌入配置管理。处理配置创建、锁定、探测和 SQLite 持久化。
+ */
+
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import { generationProfile, readActiveGeneration } from './materialVectorGenerationStore';
-import { getLibraryMetaDirectory } from '../treeOrder';
+import { generationProfile, readActiveGeneration } from './materialVectorGenerationStore.ts';
+import { getLibraryMetaDirectory } from '../files/treeOrder.ts';
 import {
   createLockedMaterialEmbeddingProfile,
   normalizeMaterialEmbeddingCandidate,
@@ -13,22 +21,36 @@ import {
   type MaterialEmbeddingProfileStatus,
   type MaterialEmbeddingProfileTestResult,
   type MaterialEmbeddingProbeResult,
-} from './materialEmbeddingTypes';
+} from './materialEmbeddingTypes.ts';
 
-export { computeMaterialEmbeddingProfileHash } from './materialEmbeddingTypes';
+export { computeMaterialEmbeddingProfileHash } from './materialEmbeddingTypes.ts';
 
+// SQLite table name for embedding profile / 嵌入配置的 SQLite 表名
 const profileTableName = 'material_embedding_profile';
+// SQLite table name for chunk vectors / 切块向量的 SQLite 表名
 const vectorTableName = 'material_chunk_vectors';
+// SQLite table name for vector metadata / 向量元数据的 SQLite 衮名
 const vectorMetaTableName = 'material_chunk_vector_meta';
+// Probe text for testing embedding model dimensions / 用于测试嵌入模型维度的探测文本
 const profileProbeText = 'Trellora 向量模型探测文本：仅用于确认返回维度，不写入资料库。';
-import { loadSqliteVec } from '../loadSqliteVec';
+import { loadSqliteVec } from '../loadSqliteVec.ts';
 
+/**
+ * Probe function type for testing an embedding candidate.
+ * 用于测试嵌入候选的探测函数类型。
+ */
 export type MaterialEmbeddingProbe = (input: {
   candidate: MaterialEmbeddingCandidate;
   text: string;
   signal: AbortSignal;
 }) => Promise<MaterialEmbeddingProbeResult>;
 
+/**
+ * Creates the embedding profile table if it does not exist and validates column completeness.
+ * 若嵌入 profile 表不存在则创建，并校验列完整性。
+ *
+ * @param database - SQLite database handle / SQLite 数据库句柄
+ */
 export function ensureMaterialEmbeddingProfileSchema(database: Database.Database): void {
   database.exec(`
     CREATE TABLE IF NOT EXISTS ${profileTableName} (
@@ -59,6 +81,13 @@ export function ensureMaterialEmbeddingProfileSchema(database: Database.Database
   }
 }
 
+/**
+ * Reads the embedding profile status from the library database file.
+ * 从资料库数据库文件读取嵌入 profile 状态。
+ *
+ * @param libraryPath - Absolute path of the materials library / 资料库绝对路径
+ * @returns Profile status: UNBOUND, LOCKED, or LEGACY_UNBOUND / profile 状态：UNBOUND、LOCKED 或 LEGACY_UNBOUND
+ */
 export function readMaterialEmbeddingProfile(libraryPath: string): MaterialEmbeddingProfileStatus {
   const databasePath = getDatabasePath(libraryPath);
   if (!fs.existsSync(databasePath)) return { state: 'UNBOUND' };
@@ -71,6 +100,13 @@ export function readMaterialEmbeddingProfile(libraryPath: string): MaterialEmbed
   }
 }
 
+/**
+ * Reads the embedding profile status from an open database handle.
+ * 从已打开的数据库句柄读取嵌入 profile 状态。
+ *
+ * @param database - SQLite database handle / SQLite 数据库句柄
+ * @returns Profile status / profile 状态
+ */
 export function readMaterialEmbeddingProfileFromDatabase(database: Database.Database): MaterialEmbeddingProfileStatus {
   ensureMaterialEmbeddingProfileSchema(database);
   const active = readActiveGeneration(database);
@@ -81,6 +117,13 @@ export function readMaterialEmbeddingProfileFromDatabase(database: Database.Data
   return legacy ? { state: 'LEGACY_UNBOUND', legacy } : { state: 'UNBOUND' };
 }
 
+/**
+ * Tests an embedding candidate by probing the model and validating the response.
+ * 通过探测模型并校验响应来测试嵌入候选。
+ *
+ * @param input - Candidate, probe function, and optional abort signal / 候选、探测函数和可选中止信号
+ * @returns Test result with profile hash and dimension / 含 profile 哈希和维度的测试结果
+ */
 export async function testMaterialEmbeddingCandidate(input: {
   candidate: unknown;
   probe: MaterialEmbeddingProbe;

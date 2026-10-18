@@ -1,7 +1,12 @@
+/**
+ * Knowledge base image resolver: resolves and validates images for assistant responses.
+ * 知识库图片解析器：解析并校验助手回答中的图片。
+ */
+
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { MaterialsDocument } from '../materialsLibrary';
+import type { MaterialsDocument } from '../library/materialsLibrary';
 import { pipelineRoot, safeSegment } from '../pipeline/pathLayout';
 import { readParseImagesManifest, type ParseImageRecord } from '../pipeline/parseImages';
 import type { PipelineManifest } from '../pipeline/types';

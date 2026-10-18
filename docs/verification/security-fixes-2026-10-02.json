@@ -11,11 +11,11 @@
     "Text import preflights and stages the entire batch; publish failures undo newly created files",
     "Mermaid upgraded to 11.16.1 and verified against the actual equal-range XY chart parser"
   ],
-  "windowsDirectoryMoves": {
+  "macDirectoryMoves": {
     "finding": "Recursive directory notifications can temporarily prevent backup directory renames; synchronous retry prevents notifications from settling",
     "fix": "Asynchronous bounded retry within the existing note-writer and index publication queues; physical paths and destination ownership checked on every attempt",
     "verified": [
-      "File and folder histories under a real recursive Windows watcher",
+      "File and folder histories under a real recursive macOS watcher",
       "Persistent backup rename failure restores the original note path and preserves histories",
       "Failed tree-order publication restores note paths and histories",
       "Injected interrupted move journal is recovered before startup indexing"
@@ -57,10 +57,10 @@
       "verify-note-export-electron.mjs: real HTTP image and redirect download, embedded image PDF and no network access during printing",
       "verify-note-save-electron.mjs: editor saves, switching, conflicts, restoration, close handshake and 1 MiB worker indexing"
     ],
-    "packagedScriptPassed": "verify-security-electron.mjs --packaged: Windows x64 ASAR test package; real IPC, frontmatter, junctions, import failure, MD/TXT ownership, file/folder moves and startup recovery"
+    "packagedScriptPassed": "verify-security-electron.mjs --packaged: macOS arm64 ASAR test package; real IPC, frontmatter, junctions, import failure, MD/TXT ownership, file/folder moves and startup recovery"
   },
   "verificationLimits": [
-    "Portable self-extracting executable and an independent clean Windows machine were not tested",
+    "Portable self-extracting executable and an independent clean macOS machine were not tested",
     "Startup recovery used an injected interrupted-move journal; physical power loss was not tested",
     "Python pipeline and external model/provider acceptance were outside this change"
   ],

@@ -1,3 +1,8 @@
+/**
+ * Project context adapter: provides project-level context materials for QA.
+ * 项目上下文适配器：为问答提供项目级上下文素材。
+ */
+
 import { createHash } from 'node:crypto';
 import type {
   ContextMemoryAdapter,

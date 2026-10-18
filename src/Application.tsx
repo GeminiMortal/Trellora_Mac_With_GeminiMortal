@@ -1,9 +1,18 @@
+/**
+ * Module: Application
+ * Root Mantine theme provider and theme transition wrapper.
+ * Manages color scheme, light color scheme, and view transitions.
+ * 模块：Application
+ * 根 Mantine 主题提供者和主题过渡包装器。
+ * 管理配色方案、浅色配色方案和视图过渡。
+ */
+
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { createTheme, defaultVariantColorsResolver, MantineProvider } from '@mantine/core';
-import App from './App';
-import { applyColorScheme, getDocumentLightColorScheme, getDocumentTheme, type ResolvedTheme } from './utils/theme';
-import { getBrandColors, getColorScheme, type LightColorScheme } from '../shared/lightColorSchemes';
-import { finishStartupSplash } from './utils/startupSplash';
+import App from './App.tsx';
+import { applyColorScheme, getDocumentLightColorScheme, getDocumentTheme, type ResolvedTheme } from './utils/ui/theme.ts';
+import { getBrandColors, getColorScheme, type LightColorScheme } from '../shared/lightColorSchemes.ts';
+import { finishStartupSplash } from './utils/ui/startupSplash.ts';
 
 type ViewTransitionHandle = {
   finished: Promise<void>;

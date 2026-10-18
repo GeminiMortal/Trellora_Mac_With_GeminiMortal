@@ -1,4 +1,4 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import { Alert, Button, Group, Loader, Modal, Select, Stack, Text } from '@mantine/core';
 import { useEffect, useState } from 'react';
 import type { LibrarySummary } from '../../electron';

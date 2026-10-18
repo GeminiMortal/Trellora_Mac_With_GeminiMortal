@@ -1,8 +1,8 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import { ActionIcon, Badge, Button, Group, Popover, Progress, SegmentedControl, Select, Text, TextInput, Tooltip } from '@mantine/core';
 import { Check, Info, LayoutDashboard, Menu, PanelLeftClose, PanelLeftOpen, Search, Square, Sparkles, X } from 'lucide-react';
 import type { MaterialsLibrarySummary } from '../../electron';
-import type { WikiBuildMode, WikiGenerationJob, WikiMapInteractionMode, WikiOrderPersistence } from '../../wiki/wikiTypes';
+import type { WikiBuildMode, WikiGenerationJob, WikiMapInteractionMode, WikiOrderPersistence } from './data/wikiTypes.ts';
 
 interface WikiToolbarProps {
   libraries: MaterialsLibrarySummary[];

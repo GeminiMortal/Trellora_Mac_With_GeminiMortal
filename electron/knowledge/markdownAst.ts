@@ -1,3 +1,8 @@
+/**
+ * Markdown AST parser: extracts headings, links, tags, and content hash from markdown notes.
+ * Markdown AST 解析器：从 markdown 笔记中提取标题、链接、标签和内容哈希。
+ */
+
 import { createHash } from 'node:crypto';
 import { parseFrontmatterMapping } from '../../shared/frontmatter';
 import { unified } from 'unified';

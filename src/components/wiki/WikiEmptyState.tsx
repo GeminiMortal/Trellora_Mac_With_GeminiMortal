@@ -1,4 +1,4 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import { Button, Loader, Stack, Text, ThemeIcon } from '@mantine/core';
 import { FileQuestion, RefreshCw } from 'lucide-react';
 

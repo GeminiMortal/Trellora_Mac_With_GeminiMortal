@@ -1,10 +1,17 @@
+/**
+ * Direct-load channel for small documents: tiny materials skip recall/rerank
+ * and enter the retrieval candidate pool as whole documents under a parent budget.
+ * 小文档直载通道：小体量资料跳过召回与 rerank，在父块预算内以整文档形式进入检索候选池。
+ */
+
 import { readMaterialDirectLoadDocuments, type MaterialDirectLoadDocument } from '../pipeline/materialChunkSearch';
 
-/** 小文档直载阈值：子块数 ≤ 40 视为小文档（借鉴 WeKnora 50 chunk 直载思想）；第一版常量，不进设置面板。 */
+/** Small-document threshold: child chunks ≤ 40 counts as small. / 小文档直载阈值：子块数 ≤ 40。 */
 export const DIRECT_LOAD_MAX_CHILD_CHUNKS = 40;
-/** 直载父块总预算：防止小文档淹没检索证据。 */
+/** Total parent-chunk budget for direct load. / 直载父块总预算。 */
 export const DIRECT_LOAD_MAX_PARENTS = 4;
 
+/** One parent chunk selected for the direct-load channel. / 直载通道中选中的单个父块。 */
 export interface DirectLoadParentCandidate {
   documentId: string;
   parentChunkId: string;

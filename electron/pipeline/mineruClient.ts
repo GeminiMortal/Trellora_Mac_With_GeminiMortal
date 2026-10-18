@@ -1,25 +1,43 @@
+/**
+ * MinerU cloud PDF parsing client: upload, poll, download the result zip and
+ * normalize it into local parse artifacts. Runs only in the Electron main process.
+ * MinerU 云解析客户端：上传、轮询、下载结果包并规范化为本地产物。仅运行于 Electron 主进程。
+ */
+
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { createInflateRaw } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
-import { runMarkdownArtifactParse, type TextStageProgress } from './textStage';
-import { createParseImageSink, rewriteMarkdownFileImageReferences } from './parseImages';
-import { PipelineStageError } from './stageErrors';
+import { runMarkdownArtifactParse, type TextStageProgress } from './textStage.ts';
+import { createParseImageSink, rewriteMarkdownFileImageReferences } from './parseImages.ts';
+import { PipelineStageError } from './stageErrors.ts';
 
 const DEFAULT_MINERU_ENDPOINT = 'https://mineru.net/api/v4';
 const POLL_INTERVAL_MS = 2_000;
 const MAX_POLL_MS = 30 * 60 * 1_000;
 
+/**
+ * Options for one MinerU PDF parse run.
+ * 一次 MinerU PDF 解析运行的选项。
+ */
 export interface MineruParseOptions {
+  /** Source PDF path / 源 PDF 路径 */
   inputPath: string;
+  /** Stage output directory / 阶段输出目录 */
   outputDir: string;
+  /** Document id used as data_id / 用作 data_id 的文档 ID */
   documentId: string;
+  /** Authorized content hash to verify before upload / 上传前校验的授权内容哈希 */
   expectedContentHash?: string;
+  /** MinerU API endpoint / MinerU API 端点 */
   endpoint: string;
+  /** API key passed only in memory / 仅在内存中传递的 API Key */
   apiKey: string;
+  /** Abort signal for cancellation / 用于取消的中止信号 */
   signal: AbortSignal;
+  /** Optional progress callback / 可选进度回调 */
   onProgress?: (progress: TextStageProgress) => void;
 }
 
@@ -35,6 +53,11 @@ interface MineruResult {
 /**
  * Main-process-only MinerU adapter. The key is accepted only as an argument
  * from Electron safeStorage and is never written to disk, logs, or artifacts.
+ * 仅限主进程的 MinerU 适配器。API Key 只作为 Electron safeStorage 传入的参数被接受，
+ * 从不写入磁盘、日志或产物。
+ *
+ * @param options - Parse options / 解析选项
+ * @returns Stage counters / 阶段计数
  */
 export async function runMineruPdfParse(options: MineruParseOptions): Promise<{ counts: Record<string, number> }> {
   if (!options.apiKey.trim()) throw new PipelineStageError('MINERU_KEY_REQUIRED', '尚未配置 MinerU API Key。', false);
@@ -51,6 +74,7 @@ export async function runMineruPdfParse(options: MineruParseOptions): Promise<{ 
   try {
     // Upload immutable bytes validated against the main-process authorization.
     // A changed source must fail before any remote request, including URL submission.
+    // 上传经主进程授权校验的不可变字节。源文件若已变化，必须在任何远程请求（包括申请上传 URL）之前失败。
     let uploadOptions = options;
     if (options.expectedContentHash) {
       await fs.promises.copyFile(options.inputPath, uploadSnapshot, fs.constants.COPYFILE_EXCL);
@@ -69,6 +93,7 @@ export async function runMineruPdfParse(options: MineruParseOptions): Promise<{ 
     if (!fullMdEntry) throw new PipelineStageError('MINERU_OUTPUT_MISSING', 'MinerU 结果包中没有找到 full.md。', true);
     await extractZipEntryToFile(zipPath, fullMdEntry, markdownPath);
     // 结果包内的 images/ 一并落盘到阶段输出目录，避免 document.md 留下悬空引用。
+    // Also persist the zip's images/ into the stage output directory so document.md never keeps dangling references.
     const sink = createParseImageSink(options.outputDir);
     for (const entry of entries.filter(isZipImageEntry)) {
       const source = extractZipEntrySource(zipPath, entry);
@@ -79,6 +104,7 @@ export async function runMineruPdfParse(options: MineruParseOptions): Promise<{ 
         });
       } finally {
         // 超限提前返回时迭代器只会销毁解压流；zip 在临时目录内，源流 fd 不关会阻断目录原子改名。
+        // On early size-limit return the iterator only destroys the inflate stream; the zip lives in the temp directory, so leaving the source fd open would block the atomic directory rename.
         source.destroy();
       }
     }
@@ -95,6 +121,8 @@ export async function runMineruPdfParse(options: MineruParseOptions): Promise<{ 
     sink.writeManifest(options.outputDir);
     return parsed;
   } finally {
+    // Temporary remote artifacts are always removed; failures here must not mask a successful cache.
+    // 临时远程产物始终清理；此处失败不得掩盖已成功生成的缓存。
     for (const filePath of [zipPath, markdownPath, uploadSnapshot]) {
       try { fs.rmSync(filePath, { force: true }); } catch { /* 临时远程结果不影响成功缓存 */ }
     }

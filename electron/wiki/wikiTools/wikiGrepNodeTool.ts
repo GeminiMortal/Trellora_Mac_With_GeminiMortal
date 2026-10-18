@@ -1,18 +1,34 @@
-import type { ReActTool, ReActToolExecution } from '../../knowledge/reactAgent/toolRegistry';
-import { compactObservationText, escapeXmlAttribute, escapeXmlText } from '../../knowledge/knowledgeToolContext';
-import type { WikiDocumentOutlineNode } from '../../wikiOutline';
-import type { WikiToolContext } from '../wikiToolContext';
+/**
+ * Wiki tool for literal exact-match text retrieval within the current section subtree.
+ * 在当前章节子树内做字面精确文本检索的 Wiki 工具。
+ */
+
+import type { ReActTool, ReActToolExecution } from '../../knowledge/reactAgent/toolRegistry.ts';
+import { compactObservationText, escapeXmlAttribute, escapeXmlText } from '../../knowledge/tools/knowledgeToolContext.ts';
+import type { WikiDocumentOutlineNode } from '../wikiOutline.ts';
+import type { WikiToolContext } from '../wikiToolContext.ts';
 import {
   collectWikiSubtreeNodes,
   findWikiNode,
   formatWikiNodePath,
   getWikiNodeBreadcrumb,
   isWikiNodeDescendantOf,
-} from '../wikiNodeScope';
-import { WIKI_GREP_CONTEXT_CHARS, WIKI_GREP_MAX_MATCHES } from '../wikiNodeBudget';
-import { renderKnowledgeBaseImageTransportIndex } from '../../knowledge/knowledgeBaseImageResolver';
+} from '../wikiNodeScope.ts';
+import { WIKI_GREP_CONTEXT_CHARS, WIKI_GREP_MAX_MATCHES } from '../wikiNodeBudget.ts';
+import { renderKnowledgeBaseImageTransportIndex } from '../../knowledge/knowledgeBaseImageResolver.ts';
 
 /**
+ * wiki_grep_node tool (plan §4.5 rule 4): performs literal exact-match retrieval within the
+ * current section subtree's raw text.
+ *
+ * Division of labour with wiki_node_search: search does semantic/keyword hybrid recall by meaning;
+ * grep does literal substring matching for serial numbers, config items, commands, proper nouns and
+ * wording verification. Hit snippets are registered as evidence and assigned citation numbers;
+ * use wiki_read_node for deeper reading when context is insufficient.
+ *
+ * Evidence source is in-memory outlineNodes.markdown (no vector index needed), so this tool
+ * is always available.
+ *
  * wiki_grep_node（方案 §4.5 规则 4）：在当前章节子树原文内做「字面」精确检索。
  *
  * 与 wiki_node_search 的分工：search 按含义做语义/关键词混合召回；grep 按字面子串
@@ -55,6 +71,7 @@ interface GrepMatch {
   snippet: string;
 }
 
+/** Execute the wiki_grep_node tool: validate scope, find matches, register evidence and format XML output. / 执行 wiki_grep_node 工具：校验范围、查找匹配、登记证据并格式化 XML 输出。 */
 async function runWikiGrepNode(args: Record<string, unknown>, ctx: WikiToolContext): Promise<ReActToolExecution> {
   const pattern = typeof args.pattern === 'string' ? args.pattern.trim() : '';
   if (!pattern) {
@@ -152,13 +169,14 @@ async function runWikiGrepNode(args: Record<string, unknown>, ctx: WikiToolConte
   };
 }
 
+/** Format section context string from node path and title for evidence registration. / 根据节点路径和标题格式化章节上下文字符串，用于证据登记。 */
 function toSectionContext(nodePath: string, nodeTitle: string): string {
   return nodePath && nodePath !== nodeTitle
     ? `章节路径：${nodePath.replace(/ › /gu, ' / ')}\n章节：${nodeTitle}`
     : `章节：${nodeTitle}`;
 }
 
-/** 命中位置所在行号（1 起）：统计 offset 之前的换行数。 */
+/** Line number (1-based) at the hit offset: counts newlines before the offset. / 命中位置所在行号（1 起）：统计 offset 之前的换行数。 */
 function countLines(markdown: string, offset: number): number {
   let line = 1;
   for (let index = 0; index < offset && index < markdown.length; index += 1) {
@@ -167,7 +185,7 @@ function countLines(markdown: string, offset: number): number {
   return line;
 }
 
-/** 命中片段：以命中位置为中心取前后各 WIKI_GREP_CONTEXT_CHARS 字符，越界处标注省略号。 */
+/** Hit snippet: extract ±WIKI_GREP_CONTEXT_CHARS chars around the match, marking ellipsis at boundaries. / 命中片段：以命中位置为中心取前后各 WIKI_GREP_CONTEXT_CHARS 字符，越界处标注省略号。 */
 function buildSnippet(markdown: string, offset: number, patternLength: number): string {
   const start = Math.max(0, offset - WIKI_GREP_CONTEXT_CHARS);
   const end = Math.min(markdown.length, offset + patternLength + WIKI_GREP_CONTEXT_CHARS);

@@ -1,4 +1,4 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import { useState } from 'react';
 import { ActionIcon, Box, Group, Image, Modal, Text, Tooltip } from '@mantine/core';
 import { Minus, Plus } from 'lucide-react';

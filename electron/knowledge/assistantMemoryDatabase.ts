@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import { getLibraryMetaDirectory } from '../treeOrder';
+import { getLibraryMetaDirectory } from '../files/treeOrder';
 import { createAssistantLibraryId } from './assistantLibraryIdentity';
 import { emptyRollingSummaryPayload } from './assistantRollingSummary';
 

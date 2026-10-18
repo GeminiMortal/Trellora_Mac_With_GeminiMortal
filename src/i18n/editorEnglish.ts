@@ -1,3 +1,12 @@
+/**
+ * English translation map for editor settings UI copy.
+ * 编辑器设置界面文案的英文翻译映射。
+ */
+
+/**
+ * Maps Chinese editor settings labels and descriptions to English.
+ * 将编辑器设置的中文标签与说明映射为英文。
+ */
 export const editorEnglish: Record<string, string> = {
   '正文排版': 'Document typography', '正文字号': 'Body font size', '行距': 'Line height', '段落间距': 'Paragraph spacing',
   '正文宽度': 'Content width', '窄版': 'Narrow', '标准': 'Standard', '宽版': 'Wide', '铺满窗口': 'Full width',

@@ -1,32 +1,36 @@
+/**
+ * Electron preload bridge exposing the curated `window.electronAPI` surface to the renderer.
+ * Electron preload 桥接层：向渲染进程暴露受控的 `window.electronAPI` 能力面。
+ */
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import { readStartupAppearance } from '../shared/startupAppearance';
-import type { WorkspaceMigrationStatus } from '../shared/workspaceMigration';
-import type { CapabilityProbeRequest, CapabilityRequest } from '../shared/userCapabilities';
-import type { BackupConfiguration, BackupStatus, RestoreStatus } from '../shared/workspaceBackup';
-import type { NoteMutationRequest, SaveNoteRequest, NoteCloseResponse } from '../shared/noteSave';
-import type { CreateAssistantNoteRequest } from '../shared/assistantNote';
-import type { MaterialsDocument } from './materialsLibrary';
-import type { NoteExportRequest } from '../shared/noteExport';
-import type { SelectionTransformRequest } from './knowledge/selectionTransformTypes';
-import type { SelectionEditRunRequest, SelectionEditRunResult } from './knowledge/selectionEditIpc';
-import type { SelectionExpansionCapabilities, SelectionExpansionEvent, SelectionExpansionRequest, SelectionExpansionSettings, SelectionExpansionSettingsPatch, SelectionExpansionSourcePreparation } from './knowledge/selectionExpansionTypes';
-import type { AssistantAttachment, AssistantCitationValidation, AssistantEvidenceCitation, AssistantTurnEvent, AssistantTurnRequest } from './knowledge/assistantTurnTypes';
-import type { AssistantMemoryMode, AssistantMemorySettings, AssistantSessionDetail, AssistantSessionSummary } from './knowledge/assistantMemoryTypes';
-import type { QaMemoryPage, QaSessionDetail, QaSessionScope, QaSessionSummary } from './knowledge/qaMemoryTypes';
-import type { ManualMemoryInput, MemoryExtractionRuntimeStatus, MemoryClearResult, MemoryConsolidationResult, MemoryDocumentAffinity, MemoryImportResult, MemoryItemListQuery, MemoryItemPage, MemoryItemPatch, MemoryItemRecord, MemorySubjectRecord, MemoryTopicRecord, MemoryUsedSnapshot, MemoryWriteResult, WorkspaceMemoryConfig, MemoryProposalReview, MemoryProposalContext, MemoryTurnStatus } from './knowledge/memory/memoryTypes';
-import type { MemoryCitationSource } from '../shared/memoryCitations';
-import type { MemoryPage, MemoryPageQuery, MemoryItemPageQuery, MemoryItemCounts } from './knowledge/memory/memoryTypes';
-import type { MemoryCutoverReport } from './knowledge/memory/memoryCutover';
-import type { AssistantDetailedTraceRecordView } from './knowledge/assistantDetailedTrace';
-import type { AiExtensionsSettings, AiModelSettingsInput, AiSkillImportKind, AiSkillsOverview, SkillDocumentUpdateResult, SkillExportResult, SkillFormCreateInput, SkillImportResult } from './knowledge/aiTypes';
-import type { WikiSiblingOrderRequest, WikiSiblingOrderResult } from './wikiOutline';
+import { readStartupAppearance } from '../shared/startupAppearance.ts';
+import type { WorkspaceMigrationStatus } from '../shared/workspaceMigration.ts';
+import type { CapabilityProbeRequest, CapabilityRequest } from '../shared/userCapabilities.ts';
+import type { BackupConfiguration, BackupStatus, RestoreStatus } from '../shared/workspaceBackup.ts';
+import type { NoteMutationRequest, SaveNoteRequest, NoteCloseResponse } from '../shared/noteSave.ts';
+import type { CreateAssistantNoteRequest } from '../shared/assistantNote.ts';
+import type { MaterialsDocument } from './library/materialsLibrary.ts';
+import type { NoteExportRequest } from '../shared/noteExport.ts';
+import type { SelectionTransformRequest } from './knowledge/selection/selectionTransformTypes.ts';
+import type { SelectionEditRunRequest, SelectionEditRunResult } from './knowledge/selection/selectionEditIpc.ts';
+import type { SelectionExpansionCapabilities, SelectionExpansionEvent, SelectionExpansionRequest, SelectionExpansionSettings, SelectionExpansionSettingsPatch, SelectionExpansionSourcePreparation } from './knowledge/selection/selectionExpansionTypes.ts';
+import type { AssistantAttachment, AssistantCitationValidation, AssistantEvidenceCitation, AssistantTurnEvent, AssistantTurnRequest } from './knowledge/assistant/assistantTurnTypes.ts';
+import type { AssistantMemoryMode, AssistantMemorySettings, AssistantSessionDetail, AssistantSessionSummary } from './knowledge/assistant/assistantMemoryTypes.ts';
+import type { QaMemoryPage, QaSessionDetail, QaSessionScope, QaSessionSummary } from './knowledge/qa/qaMemoryTypes.ts';
+import type { ManualMemoryInput, MemoryExtractionRuntimeStatus, MemoryClearResult, MemoryConsolidationResult, MemoryDocumentAffinity, MemoryImportResult, MemoryItemListQuery, MemoryItemPage, MemoryItemPatch, MemoryItemRecord, MemorySubjectRecord, MemoryTopicRecord, MemoryUsedSnapshot, MemoryWriteResult, WorkspaceMemoryConfig, MemoryProposalReview, MemoryProposalContext, MemoryTurnStatus } from './knowledge/memory/memoryTypes.ts';
+import type { MemoryCitationSource } from '../shared/memoryCitations.ts';
+import type { MemoryPage, MemoryPageQuery, MemoryItemPageQuery, MemoryItemCounts } from './knowledge/memory/memoryTypes.ts';
+import type { MemoryCutoverReport } from './knowledge/memory/memoryCutover.ts';
+import type { AssistantDetailedTraceRecordView } from './knowledge/assistant/assistantDetailedTrace.ts';
+import type { AiExtensionsSettings, AiModelSettingsInput, AiSkillImportKind, AiSkillsOverview, SkillDocumentUpdateResult, SkillExportResult, SkillFormCreateInput, SkillImportResult } from './knowledge/ai/aiTypes.ts';
+import type { WikiSiblingOrderRequest, WikiSiblingOrderResult } from './wiki/wikiOutline.ts';
 import type {
   WikiDerivedDeleteRequest,
   WikiDerivedDeleteResult,
   WikiDerivedNodeRequest,
   WikiDerivedNodeResult,
   WikiDerivedRenameRequest,
-} from './wiki/wikiDerivedNodes';
+} from './wiki/wikiDerivedNodes.ts';
 import type {
   WikiAiMemoryCreateRequest,
   WikiAiMemoryDeleteRequest,
@@ -36,12 +40,15 @@ import type {
   WikiAiMemoryRenameRequest,
   WikiAiMemoryResult,
   WikiAiMemoryUpsertRequest,
-} from './wiki/wikiAiMemories';
-import type { WikiNodeQuestionsResult } from './wiki/wikiNodeQuestions';
+} from './wiki/wikiAiMemories.ts';
+import type { WikiNodeQuestionsResult } from './wiki/wikiNodeQuestions.ts';
 
 let noteCloseSubscribers = 0;
+// No editable content exists during the first frame; React takes over and continues with the original save handshake.
 // 首帧期间尚无可编辑内容；React 接管后继续使用原有保存握手。
 ipcRenderer.on('notes:close-request', (_event, request: { requestId: string }) => {
+    // Auto-acknowledge before React mounts so shutdown never blocks on an absent subscriber.
+    // React 挂载前自动应答，确保退出不会因缺少订阅者而阻塞。
     if (noteCloseSubscribers === 0) ipcRenderer.send('notes:close-response', { requestId: request.requestId, ok: true });
 });
 
@@ -51,6 +58,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     waitForStartup: () => ipcRenderer.invoke('startup:ready'),
     ping: () => ipcRenderer.invoke('ping'),
     // File System APIs
+    // 文件系统 API
     selectDirectory: () => ipcRenderer.invoke('select-directory'),
     selectWorkspace: () => ipcRenderer.invoke('select-workspace'),
     getWorkspacePath: () => ipcRenderer.invoke('get-workspace-path'),
@@ -72,7 +80,45 @@ contextBridge.exposeInMainWorld('electronAPI', {
     activateLibrary: (libraryPath: string) => ipcRenderer.invoke('activate-library', libraryPath),
     removeLibrary: (libraryPath: string) => ipcRenderer.invoke('remove-library', libraryPath),
     getLibraryPath: () => ipcRenderer.invoke('get-library-path'),
+    // Schedule / Calendar APIs
+    // 日程 / 日历 API
+    listScheduleOccurrences: (query: import('../shared/schedule.ts').ScheduleRangeQuery) => ipcRenderer.invoke('schedule:list-occurrences', query) as Promise<import('../shared/schedule.ts').ScheduleOccurrence[]>,
+    createScheduleItem: (req: import('../shared/schedule.ts').ScheduleCreateRequest) => ipcRenderer.invoke('schedule:create-item', req) as Promise<import('../shared/schedule.ts').ScheduleItem>,
+    updateScheduleItem: (req: import('../shared/schedule.ts').ScheduleUpdateRequest) => ipcRenderer.invoke('schedule:update-item', req) as Promise<import('../shared/schedule.ts').ScheduleItem>,
+    deleteScheduleItem: (req: import('../shared/schedule.ts').ScheduleDeleteRequest) => ipcRenderer.invoke('schedule:delete-item', req) as Promise<void>,
+    updateScheduleOccurrence: (req: import('../shared/schedule.ts').ScheduleOccurrenceOverrideRequest) => ipcRenderer.invoke('schedule:update-occurrence', req) as Promise<void>,
+    setScheduleTodoStatus: (id: string, status: import('../shared/schedule.ts').TodoStatus) => ipcRenderer.invoke('schedule:set-todo-status', id, status) as Promise<import('../shared/schedule.ts').ScheduleItem>,
+    listScheduleCategories: () => ipcRenderer.invoke('schedule:list-categories') as Promise<import('../shared/schedule.ts').ScheduleCategory[]>,
+    upsertScheduleCategory: (name: string, color: string) => ipcRenderer.invoke('schedule:upsert-category', name, color) as Promise<import('../shared/schedule.ts').ScheduleCategory>,
+    deleteScheduleCategory: (name: string) => ipcRenderer.invoke('schedule:delete-category', name) as Promise<void>,
+    getScheduleCourseTimes: () => ipcRenderer.invoke('schedule:get-course-times') as Promise<import('../shared/schedule.ts').CourseTimeSettings>,
+    setScheduleCourseTimes: (settings: import('../shared/schedule.ts').CourseTimeSettings) => ipcRenderer.invoke('schedule:set-course-times', settings) as Promise<void>,
+    getScheduleImportBatches: () => ipcRenderer.invoke('schedule:get-import-batches') as Promise<import('../shared/schedule.ts').ScheduleImportBatch[]>,
+    revertScheduleImport: (batchId: string) => ipcRenderer.invoke('schedule:revert-import', batchId) as Promise<void>,
+    scheduleImportPickFile: (kind: 'csv' | 'excel' | 'image') => ipcRenderer.invoke('schedule:import-pick-file', kind) as Promise<string | null>,
+    scheduleImportPreviewCsv: (filePath: string) => ipcRenderer.invoke('schedule:import-preview-csv', filePath) as Promise<import('../shared/schedule.ts').ScheduleImportPreviewResult>,
+    scheduleImportPreviewExcel: (filePath: string) => ipcRenderer.invoke('schedule:import-preview-excel', filePath) as Promise<import('../shared/schedule.ts').ScheduleImportPreviewResult>,
+    scheduleImportCommit: (req: import('../shared/schedule.ts').ScheduleImportCommitRequest) => ipcRenderer.invoke('schedule:import-commit', req) as Promise<import('../shared/schedule.ts').ScheduleImportCommitResult>,
+    scheduleImportPreviewUrl: (url: string) => ipcRenderer.invoke('schedule:import-preview-url', url) as Promise<import('../shared/schedule.ts').ScheduleImportPreviewResult>,
+    scheduleImportPreviewImage: (filePath: string) => ipcRenderer.invoke('schedule:import-preview-image', filePath) as Promise<import('../shared/schedule.ts').ScheduleImportPreviewResult>,
+    scheduleImportOpenBrowser: (url: string) => ipcRenderer.invoke('schedule:import-open-browser', url) as Promise<import('../shared/schedule.ts').ScheduleImportPreviewResult>,
+    onScheduleChanged: (callback: (event: import('../shared/schedule.ts').ScheduleChangedEvent) => void) => {
+      const listener = (_event: unknown, payload: import('../shared/schedule.ts').ScheduleChangedEvent) => callback(payload);
+      ipcRenderer.on('schedule:changed', listener);
+      return () => ipcRenderer.removeListener('schedule:changed', listener);
+    },
+    onScheduleReminder: (callback: (event: import('../shared/schedule.ts').ScheduleReminderFiredEvent) => void) => {
+      const listener = (_event: unknown, payload: import('../shared/schedule.ts').ScheduleReminderFiredEvent) => callback(payload);
+      ipcRenderer.on('schedule:reminder', listener);
+      return () => ipcRenderer.removeListener('schedule:reminder', listener);
+    },
+    onScheduleReminderClicked: (callback: (event: { itemId: string }) => void) => {
+      const listener = (_event: unknown, payload: { itemId: string }) => callback(payload);
+      ipcRenderer.on('schedule:reminder-clicked', listener);
+      return () => ipcRenderer.removeListener('schedule:reminder-clicked', listener);
+    },
     // Materials Library APIs
+    // 资料库 API
     listMaterialsLibraries: () => ipcRenderer.invoke('list-materials-libraries'),
     createMaterialsLibrary: (name: string, icon?: string | null, chunkingConfigDraft?: unknown) => ipcRenderer.invoke('create-materials-library', name, icon, chunkingConfigDraft),
     openMaterialsLibrary: (libraryPath: string) => ipcRenderer.invoke('open-materials-library', libraryPath),
@@ -301,25 +347,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
     listDocumentOpenRequests: () => ipcRenderer.invoke('documents:list-open-requests'),
     takeDocumentOpenFailures: () => ipcRenderer.invoke('documents:open-failures'),
     dropDocumentFiles: async (files: File[]) => {
+      // webUtils is the only sanctioned File→absolute-path mapping; non-OS files fall back to the picker.
+      // webUtils 是唯一受支持的 File→绝对路径映射；非本地文件回退到系统选择器。
       const paths = files.map(file => webUtils.getPathForFile(file)).filter(Boolean);
       if (paths.length !== files.length || !paths.length) { await ipcRenderer.invoke('documents:pick-file'); return; }
       await ipcRenderer.invoke('documents:drop-files', paths);
     },
     openDocumentRequest: (id: string, encoding?: string) => ipcRenderer.invoke('documents:open-request', id, encoding),
     finishDocumentOpenRequest: (id: string) => ipcRenderer.invoke('documents:finish-open-request', id),
-    updateDocumentDraft: (request: import('../shared/documentSession').DocumentDraftRequest): Promise<import('../shared/documentSession').DocumentDraftResult> => ipcRenderer.invoke('documents:update-draft', request),
+    updateDocumentDraft: (request: import('../shared/documentSession.ts').DocumentDraftRequest): Promise<import('../shared/documentSession.ts').DocumentDraftResult> => ipcRenderer.invoke('documents:update-draft', request),
     previewDocumentResources: (id: string) => ipcRenderer.invoke('documents:resource-preview', id),
     grantDocumentResourceRoot: (id: string) => ipcRenderer.invoke('documents:grant-resource-root', id),
     openDocumentLink: (id: string, href: string) => ipcRenderer.invoke('documents:open-link', id, href),
     addDocumentImage: (id: string, input: { bytes?: Uint8Array; extension?: string; sourcePath?: string }) => ipcRenderer.invoke('documents:add-image', id, input),
-    runDocumentAi: (request: import('../shared/documentAi').DocumentAiRequest) => ipcRenderer.invoke('documents:ai-run', request),
-    applyDocumentAi: (request: import('../shared/documentAi').DocumentAiApplyRequest) => ipcRenderer.invoke('documents:ai-apply', request),
+    runDocumentAi: (request: import('../shared/documentAi.ts').DocumentAiRequest) => ipcRenderer.invoke('documents:ai-run', request),
+    applyDocumentAi: (request: import('../shared/documentAi.ts').DocumentAiApplyRequest) => ipcRenderer.invoke('documents:ai-apply', request),
     cancelDocumentAi: (requestId: string) => ipcRenderer.invoke('documents:ai-cancel', requestId),
-    saveDocument: (request: import('../shared/documentSession').DocumentSaveRequest) => ipcRenderer.invoke('documents:save', request),
-    saveDocumentAs: (request: import('../shared/documentSession').DocumentSaveRequest) => ipcRenderer.invoke('documents:save-as', request),
+    saveDocument: (request: import('../shared/documentSession.ts').DocumentSaveRequest) => ipcRenderer.invoke('documents:save', request),
+    saveDocumentAs: (request: import('../shared/documentSession.ts').DocumentSaveRequest) => ipcRenderer.invoke('documents:save-as', request),
     refreshDocument: (id: string, revision: number, encoding?: string, discard = false) => ipcRenderer.invoke('documents:refresh', id, revision, encoding, discard),
-    closeDocument: (request: import('../shared/documentSession').DocumentCloseRequest): Promise<import('../shared/documentSession').DocumentCloseResult> => ipcRenderer.invoke('documents:close', request),
-    joinDocumentLibrary: (request: import('../shared/documentSession').DocumentJoinRequest) => ipcRenderer.invoke('documents:join-library', request),
+    closeDocument: (request: import('../shared/documentSession.ts').DocumentCloseRequest): Promise<import('../shared/documentSession.ts').DocumentCloseResult> => ipcRenderer.invoke('documents:close', request),
+    joinDocumentLibrary: (request: import('../shared/documentSession.ts').DocumentJoinRequest) => ipcRenderer.invoke('documents:join-library', request),
     listDocumentRecovery: () => ipcRenderer.invoke('documents:list-recovery'),
     restoreDocumentDraft: (id: string) => ipcRenderer.invoke('documents:restore-draft', id),
     listRecentDocuments: () => ipcRenderer.invoke('documents:list-recent'),
@@ -341,6 +389,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     reconcileNotes: () => ipcRenderer.invoke('notes:reconcile'),
     respondNoteClose: (response: NoteCloseResponse) => ipcRenderer.send('notes:close-response', response),
     onNoteCloseRequested: (callback: (request: { requestId: string }) => void) => {
+      // Subscriber counting shifts close handling from the auto-ack above to React's save handshake.
+      // 订阅计数使关闭处理从上方的自动应答切换到 React 的保存握手。
       noteCloseSubscribers++;
       const listener = (_event: unknown, request: { requestId: string }) => callback(request);
       ipcRenderer.on('notes:close-request', listener);
@@ -366,8 +416,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     saveTreeOrder: (parentDirectoryPath: string, orderedChildPaths: string[]) => ipcRenderer.invoke('save-tree-order', parentDirectoryPath, orderedChildPaths),
     importFiles: (targetDirectoryPath?: string | null) => ipcRenderer.invoke('import-files', targetDirectoryPath),
     // Search API
+    // 搜索 API
     searchNotes: (query: string) => ipcRenderer.invoke('search-notes', query),
     // Knowledge graph APIs
+    // 知识图谱 API
     getNoteMeta: (filePath: string) => ipcRenderer.invoke('get-note-meta', filePath),
     getBacklinks: (filePath: string) => ipcRenderer.invoke('get-backlinks', filePath),
     getAllTags: () => ipcRenderer.invoke('get-all-tags'),
@@ -381,6 +433,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     exportHtml: (defaultName: string, html: string) => ipcRenderer.invoke('export-html', defaultName, html),
     exportNote: (request: NoteExportRequest) => ipcRenderer.invoke('export-note', request),
     // Logging API
+    // 日志 API
     onLog: (callback: (message: string) => void) => {
         ipcRenderer.on('main-log', (_event, message) => callback(message));
     },
@@ -409,4 +462,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.on('library-graph-updated', listener);
         return () => ipcRenderer.removeListener('library-graph-updated', listener);
     },
+
+    // ── Terminal ──────────────────────────────────────────────────────────────
+    createTerminal: (options?: import('../shared/terminal.ts').TerminalCreateOptions) =>
+        ipcRenderer.invoke('terminal:create', options) as Promise<import('../shared/terminal.ts').TerminalSessionInfo>,
+    resizeTerminal: (id: string, cols: number, rows: number) =>
+        ipcRenderer.invoke('terminal:resize', id, cols, rows) as Promise<void>,
+    killTerminal: (id: string) =>
+        ipcRenderer.invoke('terminal:kill', id) as Promise<void>,
+    writeTerminal: (id: string, data: string) => {
+        ipcRenderer.send('terminal:write', id, data);
+    },
+    onTerminalData: (callback: (event: import('../shared/terminal.ts').TerminalDataEvent) => void) => {
+        const listener = (_event: Electron.IpcRendererEvent, payload: import('../shared/terminal.ts').TerminalDataEvent) => callback(payload);
+        ipcRenderer.on('terminal:data', listener);
+        return () => ipcRenderer.removeListener('terminal:data', listener);
+    },
+    onTerminalExit: (callback: (event: import('../shared/terminal.ts').TerminalExitEvent) => void) => {
+        const listener = (_event: Electron.IpcRendererEvent, payload: import('../shared/terminal.ts').TerminalExitEvent) => callback(payload);
+        ipcRenderer.on('terminal:exit', listener);
+        return () => ipcRenderer.removeListener('terminal:exit', listener);
+    },
+    listTerminalShells: () =>
+        ipcRenderer.invoke('terminal:list-shells') as Promise<import('../shared/terminal.ts').ShellInfo[]>,
+    getDefaultTerminalShell: () =>
+        ipcRenderer.invoke('terminal:get-default-shell') as Promise<string>,
 });

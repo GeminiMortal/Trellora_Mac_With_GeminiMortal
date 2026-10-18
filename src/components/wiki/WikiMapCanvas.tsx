@@ -1,4 +1,4 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
@@ -13,13 +13,13 @@ import {
   type OnNodeDrag,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import type { WikiMapInteractionMode, WikiMapNode } from '../../wiki/wikiTypes';
-import { createWikiBranchColorMap } from '../../wiki/wikiBranchColors';
+import type { WikiMapInteractionMode, WikiMapNode } from './data/wikiTypes.ts';
+import { createWikiBranchColorMap } from './data/wikiBranchColors.ts';
 import {
   collectVisibleWikiNodes,
   collectWikiDescendantIds,
   collectWikiSelectionBranchIds,
-} from '../../wiki/wikiViewState';
+} from './data/wikiViewState.ts';
 import {
   applyWikiBranchDrag,
   createWikiSiblingReorderPreview,
@@ -27,9 +27,9 @@ import {
   layoutWikiGraph,
   type WikiLayoutPoint,
   type WikiMeasuredHeights,
-} from '../../wiki/wikiLayout';
-import WikiMapNodeComponent, { type WikiFlowNode, type WikiMapNodeData } from './WikiMapNode';
-import WikiCurveEdge, { type WikiFlowEdge } from './WikiCurveEdge';
+} from './data/wikiLayout.ts';
+import WikiMapNodeComponent, { type WikiFlowNode, type WikiMapNodeData } from './WikiMapNode.tsx';
+import WikiCurveEdge, { type WikiFlowEdge } from './WikiCurveEdge.tsx';
 
 interface WikiMapCanvasProps {
   nodes: WikiMapNode[];

@@ -1,16 +1,33 @@
+/**
+ * Direct text parse stage: streams plain-text and Markdown sources into normalized parse artifacts.
+ * 文本直读解析阶段：将纯文本与 Markdown 源流式写成规范化解析产物。
+ */
+
 import fs from 'node:fs';
 import path from 'node:path';
 import { once } from 'node:events';
-import { rewriteMarkdownImageReferences } from './parseImages';
-import { PipelineStageError } from './stageErrors';
+import { rewriteMarkdownImageReferences } from './parseImages.ts';
+import { PipelineStageError } from './stageErrors.ts';
 
+/**
+ * Progress snapshot emitted while streaming a text source.
+ * 流式读取文本源时发出的进度快照。
+ */
 export interface TextStageProgress {
+  /** Lines consumed so far / 已消费的行数 */
   completed: number;
+  /** Total lines when known / 已知时的总行数 */
   total?: number;
+  /** Human-readable progress message / 可读的进度信息 */
   message: string;
 }
 
+/**
+ * Counters produced by a text parse run.
+ * 文本解析运行产出的计数结果。
+ */
 export interface TextStageResult {
+  /** Named counters (lines, blocks, bytes, ...) / 命名计数（行、块、字节等） */
   counts: Record<string, number>;
 }
 
@@ -18,6 +35,20 @@ export interface TextStageResult {
  * Direct text parsing is deliberately line-streamed. The original file stays
  * the source of truth; the stage only writes normalized local artifacts and
  * keeps rawText on each block for later line/signal provenance.
+ * 文本直读刻意采用按行流式处理。原始文件仍是唯一真实来源；本阶段只写入规范化
+ * 本地产物，并在每个块上保留 rawText 以便后续逻辑行/信号溯源。
+ *
+ * @param params - Parse parameters / 解析参数
+ * @param params.inputPath - Source file path / 源文件路径
+ * @param params.outputDir - Stage output directory / 阶段输出目录
+ * @param params.extension - Source file extension / 源文件扩展名
+ * @param params.engine - Engine label recorded in the report / 报告中记录的引擎标签
+ * @param params.sourceName - Display name of the source / 源显示名称
+ * @param params.signal - Abort signal for cancellation / 用于取消的中止信号
+ * @param params.onProgress - Optional progress callback / 可选进度回调
+ * @param params.imageRewrites - Accepted reference map; rewrites markdown per line so artifacts stay self-contained / 已采纳进 images/ 的引用映射，逐行改写 markdown 保证产物自包含
+ * @param params.extraCounts - Extra counters merged into the report / 合并进报告的额外计数
+ * @returns Parse counters / 解析计数
  */
 export async function runDirectTextParse(params: {
   inputPath: string;
@@ -27,7 +58,7 @@ export async function runDirectTextParse(params: {
   sourceName?: string;
   signal: AbortSignal;
   onProgress?: (progress: TextStageProgress) => void;
-  /** 已采纳进 images/ 的引用映射，逐行改写 markdown 保证产物自包含。 */
+  /** Accepted reference map; rewrites markdown per line so artifacts stay self-contained. / 已采纳进 images/ 的引用映射，逐行改写 markdown 保证产物自包含。 */
   imageRewrites?: ReadonlyMap<string, string>;
   extraCounts?: Record<string, number>;
 }): Promise<TextStageResult> {
@@ -63,6 +94,8 @@ export async function runDirectTextParse(params: {
       lineNumber += 1;
       maxLineChars = Math.max(maxLineChars, rawText.length);
       if (!text.trim()) {
+        // Leading blanks are dropped; interior blanks collapse into a blankBefore flag.
+        // 文首空行被丢弃；文中空行折叠为 blankBefore 标记。
         if (renderedLines > 0) {
           blankBefore = true;
           blankLinesRemoved += 1;
@@ -116,6 +149,8 @@ export async function runDirectTextParse(params: {
     params.onProgress?.({ completed: lineNumber, total: lineNumber, message: '文本直读缓存已生成。' });
     return { counts };
   } catch (error) {
+    // Destroy all streams on failure so a retry starts from a clean slate.
+    // 失败时销毁全部流，确保重试从干净状态开始。
     input.destroy();
     markdown.destroy();
     lineLayout.destroy();
@@ -125,6 +160,20 @@ export async function runDirectTextParse(params: {
   }
 }
 
+/**
+ * Parses a pre-produced Markdown artifact using the direct text pipeline.
+ * 使用文本直读流水线解析已生成的 Markdown 产物。
+ *
+ * @param params - Parse parameters (extension is fixed to .md) / 解析参数（扩展名固定为 .md）
+ * @param params.inputPath - Source markdown path / 源 markdown 路径
+ * @param params.outputDir - Stage output directory / 阶段输出目录
+ * @param params.engine - Engine label recorded in the report / 报告中记录的引擎标签
+ * @param params.sourceName - Display name of the source / 源显示名称
+ * @param params.signal - Abort signal for cancellation / 用于取消的中止信号
+ * @param params.onProgress - Optional progress callback / 可选进度回调
+ * @param params.extraCounts - Extra counters merged into the report / 合并进报告的额外计数
+ * @returns Parse counters / 解析计数
+ */
 export async function runMarkdownArtifactParse(params: {
   inputPath: string;
   outputDir: string;
@@ -137,6 +186,8 @@ export async function runMarkdownArtifactParse(params: {
   return runDirectTextParse({ ...params, extension: '.md' });
 }
 
+// Strips control characters that would corrupt JSONL/markdown output and trims trailing whitespace.
+// 剥离会破坏 JSONL/markdown 输出的控制字符，并去除行尾空白。
 function normalizeTextLine(value: string): string {
   const filtered = Array.from(value).filter((character) => {
     const code = character.charCodeAt(0);
@@ -149,6 +200,8 @@ function stripBom(value: string): string {
   return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value;
 }
 
+// Classifies a rendered line into a block kind for downstream structure signals.
+// 将渲染行分类为块类型，供下游结构信号使用。
 function inferTextBlockKind(text: string): string {
   if (/^#{1,6}\s+/.test(text)) return 'heading';
   if (/^\s*(?:[-*+]\s+|\d+[.)]\s+|\[[ xX]\]\s+)/.test(text)) return 'list_item';
@@ -170,11 +223,15 @@ function finishStream(stream: NodeJS.WritableStream): Promise<void> {
   });
 }
 
+// Waits for 'drain' when the writable buffer is full to apply backpressure.
+// 可写缓冲区满时等待 'drain'，以施加背压。
 async function writeWithBackpressure(stream: NodeJS.WritableStream, chunk: string): Promise<void> {
   if (stream.write(chunk)) return;
   await once(stream, 'drain');
 }
 
+// Splits a chunk stream into CRLF/LF-tolerant lines without buffering the whole file.
+// 将分块流切分为容忍 CRLF/LF 的行，无需缓冲整个文件。
 async function* readLines(stream: AsyncIterable<string>): AsyncGenerator<string> {
   let pending = '';
   for await (const chunk of stream) {

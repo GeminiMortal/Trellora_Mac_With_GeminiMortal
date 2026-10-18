@@ -25,7 +25,7 @@ This document describes the working tree inspected on 2026-10-05. Repository-rel
 
 ## Overall architecture and process boundaries
 
-Trellora is a **local-first Windows Electron desktop application**. React owns interaction; Electron owns filesystem/database access; Node Workers and a Python Sidecar perform isolated computation. Core operation requires no separate web backend, Redis, PostgreSQL, or external vector database.
+Trellora is a **local-first macOS Electron desktop application**. React owns interaction; Electron owns filesystem/database access; Node Workers and a Python Sidecar perform isolated computation. Core operation requires no separate web backend, Redis, PostgreSQL, or external vector database.
 
 ```mermaid
 flowchart TB
@@ -222,7 +222,7 @@ This is execution order/major outputs, not a claim that each stage reads only it
 
 ### Worker protocol
 
-[pythonWorkerClient.ts](../electron/pipeline/pythonWorkerClient.ts) centralizes spawning. Development prefers `.venv/Scripts/python.exe -m pipeline_worker`; packaged execution uses `resources/pipeline-runtime/python-worker.exe -E -m pipeline_worker`. Hello validates protocol, engine, capabilities.
+[pythonWorkerClient.ts](../electron/pipeline/pythonWorkerClient.ts) centralizes spawning. Development prefers `.venv/bin/python -m pipeline_worker`; packaged execution uses `resources/pipeline-runtime/python-worker -E -m pipeline_worker`. Hello validates protocol, engine, capabilities.
 
 ```json
 {"id":"request-1","method":"hello","params":{"protocolVersion":1}}
@@ -541,24 +541,24 @@ pnpm dev
 
 ### Packaging
 
-```powershell
-python -m pip install -r pipeline-python\requirements.txt --target pipeline-python\.deps
+```bash
+python3 -m pip install -r pipeline-python/requirements.txt --target pipeline-python/.deps
 pnpm build
 pnpm run release:manifest
 ```
 
-[build-pipeline-runtime.mjs](../scripts/build-pipeline-runtime.mjs) assembles CPython/stdlib/Worker/Jieba/graph dependencies, validates hello, writes manifest. It requires a CPython installation, not just a venv, prefers `py -3`, and accepts `MENGHAN_PIPELINE_PYTHON`.
+[build-pipeline-runtime.mjs](../scripts/build-pipeline-runtime.mjs) assembles CPython/stdlib/Worker/Jieba/graph dependencies, validates hello, writes manifest. It requires a CPython installation, not just a venv, and accepts `MENGHAN_PIPELINE_PYTHON`.
 
-electron-builder carries runtime/skills via `extraResources`, native SQLite/sqlite-vec and applicable Workers via `asarUnpack`. [build-windows-packages.mjs](../scripts/build-windows-packages.mjs) creates portable/NSIS; [installer.nsh](../build/installer.nsh) handles optional Open With. `portable.unpackDirName: true` uses separate extraction directories; actual manifests establish signing status.
+electron-builder carries runtime/skills via `extraResources`, native SQLite/sqlite-vec and applicable Workers via `asarUnpack`. [build-mac-packages.mjs](../scripts/build/build-mac-packages.mjs) creates DMG/ZIP; Mac uses `icon.icns` as the app icon. Actual manifests establish signing status.
 
 | Validation | Commands/evidence | Establishes |
 | --- | --- | --- |
 | Static | `pnpm exec tsc -b`, `pnpm lint` | Types/rules/basic contracts |
 | Focused | `verify:markdown`, `verify:ai-provider`, `verify:wiki-workspace`, etc. | Fixture behavior/boundaries |
-| Python | `.venv/Scripts/python.exe -m unittest discover -s pipeline-python/tests -v` | Stage algorithms/protocol |
+| Python | `.venv/bin/python -m unittest discover -s pipeline-python/tests -v` | Stage algorithms/protocol |
 | Electron | `verify:*electron`, `docs/verification/` | Main/preload/UI/event/file interaction |
 | Real services | Applicable `--real`/real-model scripts | Specified configuration/route calls |
-| Packaged/clean Windows | Distribution/Open With records | Runtime/native dependencies/install/launch/associations |
+| Packaged/clean macOS | Distribution/Open With records | Runtime/native dependencies/install/launch/associations |
 
 The self-captured demo screenshots used an isolated current-source Electron build, local Markdown pipeline, and all eight menus. That capture session did not exercise remote models, MinerU, graph enrichment, or clean-machine acceptance. The README also includes actual-use screenshots supplied by the user; [showcase assets](assets/README.md) records the two groups separately. Screenshots do not prove every feature end to end.
 

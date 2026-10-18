@@ -1,14 +1,26 @@
+/**
+ * Content-addressed storage for library-level graph artifacts under .menghan-meta/graph.
+ * 资料库级图谱产物的内容寻址存储（位于 .menghan-meta/graph 下）。
+ */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { LibraryLeidenConfig } from './types';
-import { PipelineStageError } from './stageErrors';
+import type { LibraryLeidenConfig } from './types.ts';
+import { PipelineStageError } from './stageErrors.ts';
 
-/** Worker 侧图装配协议/产物 schema 版本，参与 graphKey 计算（方案 §3.2）。
- * graph-v3：LLM strength 改为均值聚合，并持久化 PMI 与独立支持计数。 */
+/**
+ * Worker-side graph assembly protocol/artifact schema version; participates in graphKey computation (design §3.2).
+ * Worker 侧图装配协议/产物 schema 版本，参与 graphKey 计算（方案 §3.2）。
+ *
+ * graph-v3: LLM strength switches to mean aggregation and persists PMI plus independent support counts.
+ * graph-v3：LLM strength 改为均值聚合，并持久化 PMI 与独立支持计数。
+ */
 export const WORKER_GRAPH_SCHEMA_VERSION = 'graph-v3';
 
-/** 与 Python `graph_leiden.DEFAULT_LEIDEN_CONFIG` 保持一致；改任一侧必须同步。 */
+/**
+ * Kept in sync with Python `graph_leiden.DEFAULT_LEIDEN_CONFIG`; both sides must be updated together.
+ * 与 Python `graph_leiden.DEFAULT_LEIDEN_CONFIG` 保持一致；改任一侧必须同步。
+ */
 export const DEFAULT_LIBRARY_LEIDEN_CONFIG: LibraryLeidenConfig = {
   resolution: 1.0,
   maxDepth: 4,
@@ -16,26 +28,48 @@ export const DEFAULT_LIBRARY_LEIDEN_CONFIG: LibraryLeidenConfig = {
   seed: 42,
 };
 
+/**
+ * Report metadata persisted alongside a committed library graph.
+ * 与已提交资料库图谱一同持久化的报告元数据。
+ */
 export interface LibraryGraphReport {
+  /** Artifact schema version. / 产物 schema 版本。 */
   schemaVersion: number;
+  /** Stage name that produced the graph. / 产出该图谱的阶段名称。 */
   stage: string;
+  /** Content-addressed graph cache key. / 内容寻址的图缓存键。 */
   graphKey: string;
+  /** Stage cache key of the graph stage itself. / 图谱阶段自身的阶段缓存键。 */
   stageKey: string;
+  /** Engine name and version that produced the graph. / 产出该图谱的引擎名称与版本。 */
   engine: string;
+  /** Leiden clustering configuration used. / 使用的 Leiden 聚类配置。 */
   leidenConfig: LibraryLeidenConfig;
+  /** Element counts of the assembled graph. / 装配图的元素计数。 */
   counts: { nodes: number; edges: number; communities: number; levels: number; chunkEdges: number };
+  /** Community counts per Leiden level. / 各 Leiden 层级的社区数量。 */
   communitiesByLevel: Record<string, number>;
+  /** Modularity of level 0, or null when unavailable. / 第 0 层模块度，不可用时为 null。 */
   modularityLevel0: number | null;
+  /** Source document ids included in the graph. / 纳入该图的源文档 id 列表。 */
   sourceDocuments: string[];
-  /** 权重公式配置：完整保留用于审计与离线调参。 */
+  /** Edge-weight formula config: fully preserved for auditing and offline tuning. / 权重公式配置：完整保留用于审计与离线调参。 */
   weightConfig: Record<string, unknown>;
-  /** 权重公式版本；旧 report 缺省为空串。 */
+  /** Edge-weight formula version; older reports default to an empty string. / 权重公式版本；旧 report 缺省为空串。 */
   weightVersion: string;
+  /** Graph build duration in milliseconds. / 图谱构建耗时（毫秒）。 */
   durationMs: number;
+  /** ISO timestamp of report generation. / 报告生成时间的 ISO 时间戳。 */
   generatedAt: string;
 }
 
-/** 归一化 Leiden 配置，边界与 Python `normalize_leiden_config` 完全一致。 */
+/**
+ * Normalizes Leiden config with bounds identical to Python `normalize_leiden_config`.
+ * 归一化 Leiden 配置，边界与 Python `normalize_leiden_config` 完全一致。
+ *
+ * @param candidate - Untrusted config value / 不可信的配置值
+ * @returns Normalized Leiden config with out-of-range fields replaced by defaults / 归一化后的 Leiden 配置，越界字段回退为默认值
+ */
 export function normalizeLibraryLeidenConfig(candidate?: unknown): LibraryLeidenConfig {
   const source = candidate && typeof candidate === 'object' && !Array.isArray(candidate)
     ? (candidate as Record<string, unknown>)
@@ -67,10 +101,25 @@ export function computeLibraryGraphKey(input: { entitiesStageKeys: readonly stri
   })).digest('hex');
 }
 
+/**
+ * Returns the root graph directory path for a library.
+ * 返回资料库的图谱根目录路径。
+ *
+ * @param libraryPath - Absolute path of the materials library / 资料库绝对路径
+ * @returns Absolute path of the graph root / 图谱根目录绝对路径
+ */
 export function libraryGraphRoot(libraryPath: string): string {
   return path.join(path.resolve(libraryPath), '.menghan-meta', 'graph');
 }
 
+/**
+ * Returns the committed graph directory for a specific graph key.
+ * 返回特定 graphKey 对应的已提交图谱目录。
+ *
+ * @param libraryPath - Absolute path of the materials library / 资料库绝对路径
+ * @param graphKey - Content-addressed graph cache key / 内容寻址的图缓存键
+ * @returns Absolute path of the graph directory / 图谱目录绝对路径
+ */
 export function libraryGraphDirectory(libraryPath: string, graphKey: string): string {
   assertGraphKey(graphKey);
   return path.join(libraryGraphRoot(libraryPath), graphKey);
@@ -123,6 +172,13 @@ export function readLibraryGraphReport(libraryPath: string, graphKey: string): L
   }
 }
 
+/**
+ * Reads and validates a graph-report.json from the given directory.
+ * 从指定目录读取并校验 graph-report.json。
+ *
+ * @param directory - Absolute path of the graph artifact directory / 图谱产物目录绝对路径
+ * @returns Parsed report, or null when missing or malformed / 解析后的报告；缺失或格式非法时为 null
+ */
 export function readLibraryGraphReportFromDirectory(directory: string): LibraryGraphReport | null {
   const reportPath = path.join(directory, 'graph-report.json');
   if (!fs.existsSync(reportPath)) return null;

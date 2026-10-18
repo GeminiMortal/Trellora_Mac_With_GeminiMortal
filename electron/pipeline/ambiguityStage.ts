@@ -1,8 +1,15 @@
+/**
+ * Resolves ambiguous heading candidates by asking an LLM to reclassify
+ * low-confidence rule-stage signals as HEADING or LIST_ITEM, with checkpointed
+ * resume, prompt-window fitting, and strict decision validation.
+ * 通过大模型对规则阶段筛出的低置信度标题候选进行消解，判定其为章节标题（HEADING）
+ * 或列表项（LIST_ITEM）；支持断点续跑、提示词窗口裁剪和严格的判定结果校验。
+ */
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
-import { PipelineStageError } from './stageErrors';
-import type { AmbiguityModelClient, PipelineAmbiguityConfig } from './types';
+import { PipelineStageError } from './stageErrors.ts';
+import type { AmbiguityModelClient, PipelineAmbiguityConfig } from './types.ts';
 
 const SCHEMA_VERSION = 1;
 const ALLOWED_DECISIONS = new Set(['HEADING', 'LIST_ITEM']);
@@ -63,33 +70,69 @@ interface Checkpoint {
   updatedAt: string;
 }
 
+/**
+ * Input contract for the ambiguity resolution stage.
+ * 标题候选消解阶段的输入契约。
+ */
 export interface AmbiguityStageInput {
+  /** Path to the rule-signals JSONL produced by the signals stage / 规则信号阶段产出的 JSONL 路径 */
   inputPath: string;
+  /** Directory where ambiguity.jsonl and reports are written / 写入 ambiguity.jsonl 与报告的输出目录 */
   outputDir: string;
+  /** Document identifier used in the report / 报告中使用的文档标识 */
   documentId: string;
+  /** Source content hash for cache identity / 用于缓存标识的源内容哈希 */
   contentHash: string;
+  /** Cache key binding config and engine versions / 绑定配置与引擎版本的缓存键 */
   stageKey: string;
+  /** Ambiguity stage configuration / 消解阶段配置 */
   config: PipelineAmbiguityConfig;
+  /** Model client used to classify candidates / 用于分类候选的大模型客户端 */
   model: AmbiguityModelClient;
+  /** Abort signal for cancellation / 用于取消的 Abort 信号 */
   signal: AbortSignal;
+  /** Optional progress callback (completed, total, unit, message) / 可选进度回调（已完成数、总数、单位、消息） */
   onProgress?: (completed: number, total: number | undefined, unit: string, message: string) => void;
 }
 
+/**
+ * Stage report written as ambiguity-report.json alongside the output.
+ * 阶段报告，与产物一同写入 ambiguity-report.json。
+ */
 export interface AmbiguityStageReport {
+  /** Report schema version / 报告结构版本 */
   schemaVersion: number;
+  /** Always 'ambiguity' / 恒为 'ambiguity' */
   stage: 'ambiguity';
+  /** Cache key of the run / 本次运行的缓存键 */
   stageKey: string;
+  /** Document identifier / 文档标识 */
   documentId: string;
+  /** Source content hash / 源内容哈希 */
   contentHash: string;
+  /** Whether the stage was enabled in config / 配置中是否启用该阶段 */
   enabled: boolean;
+  /** Model provider name / 模型提供商名称 */
   provider: string;
+  /** Model name / 模型名称 */
   model: string;
+  /** Prompt template version / 提示词模板版本 */
   promptVersion: string;
+  /** Aggregated counters for the run / 本次运行的统计计数 */
   counts: Stats;
+  /** Dominant fallback reason, or 'none' / 主要回退原因，无则为 'none' */
   fallbackReason: string;
+  /** ISO timestamp of report generation / 报告生成的 ISO 时间戳 */
   generatedAt: string;
 }
 
+/**
+ * Runs the ambiguity stage over the signal batches in the input file.
+ * 对输入文件中的信号批次执行标题候选消解阶段。
+ *
+ * @param input - Stage input including paths, config, model client, and abort signal / 阶段输入，包含路径、配置、模型客户端与取消信号
+ * @returns Aggregate stage statistics / 阶段汇总统计
+ */
 export async function runAmbiguityStage(input: AmbiguityStageInput): Promise<AmbiguityStageReport['counts']> {
   const source = path.resolve(input.inputPath);
   const output = path.resolve(input.outputDir);
@@ -102,6 +145,8 @@ export async function runAmbiguityStage(input: AmbiguityStageInput): Promise<Amb
   const checkpointPath = path.join(output, 'checkpoint.json');
   const checkpoint = readCheckpoint(checkpointPath, input.stageKey);
   const resumeBatchIndex = checkpoint?.complete ? -1 : checkpoint?.lastBatchIndex ?? -1;
+  // Fresh runs reset the output file; resuming keeps existing output and re-appends only batches after the checkpoint.
+  // 全新运行会重置输出文件；续跑则保留已有输出，仅追加断点之后的批次。
   if (resumeBatchIndex >= 0 && !fs.existsSync(outputPath)) {
     fs.writeFileSync(outputPath, '', 'utf8');
   } else if (resumeBatchIndex < 0) {
@@ -202,6 +247,8 @@ async function transformBatch(batch: SignalBatch, input: AmbiguityStageInput, st
   if (selectedByLimit.length < candidates.length) addFallback(stats, candidates.length - selectedByLimit.length, 'candidate-limit');
   const contexts = selectedByLimit.map((candidate) => createCandidateContext(candidate, signals));
   const documentTitle = getDocumentTitleText(batch.documentTitle);
+  // Drop trailing candidates until the serialized prompt fits the character budget.
+  // 从尾部裁剪候选，直到序列化后的提示词不超过字符预算。
   const selectedByWindow = fitPromptWindow(contexts, input.config.maxInputCharacters, input.config.promptVersion, documentTitle);
   if (selectedByWindow.length < contexts.length) addFallback(stats, contexts.length - selectedByWindow.length, 'input-limit');
   if (!selectedByWindow.length) {
@@ -251,6 +298,8 @@ async function transformBatch(batch: SignalBatch, input: AmbiguityStageInput, st
     batchMeta.fallbackReason = decisions.length === selectedByWindow.length ? 'none' : 'missing-decision';
   } catch (error) {
     if (input.signal.aborted || isAbortError(error)) throw cancelledError();
+    // Malformed model output falls back as 'invalid-output'; any other failure is a generic 'model-error'.
+    // 模型输出不合法记为 'invalid-output' 回退；其余失败统一记为 'model-error'。
     const fallbackReason = error instanceof InvalidDecisionError || error instanceof SyntaxError ? 'invalid-output' : 'model-error';
     addFallback(stats, selectedByWindow.length, fallbackReason);
     batchMeta.fallbackReason = fallbackReason;
@@ -275,6 +324,8 @@ function fitPromptWindow(contexts: CandidateContext[], maxCharacters: number, pr
 }
 
 function buildPrompt(contexts: CandidateContext[], promptVersion: string, documentTitle: string | null): string {
+  // Prompt-injection guard: document text is framed as untrusted data, never as instructions.
+  // 提示词注入防护：文档文本被声明为不可信数据，而不是指令。
   return [
     '你是Trellora 的文档结构判定助手。',
     '你的任务是复核规则阶段筛出的低置信度标题候选，只判断候选行在局部上下文中更像章节标题还是列表项。不要改写文本，不要补写层级，不要分析整篇文档。',
@@ -313,6 +364,8 @@ function getDocumentTitleText(value: unknown): string | null {
 }
 
 function validateDecisions(value: unknown, candidates: Map<string, Signal>): Decision[] {
+  // Accept either {decisions: [...]} or a bare single-decision object returned by the model.
+  // 接受模型返回的 {decisions: [...]} 数组或单个判定对象两种形态。
   const record = isRecord(value) ? value : null;
   const raw = record && Array.isArray(record.decisions)
     ? record.decisions
@@ -389,6 +442,8 @@ function normalizeStats(value: unknown): Stats {
 function readCheckpoint(filePath: string, stageKey: string): Checkpoint | null {
   try {
     const value = JSON.parse(fs.readFileSync(filePath, 'utf8')) as Partial<Checkpoint>;
+    // Checkpoints from a different stage or config hash are ignored to force a clean re-run.
+    // 忽略来自其他阶段或不同配置哈希的断点，强制干净重跑。
     if (value.stage !== 'ambiguity' || value.stageKey !== stageKey || typeof value.lastBatchIndex !== 'number') return null;
     return {
       schemaVersion: SCHEMA_VERSION,
@@ -409,6 +464,8 @@ function writeCheckpoint(filePath: string, checkpoint: Checkpoint): void {
 }
 
 function writeJson(filePath: string, value: unknown): void {
+  // Atomic write: serialize to a unique temp file first, then rename over the target.
+  // 原子写入：先序列化到唯一临时文件，再重命名覆盖目标文件。
   const temporary = `${filePath}.tmp-${process.pid}-${Date.now()}`;
   fs.writeFileSync(temporary, JSON.stringify(value, null, 2), 'utf8');
   fs.renameSync(temporary, filePath);

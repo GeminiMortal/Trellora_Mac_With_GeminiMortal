@@ -1,9 +1,9 @@
-import { t, useI18n } from '../../i18n';
+import { t, useI18n } from '../../i18n/index.ts';
 import { Badge, Button, Group, ScrollArea, Text, Tooltip } from '@mantine/core';
 import { BookmarkPlus, ExternalLink, FileText } from 'lucide-react';
-import MarkdownContent from '../MarkdownContent';
-import type { WikiMapNode } from '../../wiki/wikiTypes';
-import type { ResolvedTheme } from '../../utils/theme';
+import MarkdownContent from '../markdown/MarkdownContent.tsx';
+import type { WikiMapNode } from './data/wikiTypes.ts';
+import type { ResolvedTheme } from '../../utils/ui/theme.ts';
 
 interface WikiDocumentTabProps {
   node: WikiMapNode;
