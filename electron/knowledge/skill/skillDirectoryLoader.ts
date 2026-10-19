@@ -11,7 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { getAiSkillWorkspacePath } from '../aiSkillWorkspace.ts';
+import { getAiSkillWorkspacePath } from './aiSkillWorkspace.ts';
 import type { ResolvedSkillDefinitions } from './skillDefinitionResolver.ts';
 
 /**

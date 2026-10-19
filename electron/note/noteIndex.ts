@@ -5,7 +5,7 @@ import { parseNoteFrontmatter } from '../../shared/frontmatter.ts';
 import { getFileTypeInfo, type FileKind } from '../files/fileTypes.ts';
 import { readTextFile } from '../files/textFile.ts';
 import { loadTreeOrder, sortEntriesByTreeOrder, type TreeOrderState } from '../files/treeOrder.ts';
-import { extractMarkdownKnowledgeFacts } from '../knowledge/markdownAst.ts';
+import { extractMarkdownKnowledgeFacts } from '../knowledge/tools/markdownAst.ts';
 
 export interface FileNode {
   path: string;

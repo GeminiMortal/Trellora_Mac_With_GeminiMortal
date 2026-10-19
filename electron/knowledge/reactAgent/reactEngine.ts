@@ -6,11 +6,11 @@ import {
   estimateReActMessagesTokens,
   projectCurrentTurnToolResults,
 } from './toolResultBudget';
-import type { AssistantTokenUsage } from '../tokenEstimator';
-import { estimateTokenCount } from '../tokenEstimator';
-import type { AssistantModelInputCompression } from '../assistantTurnTypes';
-import { observeToolObservationS0 } from '../dynamicMemoryS0Observe';
-import { stripInlineThinkBlocks } from '../qaCanonicalHistory';
+import type { AssistantTokenUsage } from '../model/tokenEstimator.ts';
+import { estimateTokenCount } from '../model/tokenEstimator.ts';
+import type { AssistantModelInputCompression } from '../assistant/assistantTurnTypes.ts';
+import { observeToolObservationS0 } from '../currentNote/dynamicMemoryS0Observe.ts';
+import { stripInlineThinkBlocks } from '../qa/qaCanonicalHistory.ts';
 import {
   DEFAULT_REACT_BUDGET,
   DEFAULT_REACT_TERMINAL_POLICY,

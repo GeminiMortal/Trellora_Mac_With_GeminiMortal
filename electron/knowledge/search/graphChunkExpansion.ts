@@ -4,7 +4,7 @@
  */
 
 import type Database from 'better-sqlite3';
-import { openGraphDatabase, searchGraphChunkEdgeNeighbors } from '../pipeline/graphProjection';
+import { openGraphDatabase, searchGraphChunkEdgeNeighbors } from '../../pipeline/graphProjection';
 import type { HybridChildFusion } from './hybridRetrievalFusion';
 
 /** Seed limit for graph expansion. / 图扩展的种子上限。 */

@@ -13,7 +13,7 @@ import { readMaterialParentWindow } from '../../../pipeline/materialChunkSearch.
 import { findMaterialsDocument } from '../../../library/materialsLibrary.ts';
 import type { ReActTool, ReActToolExecution } from '../../reactAgent/toolRegistry.ts';
 import { compactObservationText, escapeXmlAttribute, escapeXmlText, toBoundedPublicToolResultText, type KnowledgeToolContext } from '../knowledgeToolContext.ts';
-import { renderKnowledgeBaseImageTransportIndex } from '../../knowledgeBaseImageResolver.ts';
+import { renderKnowledgeBaseImageTransportIndex } from '../knowledgeBaseImageResolver.ts';
 import type { AssistantPublicToolResultView } from '../../assistant/assistantTurnTypes.ts';
 
 const DEFAULT_WINDOW = 1;

@@ -3,8 +3,8 @@
  * 知识库 RAG：资料库级检索增强生成主管道。
  */
 
-import { searchMaterialChunks, type MaterialChunkSearchOutcome } from '../pipeline/materialChunkSearch';
-import type { MaterialEmbeddingAdapter } from '../pipeline/materialEmbeddingAdapters';
+import { searchMaterialChunks, type MaterialChunkSearchOutcome } from '../../pipeline/materialChunkSearch';
+import type { MaterialEmbeddingAdapter } from '../../pipeline/materialEmbeddingAdapters';
 import { aggregateParentScores, fuseRerankScores, type HybridChildFusion } from './hybridRetrievalFusion';
 import { buildRerankDocument, type RerankAdapter } from './rerankAdapters';
 import type { AssistantContextSource, AssistantTurnRequest } from '../assistant/assistantTurnTypes.ts';

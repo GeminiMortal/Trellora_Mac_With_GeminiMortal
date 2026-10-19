@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import { QaMemoryDatabase } from '../qaMemoryDatabase';
+import { QaMemoryDatabase } from '../qa/qaMemoryDatabase.ts';
 import { normalizeWorkspaceMemoryConfig, resolveLongTermMemoryAvailability } from './memoryConfig';
 import { assertTrustedMemoryScope } from './memoryScope';
 import type {

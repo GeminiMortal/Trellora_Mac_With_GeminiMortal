@@ -3,7 +3,7 @@ import { getCurrentNoteSnapshotBlock } from '../currentNoteSnapshot';
 import { createCurrentNoteTools } from '../currentNoteTools';
 import type { ReActTool, ReActToolExecution } from '../reactAgent/toolRegistry';
 import type { SelectionEditResearchToolContext } from '../selectionEditAgentRuntime';
-import { createExpansionRangeReader } from '../selectionExpansionRead';
+import { createExpansionRangeReader } from '../selection/selectionExpansionRead.ts';
 
 const MAX_QUERY_TERMS = 6;
 const MAX_QUERY_TERM_CHARS = 80;

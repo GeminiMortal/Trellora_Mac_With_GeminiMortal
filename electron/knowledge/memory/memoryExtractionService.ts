@@ -1,9 +1,9 @@
 import { isRestorePaused } from '../../backup/restorePause';
 import type Database from 'better-sqlite3';
-import type { AiJsonGenerationOptions } from '../aiProvider';
-import type { AiProviderConfig } from '../aiTypes';
-import { isStructuredOutputContractError } from '../structuredOutputContract';
-import { QaMemoryDatabase } from '../qaMemoryDatabase';
+import type { AiJsonGenerationOptions } from '../ai/aiProvider.ts';
+import type { AiProviderConfig } from '../ai/aiTypes.ts';
+import { isStructuredOutputContractError } from '../plan/structuredOutputContract.ts';
+import { QaMemoryDatabase } from '../qa/qaMemoryDatabase.ts';
 import { classifyMemoryFailure } from '../../../shared/memoryFailure';
 import { MEMORY_CONSTANTS, type MemoryKind } from './memoryConstants';
 import {

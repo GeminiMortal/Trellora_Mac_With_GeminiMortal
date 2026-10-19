@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ASSISTANT_RELEASE_DEFAULTS } from '../../../shared/assistantReleaseDefaults';
-import { estimateTokenCount } from '../tokenEstimator';
+import { estimateTokenCount } from '../model/tokenEstimator.ts';
 import type { ContextMemoryResult } from '../contextMemoryTypes';
 import type { ContextMaterial } from '../contextRuntimeTypes';
 import type { ReActChatMessage } from '../reactAgent/reactChatTransport';

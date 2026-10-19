@@ -3,7 +3,7 @@
  * 标签建议应用辅助：将 AI 建议的标签合并进笔记 frontmatter。
  */
 
-import { parseNoteFrontmatter, stringifyNoteFrontmatter } from '../../shared/frontmatter';
+import { parseNoteFrontmatter, stringifyNoteFrontmatter } from '../../../shared/frontmatter';
 
 /**
  * Merge confirmed tags into the note markdown frontmatter, deduplicating against existing tags.

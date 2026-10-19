@@ -1,6 +1,6 @@
 import type { ReActToolSchema } from './reactChatTransport';
-import type { AssistantPublicToolResultView } from '../assistantTurnTypes';
-import type { AiTransportImage } from '../aiGenerationTransport';
+import type { AssistantPublicToolResultView } from '../assistant/assistantTurnTypes.ts';
+import type { AiTransportImage } from '../ai/aiGenerationTransport.ts';
 
 /** 工具执行结果：观察文本喂回模型，事件信息对外发布。 */
 export interface ReActToolExecution {

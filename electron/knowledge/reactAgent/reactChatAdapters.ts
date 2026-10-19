@@ -1,6 +1,6 @@
 import { createParser } from 'eventsource-parser';
-import type { AiProviderConfig } from '../aiTypes';
-import type { AssistantTokenUsage } from '../tokenEstimator';
+import type { AiProviderConfig } from '../ai/aiTypes.ts';
+import type { AssistantTokenUsage } from '../model/tokenEstimator.ts';
 import {
   assertRemoteGenerationRequest,
   createGenerationRequestSignal,
@@ -8,9 +8,9 @@ import {
   readNonNegativeTokenCount,
   resolveGenerationTemperature,
   splitImageDataBase64,
-} from '../aiGenerationTransport';
-import { createAiProviderHttpError, createAiProviderMessageError } from '../aiProviderError';
-import { resolveAiModelDescriptor, resolveMaxOutputTokensOptions, resolveMaxOutputTokensValue, resolveThinkingOptions } from '../aiModelCapabilities';
+} from '../ai/aiGenerationTransport.ts';
+import { createAiProviderHttpError, createAiProviderMessageError } from '../ai/aiProviderError.ts';
+import { resolveAiModelDescriptor, resolveMaxOutputTokensOptions, resolveMaxOutputTokensValue, resolveThinkingOptions } from '../ai/aiModelCapabilities.ts';
 import type { ReActChatMessage, ReActChatRequest, ReActChatResponse, ReActToolCall, ReActToolSchema } from './reactChatTransport';
 
 let syntheticToolCallCounter = 0;

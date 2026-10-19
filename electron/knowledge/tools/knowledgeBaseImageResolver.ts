@@ -6,10 +6,10 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { MaterialsDocument } from '../library/materialsLibrary';
-import { pipelineRoot, safeSegment } from '../pipeline/pathLayout';
-import { readParseImagesManifest, type ParseImageRecord } from '../pipeline/parseImages';
-import type { PipelineManifest } from '../pipeline/types';
+import type { MaterialsDocument } from '../../library/materialsLibrary';
+import { pipelineRoot, safeSegment } from '../../pipeline/pathLayout';
+import { readParseImagesManifest, type ParseImageRecord } from '../../pipeline/parseImages';
+import type { PipelineManifest } from '../../pipeline/types';
 import type { AiTransportImage } from '../ai/aiGenerationTransport.ts';
 import { maxAssistantImageBytes, maxAssistantImageTotalBytes, type AssistantImageMimeType } from '../assistant/assistantTurnTypes.ts';
 

@@ -4,6 +4,21 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 
 const root = process.cwd();
+
+// 清除旧版本安装包，避免累积占用磁盘空间
+const outputDir = path.join(root, 'trellora');
+try {
+  const entries = await fs.readdir(outputDir);
+  const stalePatterns = [/\.dmg$/i, /\.dmg\.blockmap$/i, /\.zip$/i, /\.zip\.blockmap$/i, /\.part_[a-z]+$/i, /SHA256SUMS\.txt$/i, /latest-mac\.yml$/i, /builder-debug\.yml$/i, /builder-effective-config\.yaml$/i];
+  let removed = 0;
+  for (const name of entries) {
+    if (stalePatterns.some(p => p.test(name))) {
+      await fs.rm(path.join(outputDir, name), { force: true });
+      removed++;
+    }
+  }
+  if (removed) console.log(`已清除 ${removed} 个旧版本构建产物。`);
+} catch { /* 首次构建，目录不存在 */ }
 const iconset = path.join(root, 'build', 'icon.iconset');
 const iconSource = path.join(root, 'build', 'icon.png');
 const icnsTarget = path.join(root, 'build', 'icon.icns');

@@ -6,6 +6,7 @@
  * 仅接受本轮搜索结果内的 http/https URL（白名单在工具层校验），
  * 抓取后做轻量正文抽取：去脚本/样式/导航标签 → 文本化 → 截断。
  */
+import { net } from 'electron';
 
 /**
  * Page fetch timeout in milliseconds; search timeout lives in webSearchTypes.WEB_SEARCH_TIMEOUT_MS.
@@ -93,6 +94,112 @@ function isPrivateHostname(hostname: string): boolean {
   const [first, second] = octets;
   return first === 0 || first === 10 || first === 127 || first === 169 && second === 254
     || first === 172 && second >= 16 && second <= 31 || first === 192 && second === 168;
+}
+
+/**
+ * Fetch via Electron net module — uses Chromium's network stack for TLS/proxy/cert compatibility.
+ * 通过 Electron net 模块抓取 — 使用 Chromium 网络栈，兼容 TLS/代理/证书。
+ *
+ * Use this for URLs that fail with Node.js fetch (e.g. educational system sites with strict TLS).
+ * 对 Node.js fetch 失败的 URL（如严格 TLS 的教务系统网站）使用此函数。
+ *
+ * @param input - Target URL and caller abort signal / 目标 URL 与调用方取消信号
+ * @returns Extracted title/text outcome / 抽取后的标题与正文结果
+ */
+export function fetchWebPageViaNet(input: { url: string; signal: AbortSignal }): Promise<WebFetchOutcome> {
+  const parsed = parsePublicWebUrl(input.url);
+  const MAX_REDIRECTS = 5;
+
+  return new Promise((resolve, reject) => {
+    let redirectCount = 0;
+    let currentUrl = parsed.toString();
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    const doRequest = (url: string) => {
+      const request = net.request({
+        url,
+        method: 'GET',
+        redirect: 'manual',
+        session: undefined, // Use default session for cert/proxy settings
+      });
+
+      let delivered = false;
+      let body = '';
+
+      const cleanup = () => {
+        if (timeoutId) { clearTimeout(timeoutId); timeoutId = undefined; }
+        input.signal.removeEventListener('abort', onAbort);
+      };
+
+      const settle = () => { if (!delivered) { delivered = true; cleanup(); } };
+
+      // Timeout guard
+      timeoutId = setTimeout(() => {
+        request.abort();
+        settle();
+        reject(new Error('网页请求超时。'));
+      }, WEB_FETCH_TIMEOUT_MS);
+
+      const onAbort = () => {
+        request.abort();
+        settle();
+        reject(new Error('网络请求已取消。'));
+      };
+      input.signal.addEventListener('abort', onAbort, { once: true });
+      if (input.signal.aborted) { onAbort(); return; }
+
+      // Handle redirects manually to stay within Chromium's network stack
+      request.on('redirect', (status, _method, redirectUrl) => {
+        request.abort();
+        if (redirectCount >= MAX_REDIRECTS) {
+          if (!delivered) { delivered = true; cleanup(); reject(new Error('重定向次数过多。')); }
+          return;
+        }
+        redirectCount++;
+        // Clear current timeout before following redirect
+        if (timeoutId) { clearTimeout(timeoutId); timeoutId = undefined; }
+        input.signal.removeEventListener('abort', onAbort);
+        // Follow the redirect with a new net.request
+        doRequest(redirectUrl);
+      });
+
+      request.on('response', (response) => {
+        // Check content type before reading body
+        const contentType = response.headers['content-type'] ?? '';
+        const contentTypeStr = Array.isArray(contentType) ? contentType.join(', ') : contentType;
+        if (contentTypeStr && !/text\/html|application\/xhtml|text\/plain|application\/xml/i.test(contentTypeStr)) {
+          request.abort();
+          if (!delivered) { delivered = true; cleanup(); reject(new Error(`网页返回了不支持的内容类型（${contentTypeStr.split(';')[0]}）。`)); }
+          return;
+        }
+
+        if (response.statusCode && response.statusCode >= 400) {
+          request.abort();
+          if (!delivered) { delivered = true; cleanup(); reject(new Error(`网页请求失败（HTTP ${response.statusCode}）。`)); }
+          return;
+        }
+
+        response.on('data', (chunk: Buffer) => { body += chunk.toString('utf-8'); });
+        response.on('end', () => {
+          cleanup();
+          if (!delivered) { delivered = true; resolve(extractReadableContent(body)); }
+        });
+        response.on('error', (err: Error) => {
+          cleanup();
+          if (!delivered) { delivered = true; reject(err); }
+        });
+      });
+
+      request.on('error', (err: Error) => {
+        cleanup();
+        if (!delivered) { delivered = true; reject(err); }
+      });
+
+      request.end();
+    };
+
+    doRequest(currentUrl);
+  });
 }
 
 /**

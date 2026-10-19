@@ -1,7 +1,7 @@
-import type { AiProviderConfig } from '../aiTypes';
-import type { AiTransportImage } from '../aiGenerationTransport';
-import type { AssistantTokenUsage } from '../tokenEstimator';
-import type { AssistantModelInputCompression, AssistantPublicToolResultView, AssistantThinkingMode } from '../assistantTurnTypes';
+import type { AiProviderConfig } from '../ai/aiTypes.ts';
+import type { AiTransportImage } from '../ai/aiGenerationTransport.ts';
+import type { AssistantTokenUsage } from '../model/tokenEstimator.ts';
+import type { AssistantModelInputCompression, AssistantPublicToolResultView, AssistantThinkingMode } from '../assistant/assistantTurnTypes.ts';
 import type { ObservationBudgetTracker } from './toolResultBudget';
 import type { ReActToolRegistry } from './toolRegistry';
 import type { ReActChatMessage, ReActChatRequest, ReActChatTransport, ReActToolCall } from './reactChatTransport';

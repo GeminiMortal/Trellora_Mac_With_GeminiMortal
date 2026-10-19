@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { createHash, randomUUID } from 'node:crypto';
-import { QaMemoryDatabase } from '../qaMemoryDatabase';
+import { QaMemoryDatabase } from '../qa/qaMemoryDatabase.ts';
 import { MEMORY_CONSTANTS, type MemoryKind } from './memoryConstants';
 import { tokenizeMemoryLexical } from './memoryLexical';
 import { sanitizeMemoryContent, sanitizeMemoryTopic } from './memoryText';

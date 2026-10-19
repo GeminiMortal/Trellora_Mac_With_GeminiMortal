@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
-import { QaMemoryDatabase } from '../qaMemoryDatabase';
+import { QaMemoryDatabase } from '../qa/qaMemoryDatabase.ts';
 import { MEMORY_CONSTANTS } from './memoryConstants';
 import { ensureScopeRows, MemoryRepository, runInImmediateTransaction } from './memoryRepository';
 import type {

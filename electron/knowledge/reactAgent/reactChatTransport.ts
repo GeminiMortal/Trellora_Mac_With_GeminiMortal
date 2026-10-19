@@ -1,8 +1,8 @@
-import type { AiProviderConfig } from '../aiTypes';
-import type { AiTransportImage } from '../aiGenerationTransport';
-import type { AssistantThinkingMode } from '../assistantTurnTypes';
-import type { AssistantTokenUsage } from '../tokenEstimator';
-import { resolveAiModelDescriptor } from '../aiModelCapabilities';
+import type { AiProviderConfig } from '../ai/aiTypes.ts';
+import type { AiTransportImage } from '../ai/aiGenerationTransport.ts';
+import type { AssistantThinkingMode } from '../assistant/assistantTurnTypes.ts';
+import type { AssistantTokenUsage } from '../model/tokenEstimator.ts';
+import { resolveAiModelDescriptor } from '../ai/aiModelCapabilities.ts';
 import { chatAnthropicMessages, chatGoogleContent, chatOpenAiCompletion, chatOpenAiResponse } from './reactChatAdapters';
 
 /** 模型发起的一次工具调用；id 由引擎或传输层保证在本轮会话内唯一。 */

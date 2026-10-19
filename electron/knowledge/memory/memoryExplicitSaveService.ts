@@ -1,4 +1,4 @@
-import { QaMemoryDatabase } from '../qaMemoryDatabase';
+import { QaMemoryDatabase } from '../qa/qaMemoryDatabase.ts';
 import { runInImmediateTransaction } from './memoryRepository';
 import { detectExplicitMemoryStatement } from './memoryText';
 import { MemoryWriteError, MemoryWriteService } from './memoryWriteService';

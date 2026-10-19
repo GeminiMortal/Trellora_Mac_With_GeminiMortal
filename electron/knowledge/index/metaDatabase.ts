@@ -6,8 +6,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import { getLibraryMetaDirectory } from '../files/treeOrder';
-import { sqliteVecPackagedExtensionPath } from '../loadSqliteVec';
+import { getLibraryMetaDirectory } from '../../files/treeOrder';
+import { sqliteVecPackagedExtensionPath } from '../../loadSqliteVec';
 import type { AiInsight, AiInsightPayload } from '../ai/aiTypes.ts';
 import type { AiProviderKind } from '../ai/aiTypes.ts';
 import type { LearningPlan, OrganizationSuggestion } from '../library/libraryAiTypes.ts';

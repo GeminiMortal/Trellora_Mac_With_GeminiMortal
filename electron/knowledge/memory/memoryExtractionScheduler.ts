@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
-import { QaMemoryDatabase, recoverExpiredMemoryExtractionJobLeases } from '../qaMemoryDatabase';
+import { QaMemoryDatabase, recoverExpiredMemoryExtractionJobLeases } from '../qa/qaMemoryDatabase.ts';
 import { MEMORY_CONSTANTS } from './memoryConstants';
 import { assertTrustedMemoryScope } from './memoryScope';
 import { ensureScopeRows, runInImmediateTransaction } from './memoryRepository';

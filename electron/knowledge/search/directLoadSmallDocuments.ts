@@ -4,7 +4,7 @@
  * 小文档直载通道：小体量资料跳过召回与 rerank，在父块预算内以整文档形式进入检索候选池。
  */
 
-import { readMaterialDirectLoadDocuments, type MaterialDirectLoadDocument } from '../pipeline/materialChunkSearch';
+import { readMaterialDirectLoadDocuments, type MaterialDirectLoadDocument } from '../../pipeline/materialChunkSearch';
 
 /** Small-document threshold: child chunks ≤ 40 counts as small. / 小文档直载阈值：子块数 ≤ 40。 */
 export const DIRECT_LOAD_MAX_CHILD_CHUNKS = 40;

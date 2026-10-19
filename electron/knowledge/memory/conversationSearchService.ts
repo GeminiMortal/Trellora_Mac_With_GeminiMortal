@@ -1,6 +1,6 @@
 import { isRestorePaused } from '../../backup/restorePause';
 import type Database from 'better-sqlite3';
-import { QaMemoryDatabase } from '../qaMemoryDatabase';
+import { QaMemoryDatabase } from '../qa/qaMemoryDatabase.ts';
 import {
   calculateConversationArchiveHash,
   normalizeConversationSearchText,

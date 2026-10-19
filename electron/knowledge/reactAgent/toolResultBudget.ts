@@ -1,5 +1,5 @@
 import { resolveWorkingMemoryWindowTokens } from '../../../shared/effectiveContextWindow';
-import { estimateTokenCount } from '../tokenEstimator';
+import { estimateTokenCount } from '../model/tokenEstimator.ts';
 import type { ReActChatMessage } from './reactChatTransport';
 
 /**

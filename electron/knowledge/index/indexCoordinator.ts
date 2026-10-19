@@ -10,7 +10,7 @@ import { buildNoteIndex, type FileNode, type IndexedNote, type NoteIndex } from 
 import { readNoteBytes } from '../../atomicTextWrite';
 import { getFileTypeInfo } from '../../files/fileTypes.ts';
 import { loadTreeOrder, sortEntriesByTreeOrder } from '../../files/treeOrder.ts';
-import { KnowledgeProjectionDatabase, synchronizeKnowledgeIndex } from '../metaDatabase.ts';
+import { KnowledgeProjectionDatabase, synchronizeKnowledgeIndex } from './metaDatabase.ts';
 import { NoteIndexWorkerClient } from '../noteAnalysis/noteIndexWorkerClient.ts';
 import { toNoteSearchDocument, type NoteSearchDocument } from '../noteAnalysis/noteLexicalIndex.ts';
 import type { IndexSyncResult, PersistedKnowledgeNote } from '../types.ts';

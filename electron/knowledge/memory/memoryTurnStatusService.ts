@@ -1,4 +1,4 @@
-import { QaMemoryDatabase } from '../qaMemoryDatabase';
+import { QaMemoryDatabase } from '../qa/qaMemoryDatabase.ts';
 import { classifyMemoryFailure } from '../../../shared/memoryFailure';
 import { extractionSourceFingerprint } from './memoryExtractionSourceRepository';
 import { MemoryWriteService } from './memoryWriteService';

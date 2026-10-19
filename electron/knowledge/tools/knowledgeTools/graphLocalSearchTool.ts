@@ -14,7 +14,7 @@ import { runGraphLocalSearch, type GraphLocalSearchEvidence } from '../../../pip
 import type { ReActTool, ReActToolExecution } from '../../reactAgent/toolRegistry.ts';
 import { compactObservationText, escapeXmlAttribute, escapeXmlText, type KnowledgeToolContext } from '../knowledgeToolContext.ts';
 import type { KnowledgeEvidenceRecord } from './knowledgeSessionState';
-import { renderKnowledgeBaseImageTransportIndex } from '../../knowledgeBaseImageResolver.ts';
+import { renderKnowledgeBaseImageTransportIndex } from '../knowledgeBaseImageResolver.ts';
 
 const ENTITY_DESCRIPTION_LIMIT = 400;
 const RELATION_DESCRIPTION_LIMIT = 200;

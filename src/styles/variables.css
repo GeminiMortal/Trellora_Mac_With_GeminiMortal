@@ -10161,8 +10161,15 @@ body.resizing-knowledge-debug-rail * {
 /* Wiki workspace: neutral document surfaces with a single teal interaction
    accent. The chapter rails are intentionally orthogonal and unrounded. */
 .wiki-main-pane {
-  height: 100%;
   overflow: hidden;
+}
+.wiki-main-pane:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+}
+.wiki-main-pane > .wiki-workspace {
+  flex: 1;
+  min-height: 0;
 }
 
 .wiki-workspace {
@@ -10183,6 +10190,7 @@ body.resizing-knowledge-debug-rail * {
   width: 100%;
   height: 100%;
   min-width: 0;
+  min-height: 0;
   color: var(--wiki-ink);
   background: var(--wiki-canvas);
   overflow: hidden;
@@ -10209,7 +10217,8 @@ body.resizing-knowledge-debug-rail * {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  flex: 0 0 56px;
+  flex: 0 0 auto;
+  min-height: 56px;
   min-width: 0;
   padding: 8px 12px;
   border-bottom: 1px solid var(--wiki-border);
@@ -10256,6 +10265,11 @@ body.resizing-knowledge-debug-rail * {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+.wiki-workspace-body > .wiki-outline-pane,
+.wiki-workspace-body > .wiki-document-list-pane {
+  flex-shrink: 0;
 }
 
 .wiki-outline-pane,
@@ -11021,7 +11035,7 @@ body.resizing-knowledge-debug-rail * {
 @keyframes wiki-caret { 50% { opacity: 0; } }
 
 @media (max-width: 1180px) {
-  .wiki-toolbar { align-items: stretch; flex: 0 0 auto; flex-wrap: wrap; height: auto; min-height: 56px; }
+  .wiki-toolbar { align-items: stretch; flex-wrap: wrap; }
   .wiki-toolbar-primary,
   .wiki-toolbar-actions { flex: 0 0 100%; width: 100%; }
   .wiki-toolbar-actions { justify-content: flex-end; }

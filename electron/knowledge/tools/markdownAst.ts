@@ -4,7 +4,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { parseFrontmatterMapping } from '../../shared/frontmatter';
+import { parseFrontmatterMapping } from '../../../shared/frontmatter';
 import { unified } from 'unified';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkGfm from 'remark-gfm';

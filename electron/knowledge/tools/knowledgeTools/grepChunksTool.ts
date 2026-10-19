@@ -13,7 +13,7 @@ import { searchMaterialChunks, type MaterialChunkSearchResult } from '../../../p
 import type { ReActTool, ReActToolExecution } from '../../reactAgent/toolRegistry.ts';
 import { compactObservationText, escapeXmlAttribute, escapeXmlText, toBoundedPublicToolResultText, type KnowledgeToolContext } from '../knowledgeToolContext.ts';
 import type { KnowledgeEvidenceRecord } from './knowledgeSessionState';
-import { renderKnowledgeBaseImageTransportIndex } from '../../knowledgeBaseImageResolver.ts';
+import { renderKnowledgeBaseImageTransportIndex } from '../knowledgeBaseImageResolver.ts';
 import type { AssistantPublicToolResultView } from '../../assistant/assistantTurnTypes.ts';
 
 const DEFAULT_GREP_LIMIT = 8;

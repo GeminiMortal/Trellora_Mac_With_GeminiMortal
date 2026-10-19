@@ -2,8 +2,8 @@ import {
   ASSISTANT_PUBLIC_MODEL_INPUT_MAX_CHARS,
   ASSISTANT_PUBLIC_MODEL_OUTPUT_MAX_CHARS,
   createAssistantPublicModelText,
-} from '../assistantDetailedTrace';
-import type { AssistantPublicModelEvent } from '../assistantTurnTypes';
+} from '../assistant/assistantDetailedTrace.ts';
+import type { AssistantPublicModelEvent } from '../assistant/assistantTurnTypes.ts';
 import type { ReActModelRoundEvent } from './reactEngineTypes';
 
 export function projectReActModelRoundEvent(event: ReActModelRoundEvent): AssistantPublicModelEvent {

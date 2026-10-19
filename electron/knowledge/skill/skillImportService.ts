@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import { isBundledSkill } from './bundledSkills.ts';
 import path from 'node:path';
 import JSZip from 'jszip';
-import { getAiSkillWorkspacePath } from '../aiSkillWorkspace.ts';
+import { getAiSkillWorkspacePath } from './aiSkillWorkspace.ts';
 import {
   allowedResourceExtensions,
   ignoredDirectoryNames,

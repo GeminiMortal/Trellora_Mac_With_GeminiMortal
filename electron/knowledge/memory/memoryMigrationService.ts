@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import type Database from 'better-sqlite3';
-import { getAssistantMemoryDatabasePath, type AssistantMemoryDatabase } from '../assistantMemoryDatabase';
-import { QaMemoryDatabase } from '../qaMemoryDatabase';
-import { estimateTokenCount } from '../tokenEstimator';
+import { getAssistantMemoryDatabasePath, type AssistantMemoryDatabase } from '../assistant/assistantMemoryDatabase.ts';
+import { QaMemoryDatabase } from '../qa/qaMemoryDatabase.ts';
+import { estimateTokenCount } from '../model/tokenEstimator.ts';
 import { MEMORY_CONSTANTS, type MemoryKind, type MemoryOrigin, type MemoryStatus } from './memoryConstants';
 import { ensureScopeRows, runInImmediateTransaction } from './memoryRepository';
 import { isMostlyRedacted, memoryFingerprint, memoryItemKey, redactSensitiveMemoryContent, sanitizeMemoryContent, sanitizeMemoryTopic } from './memoryText';
