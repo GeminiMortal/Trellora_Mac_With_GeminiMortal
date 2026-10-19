@@ -413,6 +413,53 @@ function darwinPythonCandidates(): string[] {
 }
 
 /**
+ * Windows Python 探测：检查常见安装路径和 PATH 中的 python 命令。
+ * Windows Python probe: checks common installation paths and python command in PATH.
+ *
+ * @returns Candidate interpreter paths in priority order / 按优先级排列的候选解释器路径
+ */
+function windowsPythonCandidates(): string[] {
+  const candidates: string[] = [];
+  const configured = process.env.MENGHAN_PIPELINE_PYTHON?.trim();
+  if (configured) candidates.push(path.resolve(configured));
+
+  // 检查用户目录下的 Python 安装
+  const userProfile = process.env.USERPROFILE || process.env.HOME || '';
+  if (userProfile) {
+    for (const suffix of ['313', '312', '311', '310']) {
+      candidates.push(path.join(userProfile, 'AppData', 'Local', 'Programs', 'Python', `Python${suffix}`, 'python.exe'));
+    }
+  }
+
+  // 检查 Program Files 下的 Python
+  const programFiles = [process.env.ProgramFiles, process.env['ProgramFiles(x86)'], process.env.ProgramW6432].filter(Boolean);
+  for (const dir of programFiles) {
+    for (const suffix of ['Python313', 'Python312', 'Python311', 'Python310']) {
+      candidates.push(path.join(dir!, suffix, 'python.exe'));
+    }
+  }
+
+  // 检查 PATH 中的 python 命令
+  candidates.push('python');
+  candidates.push('python3');
+
+  return candidates;
+}
+
+/**
+ * 跨平台 Python 探测：根据当前操作系统选择合适的探测策略。
+ * Cross-platform Python probe: selects the appropriate probe strategy based on the current OS.
+ *
+ * @returns Candidate interpreter paths in priority order / 按优先级排列的候选解释器路径
+ */
+function getPythonCandidates(): string[] {
+  if (process.platform === 'win32') {
+    return windowsPythonCandidates();
+  }
+  return darwinPythonCandidates();
+}
+
+/**
  * 进程内一次性探测可用解释器；结果缓存，安装新 Python 后重启应用即可生效。
  * Probes for a usable interpreter once per process; the result is cached, so a restart picks up newly installed Pythons.
  *
@@ -420,7 +467,7 @@ function darwinPythonCandidates(): string[] {
  */
 function findCompatibleSystemPython(): Promise<string | null> {
   systemPythonProbe ??= (async () => {
-    for (const candidate of darwinPythonCandidates()) {
+    for (const candidate of getPythonCandidates()) {
       if (candidate.includes(path.sep) && !fs.existsSync(candidate)) continue;
       if (await probePythonVersion(candidate)) return candidate;
     }

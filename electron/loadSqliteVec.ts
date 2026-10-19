@@ -7,6 +7,15 @@ import path from 'node:path';
 import type Database from 'better-sqlite3';
 
 /**
+ * Platform-specific sqlite-vec extension configuration.
+ * 平台特定的 sqlite-vec 扩展配置。
+ */
+const SQLITE_VEC_PLATFORM_CONFIG: Record<string, { package: string; binary: string }> = {
+  darwin: { package: 'sqlite-vec-darwin-arm64', binary: 'vec0.dylib' },
+  win32: { package: 'sqlite-vec-windows-x64', binary: 'vec0.dll' },
+};
+
+/**
  * Native SQLite loading needs a physical extension path; an ASAR virtual path cannot be loaded.
  * SQLite 原生加载需要物理扩展文件路径；ASAR 虚拟路径无法被加载。
  *
@@ -15,7 +24,11 @@ import type Database from 'better-sqlite3';
 export function sqliteVecPackagedExtensionPath(): string {
   const resourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : '';
   if (!resourcesPath) return '';
-  return path.join(resourcesPath, 'app.asar.unpacked', 'node_modules', 'sqlite-vec-darwin-arm64', 'vec0.dylib');
+
+  const config = SQLITE_VEC_PLATFORM_CONFIG[process.platform];
+  if (!config) return '';
+
+  return path.join(resourcesPath, 'app.asar.unpacked', 'node_modules', config.package, config.binary);
 }
 
 /**

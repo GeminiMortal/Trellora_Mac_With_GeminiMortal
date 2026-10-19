@@ -2,15 +2,15 @@
   "name": "trellora",
   "private": true,
   "version": "1.2.3",
-  "description": "AI-native local-first Markdown knowledge management for macOS",
+  "description": "AI-native local-first Markdown knowledge management for macOS and Windows",
   "author": "GeminiMortal",
-  "homepage": "https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal",
+  "homepage": "https://github.com/GeminiMortal/Trellora",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal.git"
+    "url": "git+https://github.com/GeminiMortal/Trellora.git"
   },
   "bugs": {
-    "url": "https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/issues"
+    "url": "https://github.com/GeminiMortal/Trellora/issues"
   },
   "main": "dist-electron/main.js",
   "dependencies": {
@@ -45,6 +45,7 @@
     "dev": "concurrently -k \"vite\" \"npm run build:electron && wait-on tcp:5173 && electron dist-electron/main.js\"",
     "build": "pnpm run build:icons && pnpm run build:pipeline-runtime && vite build && pnpm run build:electron && node scripts/build/build-mac-packages.mjs",
     "build:mac": "pnpm run build:icons && pnpm run build:pipeline-runtime && vite build && pnpm run build:electron && node scripts/build/build-mac-packages.mjs",
+    "build:win": "pnpm run build:icons && pnpm run build:pipeline-runtime && vite build && pnpm run build:electron && node scripts/build/build-windows-packages.mjs",
     "build:pipeline-runtime": "node scripts/build/build-pipeline-runtime.mjs",
     "release:manifest": "node scripts/release/write-release-manifest.mjs",
     "verify:desktop-diagnostics": "node scripts/verify/verify-desktop-diagnostics.mjs",

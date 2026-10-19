@@ -84,7 +84,7 @@ function handleMessage(msg: { type: string; [key: string]: unknown }): void {
           const logFile = path.join(logDir, 'terminal-debug.log');
           const log = (m: string) => { try { fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${m}\n`); } catch {} };
           log(`SPAWN REQUEST: shell=${shell}, args=${JSON.stringify(shellArgs)}, cwd=${cwd}`);
-          log(`Shell exists: ${fs.existsSync(shell)}, executable: ${(() => { try { fs.accessSync(shell, fs.constants.X_OK); return true; } catch { return false; } })()}`);
+          log(`Shell exists: ${fs.existsSync(shell)}, platform: ${process.platform}`);
           log(`CWD exists: ${fs.existsSync(cwd)}`);
           log(`PATH: ${env?.PATH || process.env.PATH}`);
         } catch (e) {
