@@ -2,8 +2,8 @@ import { searchMaterialChunks, type MaterialChunkSearchResult } from '../../pipe
 import type { ReActTool, ReActToolExecution } from '../reactAgent/toolRegistry';
 import { compactObservationText, escapeXmlAttribute, escapeXmlText, toBoundedPublicToolResultText, type KnowledgeToolContext } from '../knowledgeToolContext';
 import type { KnowledgeEvidenceRecord } from './knowledgeSessionState';
-import { renderKnowledgeBaseImageTransportIndex } from '../knowledgeBaseImageResolver';
-import type { AssistantPublicToolResultView } from '../assistantTurnTypes';
+import { renderKnowledgeBaseImageTransportIndex } from '../tools/knowledgeBaseImageResolver';
+import type { AssistantPublicToolResultView } from '../assistant/assistantTurnTypes.ts';
 
 const DEFAULT_GREP_LIMIT = 8;
 const MAX_GREP_LIMIT = 20;

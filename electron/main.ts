@@ -31,7 +31,7 @@ import { DocumentSessionService } from './documents/documentSessionService';
 import { OpenRequestRouter } from './documents/openRequestRouter';
 import { DOCUMENT_RESOURCE_SCHEME } from './documents/documentResourceService';
 import { DocumentAiService } from './documents/documentAiService';
-import { generateAiText } from './knowledge/aiProvider';
+import { generateAiText } from './knowledge/ai/aiProvider.ts';
 import type { DocumentAiRequest, DocumentAiApplyRequest } from '../shared/documentAi';
 import type { DocumentEncoding, DocumentDraftRequest, DocumentSaveRequest, DocumentSaveResult, DocumentCloseRequest, DocumentJoinRequest } from '../shared/documentSession';
 import { readNoteBackup } from './note/noteBackups';
@@ -79,40 +79,40 @@ import {
   registerEditorImageProtocol,
   registerEditorImageProtocolScheme,
 } from './files/editorImageProtocol';
-import { getAiInsight, getFavoriteNotePaths, getNoteAnalysis, saveAiInsight, saveLearningPlan, saveOrganizationSuggestion, setFavoriteNote } from './knowledge/metaDatabase';
-import { configureAiProvider, fetchAiProviderModels, generateAiJsonWithOptions, getAiProviderConfig, getAiProviderStatus, getAiProviderStatusForConfig, getRemoteModelContextWindow, resolveAiStructuredOutputCapabilities, testAiProviderConnection, type AiJsonGenerationOptions, type AiProviderConfig } from './knowledge/aiProvider';
-import type { AiExtensionsSettings, AiGenerationApi, AiModelProfile, AiModelSettings, AiModelSettingsInput, AiProviderKind, AssistantAiOptions, DirectorySkillOverride, SkillImportResult } from './knowledge/aiTypes';
-import { createModelSettingsFromLegacy, defaultExtensionsSettings, normalizeProviderConfig, redactModelSettings, validateExtensionsSettings, validateModelSettingsInput } from './knowledge/aiSettings';
-import { syncAiSkillsToWorkspace } from './knowledge/aiSkillWorkspace';
-import { loadDirectorySkills, type DirectorySkillEntry } from './knowledge/skillDirectoryLoader';
-import { ensureBundledSkills } from './knowledge/bundledSkills';
-import { loadAssistantSkills, resolveAssistantSkillSelection } from './knowledge/assistantSkills';
-import { buildAiSkillsOverview, createDirectorySkillFromForm, exportDirectorySkillToZip, importAiSkillSource, removeDirectoryRecursively, updateDirectorySkillDocument } from './knowledge/skillImportService';
+import { getAiInsight, getFavoriteNotePaths, getNoteAnalysis, saveAiInsight, saveLearningPlan, saveOrganizationSuggestion, setFavoriteNote } from './knowledge/index/metaDatabase';
+import { configureAiProvider, fetchAiProviderModels, generateAiJsonWithOptions, getAiProviderConfig, getAiProviderRuntimeConfig, getAiProviderStatus, getAiProviderStatusForConfig, getRemoteModelContextWindow, resolveAiStructuredOutputCapabilities, testAiProviderConnection, type AiJsonGenerationOptions, type AiProviderConfig } from './knowledge/ai/aiProvider.ts';
+import type { AiExtensionsSettings, AiGenerationApi, AiModelProfile, AiModelSettings, AiModelSettingsInput, AiProviderKind, AssistantAiOptions, DirectorySkillOverride, SkillImportResult } from './knowledge/ai/aiTypes.ts';
+import { createModelSettingsFromLegacy, defaultExtensionsSettings, normalizeProviderConfig, redactModelSettings, validateExtensionsSettings, validateModelSettingsInput } from './knowledge/ai/aiSettings.ts';
+import { syncAiSkillsToWorkspace } from './knowledge/skill/aiSkillWorkspace';
+import { loadDirectorySkills, type DirectorySkillEntry } from './knowledge/skill/skillDirectoryLoader.ts';
+import { ensureBundledSkills } from './knowledge/skill/bundledSkills.ts';
+import { loadAssistantSkills, resolveAssistantSkillSelection } from './knowledge/assistant/assistantSkills.ts';
+import { buildAiSkillsOverview, createDirectorySkillFromForm, exportDirectorySkillToZip, importAiSkillSource, removeDirectoryRecursively, updateDirectorySkillDocument } from './knowledge/skill/skillImportService.ts';
 import {
   AttachmentContextProvider,
   renderDocumentImageTransportIndex,
   renderAttachmentMetadata,
   renderAttachmentRange,
   type AssistantSearchableAttachmentMetadata,
-} from './knowledge/attachmentContextProvider';
-import { collectAiTransportImageHashes, materializeAssistantDocumentImages, parseAssistantDocumentAttachments } from './knowledge/assistantDocumentAttachmentParser';
-import { runSelectionTransform, validateSelectionTransformRequest } from './knowledge/selectionTransform';
+} from './knowledge/context/attachmentContextProvider.ts';
+import { collectAiTransportImageHashes, materializeAssistantDocumentImages, parseAssistantDocumentAttachments } from './knowledge/assistant/assistantDocumentAttachmentParser.ts';
+import { runSelectionTransform, validateSelectionTransformRequest } from './knowledge/selection/selectionTransform.ts';
 import {
   createCurrentNoteSelectionEditRequest,
   createLegacyLocalSelectionEditRequest,
   runSelectionEditCoordinator,
-} from './knowledge/selectionEditCoordinator';
-import { resolveSelectionEditRuntimeMode, validateSelectionEditRunRequest } from './knowledge/selectionEditIpc';
-import { runSelectionExpansionCoordinator, validateSelectionExpansionRequest } from './knowledge/selectionExpansionCoordinator';
-import { resolveSelectionExpansionMode } from './knowledge/selectionExpansionContext';
+} from './knowledge/selection/selectionEditCoordinator.ts';
+import { resolveSelectionEditRuntimeMode, validateSelectionEditRunRequest } from './knowledge/selection/selectionEditIpc.ts';
+import { runSelectionExpansionCoordinator, validateSelectionExpansionRequest } from './knowledge/selection/selectionExpansionCoordinator.ts';
+import { resolveSelectionExpansionMode } from './knowledge/selection/selectionExpansionContext.ts';
 import {
   readSelectionExpansionSettings,
   resolveSelectionExpansionCapabilities,
   saveSelectionExpansionSettings,
-} from './knowledge/selectionExpansionSettings';
-import { createAssistantChatPromptMessages, createAssistantProjectContext, createKnowledgeAnswerPromptMessages, createQaContextRuntimeAssembly, streamKnowledgeAnswer } from './knowledge/assistantTurn';
-import type { AiTransportImage } from './knowledge/aiGenerationTransport';
-import { resolveAssistantAnswerTemperature } from './knowledge/assistantGenerationPolicy';
+} from './knowledge/selection/selectionExpansionSettings.ts';
+import { createAssistantChatPromptMessages, createAssistantProjectContext, createKnowledgeAnswerPromptMessages, createQaContextRuntimeAssembly, streamKnowledgeAnswer } from './knowledge/assistant/assistantTurn.ts';
+import type { AiTransportImage } from './knowledge/ai/aiGenerationTransport.ts';
+import { resolveAssistantAnswerTemperature } from './knowledge/assistant/assistantGenerationPolicy.ts';
 import {
   assistantDocumentExtensions,
   assistantImageExtensions,
@@ -136,18 +136,18 @@ import {
   type QaQueryRewriteRecord,
   validateAssistantEvidenceCitation,
   validateAssistantTurnRequest,
-} from './knowledge/assistantTurnTypes';
-import { getDedicatedKnowledgeBaseRagSource, KNOWLEDGE_BASE_RAG_PARENT_TOP_K, mergeKnowledgeBaseRetrievals, retrieveKnowledgeBaseEvidence, type KnowledgeBaseRetrievalOutcome } from './knowledge/knowledgeBaseRag';
-import { KnowledgeBaseImageResolver, renderKnowledgeBaseImageTransportIndex } from './knowledge/knowledgeBaseImageResolver';
-import { buildQueryRewritePrompt, QueryRewriteError, rewriteKnowledgeQuestion, selectRewriteHistoryTurns, shouldRewriteQuestion, type QueryRewriteProviderCallObservationEvent } from './knowledge/queryRewrite';
-import { observeDynamicMemoryS0Call } from './knowledge/dynamicMemoryS0Observe';
-import { buildFollowUpSuggestionsPrompt, FollowUpSuggestionsError, generateFollowUpSuggestions, selectFollowUpHistory } from './knowledge/followUpSuggestions';
-import { QaMemoryDatabase } from './knowledge/qaMemoryDatabase';
-import { QaMemoryRepository } from './knowledge/qaMemoryRepository';
-import { QaMemoryOrchestrator } from './knowledge/qaMemoryOrchestrator';
-import type { QaSessionScope } from './knowledge/qaMemoryTypes';
-import { QaLegacyMemoryMigrationService } from './knowledge/qaLegacyMemoryMigration';
-import { projectQaRecentTurnsToConversation, selectQaRecentCompleteConversation } from './knowledge/qaCanonicalHistory';
+} from './knowledge/assistant/assistantTurnTypes.ts';
+import { getDedicatedKnowledgeBaseRagSource, KNOWLEDGE_BASE_RAG_PARENT_TOP_K, mergeKnowledgeBaseRetrievals, retrieveKnowledgeBaseEvidence, type KnowledgeBaseRetrievalOutcome } from './knowledge/search/knowledgeBaseRag';
+import { KnowledgeBaseImageResolver, renderKnowledgeBaseImageTransportIndex } from './knowledge/tools/knowledgeBaseImageResolver';
+import { buildQueryRewritePrompt, QueryRewriteError, rewriteKnowledgeQuestion, selectRewriteHistoryTurns, shouldRewriteQuestion, type QueryRewriteProviderCallObservationEvent } from './knowledge/search/queryRewrite.ts';
+import { observeDynamicMemoryS0Call } from './knowledge/currentNote/dynamicMemoryS0Observe.ts';
+import { buildFollowUpSuggestionsPrompt, FollowUpSuggestionsError, generateFollowUpSuggestions, selectFollowUpHistory } from './knowledge/summary/followUpSuggestions.ts';
+import { QaMemoryDatabase } from './knowledge/qa/qaMemoryDatabase.ts';
+import { QaMemoryRepository } from './knowledge/qa/qaMemoryRepository.ts';
+import { QaMemoryOrchestrator } from './knowledge/qa/qaMemoryOrchestrator.ts';
+import type { QaSessionScope } from './knowledge/qa/qaMemoryTypes.ts';
+import { QaLegacyMemoryMigrationService } from './knowledge/qa/qaLegacyMemoryMigration.ts';
+import { projectQaRecentTurnsToConversation, selectQaRecentCompleteConversation } from './knowledge/qa/qaCanonicalHistory.ts';
 import { ensureLocalMemoryPrincipalId, MemoryScopeResolver } from './knowledge/memory/memoryScope';
 import { detectExplicitMemoryStatement } from './knowledge/memory/memoryText';
 import { MemoryExtractionService, reviewConsolidationWithModel, type MemoryExtractionModelResolution } from './knowledge/memory/memoryExtractionService';
@@ -167,32 +167,32 @@ import { getMemoryCutoverReport, isCanonicalMemoryProjection, normalizeMemoryPro
 import type { SearchConversationsToolRuntime } from './knowledge/knowledgeTools/searchConversationsTool';
 import type { ManualMemoryInput, MemoryDocumentCitation, MemoryExtractionJobRecord, MemoryItemListQuery, MemoryItemPageQuery, MemoryPageQuery, MemoryItemPatch, WorkspaceMemoryConfig } from './knowledge/memory/memoryTypes';
 import type { MemoryProposalReview } from './knowledge/memory/memoryTypes';
-import type { QaMemoryZoneTokens, QaRecentTurn, QaResidualMemoryObservationInput } from './knowledge/qaMemoryTypes';
-import { UserProfileRepository } from './knowledge/userProfileRepository';
-import type { ContextMemoryResult } from './knowledge/contextMemoryTypes';
-import { resolveRerankRuntime } from './knowledge/rerankAdapters';
-import { DEFAULT_CURRENT_NOTE_AGENT_BUDGET, runCurrentNoteAgent } from './knowledge/currentNoteAgentGraph';
-import { runLibraryPlanAgent } from './knowledge/libraryPlanAgentGraph';
-import { createCurrentNotePrompt } from './knowledge/currentNotePrompt';
-import { createCurrentNoteSnapshotFromIndexedNote, matchesCurrentNoteSnapshot } from './knowledge/currentNoteSnapshot';
-import { createLibraryPlanDriver } from './knowledge/libraryPlanDriver';
-import { createLibraryNoteSnapshotMap } from './knowledge/libraryNoteSnapshot';
-import { validateAssistantCitationAgainstSnapshot } from './knowledge/assistantCitationGuard';
-import { NoteConversationMemory } from './knowledge/noteConversationMemory';
-import { createCurrentNotePlanDriver, shouldUseCurrentNotePlanner } from './knowledge/searchPlanDriver';
-import type { SearchPlan } from './knowledge/searchPlanTypes';
-import { createStructuredActionDriver } from './knowledge/structuredActionDriver';
-import { createLibraryStructuredActionDriver } from './knowledge/libraryStructuredActionDriver';
-import { createAssistantIntentClassifier, type AssistantQueryUnderstanding } from './knowledge/assistantIntentClassifier';
-import { ModelCallBudgetGate } from './knowledge/modelCallBudget';
-import { ModelCallCoordinator, ModelCallPreparationError } from './knowledge/modelCallCoordinator';
-import { getOllamaModelContextWindow } from './knowledge/ollamaClient';
-import { serializeContextRoleMessagesForBudget } from './knowledge/contextRenderer';
-import { CONTEXT_REQUEST_ENVELOPE_VERSION, normalizeAssistantContextRuntimeMode, type AssistantContextRuntimeMode, type ContextMaterial, type ContextProjectionDiagnostics, type ContextRuntimeObservationReport, type ContextRuntimeObservationResult } from './knowledge/contextRuntimeTypes';
-import { getContextProjectionDiagnostics, observeContextRuntime } from './knowledge/contextRuntimeObserve';
-import { shouldRunShadowPlanner, shouldShadowKnowledgeAgent, shouldUseKnowledgeAgent, shouldUseLibraryPlanner } from './knowledge/assistantMode';
-import { runShadowPlan } from './knowledge/assistantShadowPlan';
-import { runKnowledgeAgentTurn, runKnowledgeShadowComparison } from './knowledge/knowledgeAgentTurn';
+import type { QaMemoryZoneTokens, QaRecentTurn, QaResidualMemoryObservationInput } from './knowledge/qa/qaMemoryTypes.ts';
+import { UserProfileRepository } from './knowledge/userProfile/userProfileRepository.ts';
+import type { ContextMemoryResult } from './knowledge/context/contextMemoryTypes.ts';
+import { resolveRerankRuntime } from './knowledge/search/rerankAdapters';
+import { DEFAULT_CURRENT_NOTE_AGENT_BUDGET, runCurrentNoteAgent } from './knowledge/currentNote/currentNoteAgentGraph.ts';
+import { runLibraryPlanAgent } from './knowledge/library/libraryPlanAgentGraph.ts';
+import { createCurrentNotePrompt } from './knowledge/currentNote/currentNotePrompt.ts';
+import { createCurrentNoteSnapshotFromIndexedNote, matchesCurrentNoteSnapshot } from './knowledge/currentNote/currentNoteSnapshot.ts';
+import { createLibraryPlanDriver } from './knowledge/library/libraryPlanDriver.ts';
+import { createLibraryNoteSnapshotMap } from './knowledge/library/libraryNoteSnapshot.ts';
+import { validateAssistantCitationAgainstSnapshot } from './knowledge/assistant/assistantCitationGuard.ts';
+import { NoteConversationMemory } from './knowledge/noteAnalysis/noteConversationMemory.ts';
+import { createCurrentNotePlanDriver, shouldUseCurrentNotePlanner } from './knowledge/search/searchPlanDriver.ts';
+import type { SearchPlan } from './knowledge/search/searchPlanTypes.ts';
+import { createStructuredActionDriver } from './knowledge/plan/structuredActionDriver.ts';
+import { createLibraryStructuredActionDriver } from './knowledge/library/libraryStructuredActionDriver.ts';
+import { createAssistantIntentClassifier, type AssistantQueryUnderstanding } from './knowledge/assistant/assistantIntentClassifier.ts';
+import { ModelCallBudgetGate } from './knowledge/ai/modelCallBudget.ts';
+import { ModelCallCoordinator, ModelCallPreparationError } from './knowledge/ai/modelCallCoordinator.ts';
+import { getOllamaModelContextWindow } from './knowledge/ai/ollamaClient.ts';
+import { serializeContextRoleMessagesForBudget } from './knowledge/context/contextRenderer.ts';
+import { CONTEXT_REQUEST_ENVELOPE_VERSION, normalizeAssistantContextRuntimeMode, type AssistantContextRuntimeMode, type ContextMaterial, type ContextProjectionDiagnostics, type ContextRuntimeObservationReport, type ContextRuntimeObservationResult } from './knowledge/context/contextRuntimeTypes.ts';
+import { getContextProjectionDiagnostics, observeContextRuntime } from './knowledge/context/contextRuntimeObserve.ts';
+import { shouldRunShadowPlanner, shouldShadowKnowledgeAgent, shouldUseKnowledgeAgent, shouldUseLibraryPlanner } from './knowledge/assistant/assistantMode.ts';
+import { runShadowPlan } from './knowledge/assistant/assistantShadowPlan.ts';
+import { runKnowledgeAgentTurn, runKnowledgeShadowComparison } from './knowledge/agent/knowledgeAgentTurn.ts';
 import { runWikiNodeAgentTurn } from './wiki/wikiNodeAgentTurn';
 import { WIKI_QUICK_ACTIONS } from './wiki/wikiQuickActions';
 import {
@@ -224,34 +224,35 @@ import {
 } from './wiki/wikiAiMemories';
 import { resolveWikiNodeQuestions, type WikiNodeQuestionsResult } from './wiki/wikiNodeQuestions';
 import { collectWikiChildNodes, findWikiNode, formatWikiNodePath, getWikiNodeBreadcrumb } from './wiki/wikiNodeScope';
-import { runChatWebSearchFallbackTurn, runChatWebSearchReactTurn } from './knowledge/chatWebAgentTurn';
+import { runChatWebSearchFallbackTurn, runChatWebSearchReactTurn } from './knowledge/agent/chatWebAgentTurn.ts';
 import { createReActChatTransport } from './knowledge/reactAgent/reactChatTransport';
-import { createFallbackCurrentNoteSearchScope, type CurrentNoteSearchScope } from './knowledge/currentNoteSearchScope';
-import type { CurrentNoteSearchCoverageSummary } from './knowledge/currentNoteSearchCoverage';
-import { ASSISTANT_PUBLIC_MODEL_INPUT_MAX_CHARS, ASSISTANT_PUBLIC_MODEL_OUTPUT_MAX_CHARS, AssistantDetailedTrace, createAssistantPublicModelText, toDetailedTraceError, type AssistantDetailedTraceSink } from './knowledge/assistantDetailedTrace';
-import { isStructuredOutputContractError } from './knowledge/structuredOutputContract';
+import { createFallbackCurrentNoteSearchScope, type CurrentNoteSearchScope } from './knowledge/currentNote/currentNoteSearchScope.ts';
+import type { CurrentNoteSearchCoverageSummary } from './knowledge/currentNote/currentNoteSearchCoverage.ts';
+import { ASSISTANT_PUBLIC_MODEL_INPUT_MAX_CHARS, ASSISTANT_PUBLIC_MODEL_OUTPUT_MAX_CHARS, AssistantDetailedTrace, createAssistantPublicModelText, toDetailedTraceError, type AssistantDetailedTraceSink } from './knowledge/assistant/assistantDetailedTrace.ts';
+import { isStructuredOutputContractError } from './knowledge/plan/structuredOutputContract.ts';
 import { resolveEffectiveContextWindow, type EffectiveContextWindow } from '../shared/effectiveContextWindow';
-import { AssistantMemoryDatabase } from './knowledge/assistantMemoryDatabase';
-import { AssistantMemoryRepository } from './knowledge/assistantMemoryRepository';
-import { NoteDerivedDigestRepository } from './knowledge/noteDerivedDigestRepository';
-import { classifyCurrentNoteSummaryIntent, createNoteSummaryDriver, runCurrentNoteSummary } from './knowledge/noteSummaryOrchestrator';
-import { AssistantSessionScopeRegistry, createAssistantSessionId } from './knowledge/assistantSessionScope';
-import type { AssistantMemoryMode, AssistantMemoryTurnFinalize, AssistantSearchPlanPersistenceState, AssistantSessionScope } from './knowledge/assistantMemoryTypes';
+import { AssistantMemoryDatabase } from './knowledge/assistant/assistantMemoryDatabase.ts';
+import { AssistantMemoryRepository } from './knowledge/assistant/assistantMemoryRepository.ts';
+import { NoteDerivedDigestRepository } from './knowledge/noteAnalysis/noteDerivedDigestRepository.ts';
+import { classifyCurrentNoteSummaryIntent, createNoteSummaryDriver, runCurrentNoteSummary } from './knowledge/noteAnalysis/noteSummaryOrchestrator.ts';
+import { AssistantSessionScopeRegistry, createAssistantSessionId } from './knowledge/assistant/assistantSessionScope.ts';
+import type { AssistantMemoryMode, AssistantMemoryTurnFinalize, AssistantSearchPlanPersistenceState, AssistantSessionScope } from './knowledge/assistant/assistantMemoryTypes.ts';
 import { getAppPreferences, saveAppPreferences, type AppPreferencesPatch } from './appPreferences';
 import { getColorScheme } from '../shared/lightColorSchemes';
-import { runLocalKnowledgeAgent } from './knowledge/agentRuntime';
-import { applyConfirmedTags } from './knowledge/tagSuggestion';
-import { getNoteAnalysisSourceHash } from './knowledge/noteAnalysisSource';
-import { NoteAnalysisBatchRepository } from './knowledge/noteAnalysisBatchRepository';
-import { NoteAnalysisBatchOrchestrator } from './knowledge/noteAnalysisBatchOrchestrator';
-import { noteAnalysisProviderFingerprint, type NoteAnalysisRunInput } from './knowledge/noteAnalysisBatchPrompt';
-import type { NoteAnalysisRunDetail } from './knowledge/noteAnalysisTypes';
+import { runLocalKnowledgeAgent } from './knowledge/agent/agentRuntime.ts';
+import { applyConfirmedTags } from './knowledge/tools/tagSuggestion';
+import { registerMemoryHandlers } from './ipc/memoryIpc';
+import { getNoteAnalysisSourceHash } from './knowledge/noteAnalysis/noteAnalysisSource.ts';
+import { NoteAnalysisBatchRepository } from './knowledge/noteAnalysis/noteAnalysisBatchRepository.ts';
+import { NoteAnalysisBatchOrchestrator } from './knowledge/noteAnalysis/noteAnalysisBatchOrchestrator.ts';
+import { noteAnalysisProviderFingerprint, type NoteAnalysisRunInput } from './knowledge/noteAnalysis/noteAnalysisBatchPrompt.ts';
+import type { NoteAnalysisRunDetail } from './knowledge/noteAnalysis/noteAnalysisTypes.ts';
 import { validateSystemWorkspaceDirectory, validateWorkspaceDirectory } from './workspace/workspaceService';
-import { KnowledgeIndexCoordinator } from './knowledge/indexCoordinator';
-import { createKeywordSearchOutcome, type KeywordSearchOutcome, type SearchCandidate } from './knowledge/keywordSearch';
-import { buildLexicalMatchTrace, lexicalMatchPriority, rejectsNumericVersionMismatch, type LexicalMatchTrace } from './knowledge/lexicalMatchPolicy';
-import { createNoteLexicalIndex, searchNoteLexically, toNoteSearchDocument, type NoteLexicalIndex } from './knowledge/noteLexicalIndex';
-import { tokenizeCurrentNoteText } from './knowledge/currentNoteStructure';
+import { KnowledgeIndexCoordinator } from './knowledge/index/indexCoordinator.ts';
+import { createKeywordSearchOutcome, type KeywordSearchOutcome, type SearchCandidate } from './knowledge/index/keywordSearch.ts';
+import { buildLexicalMatchTrace, lexicalMatchPriority, rejectsNumericVersionMismatch, type LexicalMatchTrace } from './knowledge/index/lexicalMatchPolicy.ts';
+import { createNoteLexicalIndex, searchNoteLexically, toNoteSearchDocument, type NoteLexicalIndex } from './knowledge/noteAnalysis/noteLexicalIndex.ts';
+import { tokenizeCurrentNoteText } from './knowledge/currentNote/currentNoteStructure.ts';
 import { getLibraryUiState, migrateLibraryUiStatePath, pruneLibraryUiState, saveLibraryUiState, type LibraryUiStatePatch } from './library/libraryUiState';
 import { activateRegisteredLibrary, listRegisteredLibraries, registerAndActivateLibrary, removeRegisteredLibrary, summarizeRegisteredLibraries } from './library/libraryRegistry';
 import {
@@ -295,12 +296,12 @@ import {
   saveModelHub,
   saveProviderConnection,
   type ModelHubPatch,
-} from './knowledge/modelHub';
-import { embedRemoteBatch } from './knowledge/remoteModelClient';
-import { fetchModelProviderCatalog, ModelConfigurationService, type ModelConfigurationStore } from './knowledge/modelConfigurationService';
+} from './knowledge/ai/modelHub.ts';
+import { embedRemoteBatch } from './knowledge/ai/remoteModelClient.ts';
+import { fetchModelProviderCatalog, ModelConfigurationService, type ModelConfigurationStore } from './knowledge/ai/modelConfigurationService.ts';
 import type { ModelConfigurationChange, ModelConfigurationSaveResult, ModelProviderCatalogDraft } from '../shared/modelConfiguration';
-import { embedOllamaBatch, getDefaultOllamaEndpoint } from './knowledge/ollamaClient';
-import type { UnifiedSearchOutcome } from './knowledge/searchTypes';
+import { embedOllamaBatch, getDefaultOllamaEndpoint } from './knowledge/ai/ollamaClient.ts';
+import type { UnifiedSearchOutcome } from './knowledge/search/searchTypes.ts';
 import { PipelineOrchestrator } from './pipeline/pipelineOrchestrator';
 import { assertArtifactPreviewIntegrity, normalizeArtifactPreviewParentChunkId, readArtifactPreview } from './pipeline/artifactPreview';
 import { readKeywordPreview } from './pipeline/keywordPreview';
@@ -5370,19 +5371,19 @@ registerAppHandler('schedule:import-pick-file', async (event, kind: 'csv' | 'exc
 
 registerAppHandler('schedule:import-preview-url', async (event, url: string) => {
   assertInternalRenderer(event);
-  const { fetchWebPage } = await import('./websearch/webFetchClient.ts');
+  const { fetchWebPageViaNet } = await import('./websearch/webFetchClient.ts');
   const { parseUrlWithAi } = await import('./schedule/import/scheduleAiParser.ts');
-  const { generateAiJsonWithOptions } = await import('./knowledge/aiProvider.ts');
-  const { resolveActiveAiProviderConfig } = await import('./knowledge/aiSettings.ts');
 
   try {
     const abortController = new AbortController();
-    const outcome = await fetchWebPage({ url, signal: abortController.signal });
+    // Use Electron net module (Chromium network stack) for better TLS/proxy/cert compatibility.
+    // 使用 Electron net 模块（Chromium 网络栈），兼容 TLS/代理/证书。
+    const outcome = await fetchWebPageViaNet({ url, signal: abortController.signal });
     if (outcome.empty) {
       return { status: 'failed', code: 'PAGE_EMPTY', message: '网页内容为空或无法提取。' };
     }
 
-    const providerConfig = resolveActiveAiProviderConfig(store);
+    const providerConfig = getAiProviderRuntimeConfig();
     const result = await parseUrlWithAi(url, outcome.text, {
       generateJson: (opts) => generateAiJsonWithOptions({ ...opts, store }),
       resolveProviderConfig: () => providerConfig,
@@ -5398,11 +5399,10 @@ registerAppHandler('schedule:import-preview-url', async (event, url: string) => 
 registerAppHandler('schedule:import-open-browser', async (event, url: string) => {
   assertInternalRenderer(event);
   const { parseUrlWithAi } = await import('./schedule/import/scheduleAiParser.ts');
-  const { generateAiJsonWithOptions } = await import('./knowledge/aiProvider.ts');
-  const { resolveActiveAiProviderConfig } = await import('./knowledge/aiSettings.ts');
 
   return new Promise((resolve) => {
     let resolved = false;
+    let extracting = false; // Flag: extraction in progress, suppress USER_CANCELLED
     const safeResolve = (value: unknown) => { if (!resolved) { resolved = true; resolve(value); } };
 
     const browserWin = new BrowserWindow({
@@ -5412,137 +5412,58 @@ registerAppHandler('schedule:import-open-browser', async (event, url: string) =>
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
+        preload: path.join(__dirname, 'scheduleImportWebPreload.js'),
       },
       parent: BrowserWindow.fromWebContents(event.sender) ?? undefined,
       modal: true,
     });
 
-    // Inject navigation toolbar + extraction button
-    const injectToolbar = () => {
-      browserWin.webContents.executeJavaScript(`
-        (function() {
-          if (document.getElementById('__trellora_toolbar')) return;
-
-          // Toolbar container
-          const toolbar = document.createElement('div');
-          toolbar.id = '__trellora_toolbar';
-          toolbar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;height:42px;background:#1e1e2e;display:flex;align-items:center;padding:0 8px;gap:4px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 1px 4px rgba(0,0,0,0.3);-webkit-app-region:drag;';
-
-          const btnStyle = 'background:transparent;border:none;color:#cdd6f4;font-size:16px;cursor:pointer;padding:4px 10px;border-radius:4px;-webkit-app-region:no-drag;display:flex;align-items:center;justify-content:center;';
-          const btnHover = 'this.style.background=\'#313244\'';
-          const btnLeave = 'this.style.background=\'transparent\'';
-
-          // Back button
-          const back = document.createElement('button');
-          back.textContent = '←';
-          back.title = '后退';
-          back.style.cssText = btnStyle;
-          back.onmouseenter = new Function(btnHover);
-          back.onmouseleave = new Function(btnLeave);
-          back.onclick = () => { try { window.history.back(); } catch {} };
-
-          // Forward button
-          const fwd = document.createElement('button');
-          fwd.textContent = '→';
-          fwd.title = '前进';
-          fwd.style.cssText = btnStyle;
-          fwd.onmouseenter = new Function(btnHover);
-          fwd.onmouseleave = new Function(btnLeave);
-          fwd.onclick = () => { try { window.history.forward(); } catch {} };
-
-          // Refresh button
-          const refresh = document.createElement('button');
-          refresh.textContent = '↻';
-          refresh.title = '刷新';
-          refresh.style.cssText = btnStyle;
-          refresh.onmouseenter = new Function(btnHover);
-          refresh.onmouseleave = new Function(btnLeave);
-          refresh.onclick = () => location.reload();
-
-          // URL input
-          const urlInput = document.createElement('input');
-          urlInput.id = '__trellora_url_input';
-          urlInput.type = 'text';
-          urlInput.value = location.href;
-          urlInput.style.cssText = 'flex:1;height:28px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;padding:0 10px;font-size:13px;outline:none;-webkit-app-region:no-drag;';
-          urlInput.onfocus = () => { urlInput.style.borderColor='#89b4fa'; urlInput.select(); };
-          urlInput.onblur = () => { urlInput.style.borderColor='#45475a'; };
-          urlInput.onkeydown = (e) => { if (e.key==='Enter') { let u=urlInput.value.trim(); if(u && !u.startsWith('http')) u='https://'+u; location.href=u; }};
-
-          // Loading indicator
-          const loader = document.createElement('div');
-          loader.id = '__trellora_loader';
-          loader.style.cssText = 'display:none;width:18px;height:18px;border:2px solid #45475a;border-top-color:#89b4fa;border-radius:50%;animation:__trellora_spin 0.6s linear infinite;';
-          const style = document.createElement('style');
-          style.textContent = '@keyframes __trellora_spin{to{transform:rotate(360deg)}}';
-          document.head.appendChild(style);
-
-          // Close button
-          const closeBtn = document.createElement('button');
-          closeBtn.textContent = '✕';
-          closeBtn.title = '关闭';
-          closeBtn.style.cssText = btnStyle + 'color:#f38ba8;font-size:18px;margin-left:4px;';
-          closeBtn.onmouseenter = () => { closeBtn.style.background='#45475a'; };
-          closeBtn.onmouseleave = () => { closeBtn.style.background='transparent'; };
-          closeBtn.onclick = () => { window.__trellora_close = true; };
-
-          toolbar.appendChild(back);
-          toolbar.appendChild(fwd);
-          toolbar.appendChild(refresh);
-          toolbar.appendChild(urlInput);
-          toolbar.appendChild(loader);
-          toolbar.appendChild(closeBtn);
-          document.documentElement.prepend(toolbar);
-
-          // Push page content down
-          document.body.style.marginTop = '42px';
-
-          // Extract button (floating, animated)
-          if (!document.getElementById('__trellora_extract_btn')) {
-            const btn = document.createElement('button');
-            btn.id = '__trellora_extract_btn';
-            btn.innerHTML = '📋 <span>提取课表</span>';
-            btn.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:2147483646;padding:14px 28px;background:linear-gradient(135deg,#16a34a,#22c55e);color:white;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 4px 16px rgba(22,163,74,0.4);transition:all 0.2s;font-family:-apple-system,BlinkMacSystemFont,sans-serif;';
-            btn.onmouseenter = () => { btn.style.transform='scale(1.05)'; btn.style.boxShadow='0 6px 20px rgba(22,163,74,0.5)'; };
-            btn.onmouseleave = () => { btn.style.transform='scale(1)'; btn.style.boxShadow='0 4px 16px rgba(22,163,74,0.4)'; };
-            btn.onclick = () => {
-              btn.innerHTML = '⏳ <span>提取中...</span>';
-              btn.disabled = true;
-              btn.style.background='#6b7280';
-              window.__trellora_extract_html = document.documentElement.outerHTML;
-              window.__trellora_extract_title = document.title;
-              window.__trellora_extract_done = true;
-            };
-            document.body.appendChild(btn);
-          }
-        })();
-      `).catch(() => {});
-    };
-
-    // Update URL bar and loader on navigation
-    browserWin.webContents.on('did-navigate', () => {
-      browserWin.webContents.executeJavaScript(`
-        var u=document.getElementById('__trellora_url_input'); if(u) u.value=location.href;
-      `).catch(() => {});
+    // IPC handlers from preload (bypass CSP, no polling needed)
+    ipcMain.once('schedule-import:close', () => {
+      browserWin.close();
+      safeResolve({ status: 'failed', code: 'USER_CANCELLED', message: '用户关闭了窗口。' });
     });
-    browserWin.webContents.on('did-navigate-in-page', () => {
-      browserWin.webContents.executeJavaScript(`
-        var u=document.getElementById('__trellora_url_input'); if(u) u.value=location.href;
-      `).catch(() => {});
+
+    ipcMain.once('schedule-import:extract', async (_e, payload: { html: string; title: string }) => {
+      extracting = true; // Suppress USER_CANCELLED from closed handler
+
+      if (!payload.html || payload.html.length < 100) {
+        if (!browserWin.isDestroyed()) browserWin.close();
+        safeResolve({ status: 'failed', code: 'PAGE_EMPTY', message: '页面内容为空。' });
+        return;
+      }
+
+      const pageUrl = browserWin.webContents.getURL();
+
+      try {
+        const providerConfig = getAiProviderRuntimeConfig();
+        const result = await parseUrlWithAi(pageUrl, payload.html, {
+          generateJson: (opts) => generateAiJsonWithOptions({ ...opts, store }),
+          resolveProviderConfig: () => providerConfig,
+        });
+        if (!browserWin.isDestroyed()) browserWin.close();
+        safeResolve(result);
+      } catch (err) {
+        if (!browserWin.isDestroyed()) browserWin.close();
+        safeResolve({ status: 'failed', code: 'AI_FAILED', message: `AI 解析失败: ${(err as Error).message}` });
+      }
+    });
+
+    // Send URL and loading state to preload on navigation
+    browserWin.webContents.on('did-navigate', (_e, navUrl) => {
+      browserWin.webContents.send('schedule-import:update-url', navUrl);
+    });
+    browserWin.webContents.on('did-navigate-in-page', (_e, navUrl) => {
+      browserWin.webContents.send('schedule-import:update-url', navUrl);
     });
     browserWin.webContents.on('did-start-loading', () => {
-      browserWin.webContents.executeJavaScript(`
-        var l=document.getElementById('__trellora_loader'); if(l) l.style.display='block';
-      `).catch(() => {});
+      browserWin.webContents.send('schedule-import:loading', true);
     });
     browserWin.webContents.on('did-stop-loading', () => {
-      browserWin.webContents.executeJavaScript(`
-        var l=document.getElementById('__trellora_loader'); if(l) l.style.display='none';
-      `).catch(() => {});
+      browserWin.webContents.send('schedule-import:loading', false);
     });
 
-    // Inject toolbar after each page load
-    browserWin.webContents.on('did-finish-load', injectToolbar);
+    // Error page (preload toolbar persists via Shadow DOM, this only replaces body content)
     browserWin.webContents.on('did-fail-load', (_ev, errorCode, errorDesc) => {
       if (errorCode === -3) return; // ABORTED (navigation)
       browserWin.webContents.executeJavaScript(`
@@ -5551,60 +5472,19 @@ registerAppHandler('schedule:import-open-browser', async (event, url: string) =>
           const div = document.createElement('div');
           div.id = '__trellora_error';
           div.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#cdd6f4;background:#1e1e2e;';
-          div.innerHTML = '<div style="font-size:48px;margin-bottom:16px;">🌐</div><div style="font-size:18px;font-weight:600;margin-bottom:8px;">页面加载失败</div><div style="font-size:14px;color:#a6adc8;margin-bottom:24px;">${errorDesc.replace(/'/g, "\\'")}</div><button onclick="location.reload()" style="padding:10px 24px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">重新加载</button>';
+          div.innerHTML = '<div style="font-size:48px;margin-bottom:16px;">🌐</div><div style="font-size:18px;font-weight:600;margin-bottom:8px;">页面加载失败</div><div style="font-size:14px;color:#a6adc8;margin-bottom:24px;">${errorDesc.replace(/'/g, "\\'")}</div><div style="display:flex;gap:12px;"><button onclick="location.reload()" style="padding:10px 24px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">重新加载</button></div>';
           document.body.appendChild(div);
           document.body.style.marginTop = '0';
         }
       `).catch(() => {});
     });
 
-    // Poll for extraction completion and close signal
-    const pollInterval = setInterval(async () => {
-      try {
-        // Check close button
-        const shouldClose = await browserWin.webContents.executeJavaScript('window.__trellora_close === true');
-        if (shouldClose) {
-          clearInterval(pollInterval);
-          browserWin.close();
-          safeResolve({ status: 'failed', code: 'USER_CANCELLED', message: '用户关闭了窗口。' });
-          return;
-        }
-
-        // Check extraction
-        const done = await browserWin.webContents.executeJavaScript('window.__trellora_extract_done === true');
-        if (done) {
-          clearInterval(pollInterval);
-          const html = await browserWin.webContents.executeJavaScript('window.__trellora_extract_html || ""');
-          const title = await browserWin.webContents.executeJavaScript('window.__trellora_extract_title || ""');
-          const pageUrl = browserWin.webContents.getURL();
-
-          browserWin.close();
-
-          if (!html || html.length < 100) {
-            safeResolve({ status: 'failed', code: 'PAGE_EMPTY', message: '页面内容为空。' });
-            return;
-          }
-
-          // Parse with AI
-          try {
-            const providerConfig = resolveActiveAiProviderConfig(store);
-            const result = await parseUrlWithAi(pageUrl, html, {
-              generateJson: (opts) => generateAiJsonWithOptions({ ...opts, store }),
-              resolveProviderConfig: () => providerConfig,
-            });
-            safeResolve(result);
-          } catch (err) {
-            safeResolve({ status: 'failed', code: 'AI_FAILED', message: `AI 解析失败: ${(err as Error).message}` });
-          }
-        }
-      } catch {
-        // Window might be closed
-      }
-    }, 500);
-
     browserWin.on('closed', () => {
-      clearInterval(pollInterval);
-      safeResolve({ status: 'failed', code: 'USER_CANCELLED', message: '用户关闭了窗口。' });
+      // Clean up IPC listeners
+      ipcMain.removeAllListeners('schedule-import:close');
+      ipcMain.removeAllListeners('schedule-import:extract');
+      // Only resolve USER_CANCELLED if not mid-extraction
+      if (!extracting) safeResolve({ status: 'failed', code: 'USER_CANCELLED', message: '用户关闭了窗口。' });
     });
 
     browserWin.loadURL(url);
@@ -5614,11 +5494,9 @@ registerAppHandler('schedule:import-open-browser', async (event, url: string) =>
 registerAppHandler('schedule:import-preview-image', async (event, filePath: string) => {
   assertInternalRenderer(event);
   const { parseImageWithAi } = await import('./schedule/import/scheduleAiParser.ts');
-  const { generateAiJsonWithOptions } = await import('./knowledge/aiProvider.ts');
-  const { resolveActiveAiProviderConfig } = await import('./knowledge/aiSettings.ts');
 
   try {
-    const providerConfig = resolveActiveAiProviderConfig(store);
+    const providerConfig = getAiProviderRuntimeConfig();
     const abortController = new AbortController();
     const result = await parseImageWithAi(filePath, {
       generateJson: (opts) => generateAiJsonWithOptions({ ...opts, store }),
@@ -7616,328 +7494,38 @@ registerAppHandler('assistant:get-detailed-trace', async (event: IpcMainInvokeEv
     return { entries: [], filePath: null };
   }
 });
-registerAppHandler('qa-memory:create-session', (event: IpcMainInvokeEvent, scope: unknown = 'chat', libraryPath?: unknown) => {
-  assertInternalRenderer(event);
-  if (scope !== 'chat' && scope !== 'knowledge-base') throw new Error('问答会话模式无效。');
-  const sessionScope = scope as QaSessionScope;
-  const normalizedLibraryPath = typeof libraryPath === 'string' ? libraryPath.trim() : '';
-  if (sessionScope === 'knowledge-base' && !normalizedLibraryPath) throw new Error('请先选择知识库。');
-  return getQaMemoryOrchestrator().repository.createSession(sessionScope, normalizedLibraryPath ? { libraryPath: normalizedLibraryPath } : {});
-});
-registerAppHandler('memory:get-cutover-report', (event: IpcMainInvokeEvent) => {
-  assertInternalRenderer(event);
-  return getMemoryCutoverReport();
-});
-registerAppHandler('qa-memory:list-sessions', (event: IpcMainInvokeEvent, cursor?: unknown) => {
-  assertInternalRenderer(event);
-  return getQaMemoryOrchestrator().repository.listSessions({
-    cursor: typeof cursor === 'number' ? cursor : undefined,
-    pageSize: 10,
-  });
-});
-registerAppHandler('qa-memory:get-session', (event: IpcMainInvokeEvent, sessionId: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof sessionId !== 'string') throw new Error('问答记忆会话标识无效。');
-  return getQaMemoryOrchestrator().repository.getSession(sessionId);
-});
-registerAppHandler('qa-memory:rename-session', (event: IpcMainInvokeEvent, sessionId: unknown, title: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof sessionId !== 'string' || typeof title !== 'string') throw new Error('问答记忆会话重命名参数无效。');
-  return getQaMemoryOrchestrator().repository.renameSession(sessionId, title);
-});
-registerAppHandler('qa-memory:set-pinned', (event: IpcMainInvokeEvent, sessionId: unknown, pinned: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof sessionId !== 'string' || typeof pinned !== 'boolean') throw new Error('问答记忆会话置顶参数无效。');
-  return getQaMemoryOrchestrator().repository.setPinned(sessionId, pinned);
-});
-registerAppHandler('qa-memory:delete-session', (event: IpcMainInvokeEvent, sessionId: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof sessionId !== 'string') throw new Error('问答记忆会话标识无效。');
-  const orchestrator = getQaMemoryOrchestrator();
-  orchestrator.cancelSession(sessionId);
-  orchestrator.repository.deleteSession(sessionId);
-  return true;
-});
-registerAppHandler('memory:get-overview', (event: IpcMainInvokeEvent) => {
-  assertInternalRenderer(event);
-  const { scope } = resolveActiveLongTermMemoryScope();
-  const service = getMemoryWriteService();
-  return {
-    workspaceConfig: service.getWorkspaceConfig(scope),
-    subject: service.getSubject(scope),
-    availability: service.getAvailability(scope),
-    extractionRuntime: getMemoryExtractionService().getRuntimeStatus(scope),
-    itemCounts: service.getItemCounts(scope),
-  };
-});
-registerAppHandler('memory:save-workspace-config', (event: IpcMainInvokeEvent, patch: unknown) => {
-  assertInternalRenderer(event);
-  const { scope } = resolveActiveLongTermMemoryScope();
-  const config = getMemoryWriteService().updateWorkspaceConfig(scope, patch as Partial<WorkspaceMemoryConfig>);
-  getMemoryExtractionService().refreshConfiguration(scope);
-  return config;
-});
-registerAppHandler('memory:set-principal-enabled', (event: IpcMainInvokeEvent, enabled: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof enabled !== 'boolean') throw new Error('长期记忆开关参数无效。');
-  const { scope } = resolveActiveLongTermMemoryScope();
-  const result = getMemoryWriteService().setPrincipalEnabled(scope, enabled);
-  getMemoryExtractionService().refreshConfiguration(scope);
-  return result;
-});
-registerAppHandler('memory:list-items', (event: IpcMainInvokeEvent, query?: unknown) => {
-  assertInternalRenderer(event);
-  const { scope } = resolveActiveLongTermMemoryScope();
-  const normalizedQuery = query && typeof query === 'object' && !Array.isArray(query) ? query as MemoryItemListQuery : {};
-  return getMemoryWriteService().list(scope, normalizedQuery);
-});
-registerAppHandler('memory:list-topics', (event: IpcMainInvokeEvent) => {
-  assertInternalRenderer(event);
-  const { scope } = resolveActiveLongTermMemoryScope();
-  return getMemoryTopicService().list(scope);
-});
-registerAppHandler('memory:list-item-page', (event: IpcMainInvokeEvent, query?: unknown) => {
-  assertInternalRenderer(event);
-  const { scope } = resolveActiveLongTermMemoryScope();
-  const normalized = query && typeof query === 'object' && !Array.isArray(query) ? query as MemoryItemPageQuery : {};
-  return getMemoryWriteService().listPage(scope, normalized);
-});
-registerAppHandler('memory:list-topic-page', (event: IpcMainInvokeEvent, query?: unknown) => {
-  assertInternalRenderer(event);
-  const { scope } = resolveActiveLongTermMemoryScope();
-  const normalized = query && typeof query === 'object' && !Array.isArray(query) ? query as MemoryPageQuery : {};
-  return getMemoryTopicService().listPage(scope, normalized);
-});
-registerAppHandler('memory:list-document-page', (event: IpcMainInvokeEvent, query?: unknown) => {
-  assertInternalRenderer(event);
-  const { scope } = resolveActiveLongTermMemoryScope();
-  const normalized = query && typeof query === 'object' && !Array.isArray(query) ? query as MemoryPageQuery : {};
-  return getMemoryAffinityService().listPage(scope, normalized);
-});
-registerAppHandler('memory:promote-topic', (event: IpcMainInvokeEvent, topicId: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof topicId !== 'string' || !topicId.trim()) throw new Error('主题标识无效。');
-  const { scope } = resolveActiveLongTermMemoryScope();
-  return getMemoryTopicService().promote(scope, topicId);
-});
-registerAppHandler('memory:delete-topic', (event: IpcMainInvokeEvent, topicId: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof topicId !== 'string' || !topicId.trim()) throw new Error('主题标识无效。');
-  const { scope } = resolveActiveLongTermMemoryScope();
-  getMemoryTopicService().delete(scope, topicId);
-  return true;
-});
-registerAppHandler('memory:list-documents', (event: IpcMainInvokeEvent) => {
-  assertInternalRenderer(event);
-  const { scope } = resolveActiveLongTermMemoryScope();
-  return getMemoryAffinityService().list(scope);
-});
-registerAppHandler('memory:delete-document', (event: IpcMainInvokeEvent, documentId: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof documentId !== 'string' || !documentId.trim()) throw new Error('文档标识无效。');
-  const { scope } = resolveActiveLongTermMemoryScope();
-  return getMemoryAffinityService().delete(scope, documentId);
-});
-registerAppHandler('memory:get-used-for-turn', (event: IpcMainInvokeEvent, turnId: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof turnId !== 'string' || !turnId.trim()) throw new Error('回答标识无效。');
-  const { scope } = resolveActiveLongTermMemoryScope();
-  return getMemoryRecallService().listUsedMemories(scope, turnId);
-});
-registerAppHandler('memory:get-citation-source', (event: IpcMainInvokeEvent, turnId: unknown, itemId: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof turnId !== 'string' || !turnId.trim() || typeof itemId !== 'string' || !itemId.trim()) throw new Error('记忆引用标识无效。');
-  const { scope } = resolveActiveLongTermMemoryScope();
-  return getMemoryRecallService().getCitationSource(scope, turnId, itemId);
-});
-registerAppHandler('memory:create-item', (event: IpcMainInvokeEvent, input: unknown) => {
-  assertInternalRenderer(event);
-  const { scope } = resolveActiveLongTermMemoryScope();
-  return getMemoryWriteService().createManual(scope, parseManualMemoryInput(input));
-});
-registerAppHandler('memory:update-item', (event: IpcMainInvokeEvent, itemId: unknown, patch: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof itemId !== 'string' || !itemId.trim()) throw new Error('记忆条目标识无效。');
-  const { scope } = resolveActiveLongTermMemoryScope();
-  return getMemoryWriteService().updateManual(scope, itemId, parseMemoryItemPatch(patch));
-});
-registerAppHandler('memory:delete-item', (event: IpcMainInvokeEvent, itemId: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof itemId !== 'string' || !itemId.trim()) throw new Error('记忆条目标识无效。');
-  const { scope } = resolveActiveLongTermMemoryScope();
-  getMemoryWriteService().delete(scope, itemId);
-  return true;
-});
-registerAppHandler('memory:confirm-item', (event: IpcMainInvokeEvent, itemId: unknown, review: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof itemId !== 'string' || !itemId.trim()) throw new Error('记忆条目标识无效。');
-  const { scope } = resolveActiveLongTermMemoryScope();
-  return getMemoryWriteService().confirm(scope, itemId, parseMemoryProposalReview(review));
-});
-registerAppHandler('memory:get-proposal-context', (event: IpcMainInvokeEvent, itemId: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof itemId !== 'string' || !itemId.trim()) throw new Error('记忆条目标识无效。');
-  return getMemoryWriteService().getProposalContext(resolveActiveLongTermMemoryScope().scope, itemId);
-});
-registerAppHandler('memory:get-turn-status', (event: IpcMainInvokeEvent, turnIds: unknown) => {
-  assertInternalRenderer(event);
-  if (!Array.isArray(turnIds) || turnIds.length > MEMORY_CONSTANTS.management.listDefaultLimit || turnIds.some(id => typeof id !== 'string' || !id.trim())) throw new Error('回答标识列表无效。');
-  const { scope, workspacePath } = resolveActiveLongTermMemoryScope();
-  return new MemoryTurnStatusService(qaMemoryDatabase, workspacePath, isMemoryExtractionRouteEnabled).get(scope, turnIds);
-});
-registerAppHandler('memory:approve-consolidation', (event: IpcMainInvokeEvent, id: unknown, fingerprint: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof id !== 'string' || !id.trim() || typeof fingerprint !== 'string' || !/^[a-f0-9]{64}$/u.test(fingerprint)) throw new Error('整理预览参数无效。');
-  const { scope, workspacePath } = resolveActiveLongTermMemoryScope();
-  return getMemoryConsolidationService(workspacePath).approvePreview(scope, id, fingerprint);
-});
-registerAppHandler('memory:reject-item', (event: IpcMainInvokeEvent, itemId: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof itemId !== 'string' || !itemId.trim()) throw new Error('记忆条目标识无效。');
-  const { scope } = resolveActiveLongTermMemoryScope();
-  return getMemoryWriteService().reject(scope, itemId);
-});
-registerAppHandler('memory:clear', (event: IpcMainInvokeEvent) => {
-  assertInternalRenderer(event);
-  const { scope } = resolveActiveLongTermMemoryScope();
-  return getMemoryWriteService().clear(scope);
-});
-registerAppHandler('memory:export', async (event: IpcMainInvokeEvent) => {
-  assertInternalRenderer(event);
-  if (!mainWindow) throw new Error('应用窗口不可用。');
-  const { scope } = resolveActiveLongTermMemoryScope();
-  const exported = getMemoryWriteService().export(scope);
-  const target = await dialog.showSaveDialog(mainWindow, {
-    title: '导出长期记忆',
-    defaultPath: `Trellora-长期记忆-${new Date().toISOString().slice(0, 10)}.json`,
-    filters: [{ name: 'JSON 文件', extensions: ['json'] }],
-  });
-  if (target.canceled || !target.filePath) return { canceled: true, exportedItems: 0 };
-  fs.writeFileSync(target.filePath, `${JSON.stringify(exported, null, 2)}\n`, 'utf8');
-  return { canceled: false, exportedItems: exported.items.length };
-});
-registerAppHandler('memory:import', async (event: IpcMainInvokeEvent) => {
-  assertInternalRenderer(event);
-  if (!mainWindow) throw new Error('应用窗口不可用。');
-  const selected = await dialog.showOpenDialog(mainWindow, {
-    title: '导入长期记忆备份',
-    properties: ['openFile'],
-    filters: [{ name: 'JSON 文件', extensions: ['json'] }],
-  });
-  if (selected.canceled || !selected.filePaths[0]) {
-    return { canceled: true, importedItems: 0, unchangedItems: 0, skippedItems: 0 };
-  }
-  const parsed = JSON.parse(fs.readFileSync(selected.filePaths[0], 'utf8')) as unknown;
-  const { scope } = resolveActiveLongTermMemoryScope();
-  return { canceled: false, ...getMemoryWriteService().import(scope, parsed) };
-});
-registerAppHandler('memory:consolidate', async (event: IpcMainInvokeEvent) => {
-  assertInternalRenderer(event);
-  const { scope, workspacePath } = resolveActiveLongTermMemoryScope();
-  const service = getMemoryConsolidationService(workspacePath);
-  let model: MemoryExtractionModelResolution | undefined;
-  return service.consolidate(scope, 'manual', async (items, control) => {
-    model ??= await resolveManualMemoryConsolidationModel(scope);
-    if (!model.ready) throw new Error(`MODEL_UNAVAILABLE:${model.code}`);
-    return reviewConsolidationWithModel(generateAiJsonWithOptions, model, items, control);
-  });
-});
-
-registerAppHandler('assistant-memory:get-settings', (event: IpcMainInvokeEvent) => {
-  assertInternalRenderer(event);
-  const libraryPath = requireCurrentLibraryPath();
-  return getAssistantMemoryRepository(libraryPath).getSettings();
-});
-registerAppHandler('assistant-memory:set-settings', (event: IpcMainInvokeEvent, mode: unknown) => {
-  assertInternalRenderer(event);
-  if (mode !== 'persistent' && mode !== 'session-only' && mode !== 'disabled') throw new Error('AI 会话记忆模式无效。');
-  const libraryPath = requireCurrentLibraryPath();
-  return getAssistantMemoryRepository(libraryPath).setSettings(mode);
-});
-registerAppHandler('assistant-memory:create-session', (event: IpcMainInvokeEvent, notePath: unknown) => {
-  assertInternalRenderer(event);
-  const { snapshot, repository } = getAssistantMemoryIpcContext(event, notePath);
-  if (getAssistantMemoryMode(repository) !== 'persistent') {
-    const createdAt = new Date().toISOString();
-    return { sessionId: createAssistantSessionId(), title: '仅本次对话', status: 'active' as const, turnCount: 0, createdAt, updatedAt: createdAt };
-  }
-  const session = repository.createSession({
-    libraryId: snapshot.libraryId,
-    relativePath: snapshot.relativePath,
-    contentHash: snapshot.contentHash,
-    title: '新对话',
-  });
-  const scope = repository.resolveScope({
-    libraryId: snapshot.libraryId,
-    relativePath: snapshot.relativePath,
-    contentHash: snapshot.contentHash,
-    sessionId: session.sessionId,
-  });
-  assistantSessionScopeRegistry.authorize(scope, event.sender.id);
-  return session;
-});
-registerAppHandler('assistant-memory:list-sessions', (event: IpcMainInvokeEvent, notePath: unknown, page?: unknown) => {
-  assertInternalRenderer(event);
-  const { snapshot, repository } = getAssistantMemoryIpcContext(event, notePath);
-  if (getAssistantMemoryMode(repository) !== 'persistent') return { items: [] };
-  return repository.listSessions({
-    libraryId: snapshot.libraryId,
-    relativePath: snapshot.relativePath,
-    contentHash: snapshot.contentHash,
-    ...(typeof page === 'number' ? { page } : {}),
-  });
-});
-registerAppHandler('assistant-memory:get-session', (event: IpcMainInvokeEvent, notePath: unknown, sessionId: unknown, page?: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof sessionId !== 'string') throw new Error('AI 会话标识无效。');
-  const { repository, scope } = getAuthorizedAssistantMemoryScope(event, notePath, sessionId);
-  return repository.getSession(scope, typeof page === 'number' ? page : undefined);
-});
-registerAppHandler('assistant-memory:archive-session', (event: IpcMainInvokeEvent, notePath: unknown, sessionId: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof sessionId !== 'string') throw new Error('AI 会话标识无效。');
-  const { repository, scope } = getAuthorizedAssistantMemoryScope(event, notePath, sessionId);
-  return repository.archiveSession(scope);
-});
-registerAppHandler('assistant-memory:delete-session', (event: IpcMainInvokeEvent, notePath: unknown, sessionId: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof sessionId !== 'string') throw new Error('AI 会话标识无效。');
-  const { repository, scope } = getAuthorizedAssistantMemoryScope(event, notePath, sessionId);
-  repository.deleteSession(scope);
-  return true;
-});
-registerAppHandler('assistant-memory:clear-note', (event: IpcMainInvokeEvent, notePath: unknown) => {
-  assertInternalRenderer(event);
-  const { snapshot, repository } = getAssistantMemoryIpcContext(event, notePath);
-  return repository.clearNote({ libraryId: snapshot.libraryId, relativePath: snapshot.relativePath, contentHash: snapshot.contentHash });
-});
-registerAppHandler('assistant-memory:export-session', async (event: IpcMainInvokeEvent, notePath: unknown, sessionId: unknown, format: unknown) => {
-  assertInternalRenderer(event);
-  if (typeof sessionId !== 'string' || (format !== 'markdown' && format !== 'json')) throw new Error('AI 会话导出参数无效。');
-  const { repository, scope } = getAuthorizedAssistantMemoryScope(event, notePath, sessionId);
-  const exported = repository.exportSession(scope, format);
-  if (!mainWindow) throw new Error('应用窗口不可用。');
-  const target = await dialog.showSaveDialog(mainWindow, {
-    title: '导出 AI 会话',
-    defaultPath: exported.suggestedFileName,
-    filters: [format === 'json' ? { name: 'JSON 文件', extensions: ['json'] } : { name: 'Markdown 文件', extensions: ['md'] }],
-  });
-  if (target.canceled || !target.filePath) return false;
-  fs.writeFileSync(target.filePath, exported.content, 'utf8');
-  return true;
-});
-registerAppHandler('assistant-memory:backup', async (event: IpcMainInvokeEvent) => {
-  assertInternalRenderer(event);
-  const libraryPath = requireCurrentLibraryPath();
-  if (!mainWindow) throw new Error('应用窗口不可用。');
-  const target = await dialog.showSaveDialog(mainWindow, {
-    title: '备份 AI 会话记忆库',
-    defaultPath: 'assistant-memory-backup.db',
-    filters: [{ name: 'SQLite 数据库', extensions: ['db'] }],
-  });
-  if (target.canceled || !target.filePath) return false;
-  await getAssistantMemoryRepository(libraryPath).backup(target.filePath);
-  return true;
+registerMemoryHandlers({
+  registerAppHandler,
+  assertInternalRenderer,
+  resolveActiveLongTermMemoryScope,
+  getMemoryWriteService,
+  getMemoryExtractionService,
+  getMemoryRecallService,
+  getMemoryAffinityService,
+  getMemoryConsolidationService,
+  getMemoryTopicService,
+  getQaMemoryOrchestrator,
+  getAssistantMemoryRepository,
+  requireCurrentLibraryPath,
+  parseManualMemoryInput,
+  parseMemoryItemPatch,
+  parseMemoryProposalReview,
+  resolveMemoryExtractionModel: (seed: any, config: any) => resolveMemoryExtractionModel(seed, config),
+  reviewConsolidationWithModel,
+  generateAiJsonWithOptions,
+  createAssistantSessionId,
+  assistantSessionScopeRegistry,
+  getCurrentNoteSnapshotForAssistantMemory,
+  validateAssistantCitationAgainstSnapshot,
+  getMemoryCutoverReport,
+  qaMemoryDatabase,
+  isMemoryExtractionRouteEnabled,
+  MEMORY_CONSTANTS,
+  mainWindow: mainWindow as BrowserWindow | null,
+  resolveManualMemoryConsolidationModel,
+  getAssistantMemoryMode,
+  getAssistantMemoryIpcContext,
+  getAuthorizedAssistantMemoryScope,
 });
 registerAppHandler('assistant-citation:validate', (event: IpcMainInvokeEvent, value: unknown): AssistantCitationValidation => {
   assertInternalRenderer(event);

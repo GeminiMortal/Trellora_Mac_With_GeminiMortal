@@ -1,5 +1,5 @@
-import { isSensitiveProfileContent } from '../userProfileExtractor';
-import type { UserProfileContextSnapshot, UserProfileItem } from '../userProfileTypes';
+import { isSensitiveProfileContent } from '../userProfile/userProfileExtractor.ts';
+import type { UserProfileContextSnapshot, UserProfileItem } from '../userProfile/userProfileTypes.ts';
 
 const MAX_PERSONALIZATION_ITEMS = 8;
 const MAX_PERSONALIZATION_VALUE_CHARS = 160;

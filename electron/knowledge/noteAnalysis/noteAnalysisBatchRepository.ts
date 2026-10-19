@@ -4,7 +4,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
-import { saveNoteAnalysisInDatabase, withKnowledgeDatabase } from '../metaDatabase.ts';
+import { saveNoteAnalysisInDatabase, withKnowledgeDatabase } from '../index/metaDatabase.ts';
 import type { NoteAnalysis, NoteAnalysisBatchPlan, NoteAnalysisBatchResult, NoteAnalysisRunDetail, NoteAnalysisRunState } from './noteAnalysisTypes.ts';
 import type { NoteAnalysisRunInput } from './noteAnalysisBatchPrompt.ts';
 import { NOTE_ANALYSIS_POLICY_VERSION, NOTE_ANALYSIS_PROMPT_VERSION } from './noteAnalysisLengthPolicy.ts';

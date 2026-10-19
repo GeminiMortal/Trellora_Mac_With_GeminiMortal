@@ -3,7 +3,7 @@
  * 通过清理重复内容和计算内容哈希来准备笔记内容以供分析。
  */
 import { createHash } from 'node:crypto';
-import { extractMarkdownEvidenceBlocks, extractMarkdownKnowledgeFacts } from '../markdownAst.ts';
+import { extractMarkdownEvidenceBlocks, extractMarkdownKnowledgeFacts } from '../tools/markdownAst.ts';
 import { buildCurrentNoteStructure, getMarkdownLineOffsets } from '../currentNote/currentNoteStructure.ts';
 import { countNoteAnalysisCharacters } from './noteAnalysisLengthPolicy.ts';
 import type { NoteAnalysisPreparationStats, NoteAnalysisSourceSpan } from './noteAnalysisTypes.ts';

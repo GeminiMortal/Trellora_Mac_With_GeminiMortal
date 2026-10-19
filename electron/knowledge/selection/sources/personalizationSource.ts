@@ -5,8 +5,8 @@
  * 为选区编辑收集刻意收窄的用户画像偏好通道。仅投影活跃、非敏感的风格与术语条目；
  * 输出绝不作为事实证据。
  */
-import { isSensitiveProfileContent } from '../../userProfileExtractor.ts';
-import type { UserProfileContextSnapshot, UserProfileItem } from '../../userProfileTypes.ts';
+import { isSensitiveProfileContent } from '../../userProfile/userProfileExtractor.ts';
+import type { UserProfileContextSnapshot, UserProfileItem } from '../../userProfile/userProfileTypes.ts';
 
 /**
  * Budget and allowlist for personalization projection: at most 8 items, each

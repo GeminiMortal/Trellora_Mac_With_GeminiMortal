@@ -6,7 +6,7 @@
 import type { IpcMainInvokeEvent } from 'electron';
 import { listMaterialsDocuments } from '../../library/materialsLibrary';
 import { readMaterialDocumentIndexStats } from '../../pipeline/materialChunkSearch';
-import { resolveRerankRuntime } from '../rerankAdapters.ts';
+import { resolveRerankRuntime } from '../search/rerankAdapters.ts';
 import { DEFAULT_REACT_BUDGET, KNOWLEDGE_SHADOW_MODEL_CALL_BUDGET } from '../reactAgent/reactEngineTypes.ts';
 import { runReActLoop } from '../reactAgent/reactEngine.ts';
 import { createReActChatTransport, type ReActChatMessage, type ReActChatTransport } from '../reactAgent/reactChatTransport.ts';
@@ -28,7 +28,7 @@ import { createReadSkillTool } from '../tools/knowledgeTools/readSkillTool.ts';
 import { createSearchMemoryTool, type SearchMemoryToolRuntime } from '../tools/knowledgeTools/searchMemoryTool.ts';
 import { createSearchConversationsTool, type SearchConversationsToolRuntime } from '../tools/knowledgeTools/searchConversationsTool.ts';
 import { buildKnowledgeAgentSystemPrompt, buildKnowledgeRuntimeContext, buildKnowledgeSkillsBlock, type KnowledgeAgentCapabilities } from './knowledgeAgentPrompt.ts';
-import { buildKnowledgeMemoryEnvelope } from '../knowledgeMemoryEnvelope.ts';
+import { buildKnowledgeMemoryEnvelope } from '../context/knowledgeMemoryEnvelope.ts';
 import { resolveQaZoneBudget } from '../qa/qaMemoryAssembler.ts';
 import { buildQueryRewritePrompt, normalizeGraphIntent, QueryRewriteError, rewriteKnowledgeQuestion, selectRewriteHistoryTurns, type QueryRewriteProviderCallObservationEvent, type QueryRewriteResult } from '../search/queryRewrite.ts';
 import type { KnowledgeToolContext, KnowledgeToolQueryOptions, KnowledgeToolRetrievalContext } from '../tools/knowledgeToolContext.ts';
@@ -43,7 +43,7 @@ import { createQaAgentMessageInputs } from '../qa/qaCanonicalHistory.ts';
 import { resolveAssistantAnswerTemperature } from '../assistant/assistantGenerationPolicy.ts';
 import { estimateTokenCount, type AssistantContextUsage } from '../model/tokenEstimator.ts';
 import type { HubStore } from '../store';
-import { KnowledgeBaseImageResolver } from '../knowledgeBaseImageResolver.ts';
+import { KnowledgeBaseImageResolver } from '../tools/knowledgeBaseImageResolver.ts';
 import { observeDynamicMemoryS0Call } from '../currentNote/dynamicMemoryS0Observe.ts';
 import type { AssistantContextRuntimeMode } from '../context/contextRuntimeTypes.ts';
 

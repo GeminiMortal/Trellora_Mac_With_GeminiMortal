@@ -2,8 +2,8 @@ import { CurrentNoteEvidenceLedger } from '../currentNoteEvidenceLedger';
 import { evaluateStrictSmallNotePolicy, type CurrentNoteContextCapacity, type StrictSmallNoteDecision } from '../currentNotePolicy';
 import type { CurrentNoteSnapshot } from '../currentNoteSnapshot';
 import { createCurrentNoteTools, materializeCurrentNoteSearchHit } from '../currentNoteTools';
-import { tokenizeCurrentNoteText } from '../currentNoteStructure';
-import { estimateTokenCount } from '../tokenEstimator';
+import { tokenizeCurrentNoteText } from '../currentNote/currentNoteStructure.ts';
+import { estimateTokenCount } from '../model/tokenEstimator.ts';
 import type { SelectionContextReceipt, SelectionEvidenceItem } from '../selectionEditTypes';
 
 const DEFAULT_MAX_EVIDENCE_CHARACTERS = 9_000;

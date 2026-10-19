@@ -3,7 +3,7 @@
  * Pure rules, zero model calls (inspired by the WeKnora expansion idea).
  * 本地规则式查询扩写与扩写轮次结果合并。纯规则实现，零模型调用（借鉴 WeKnora 扩写思想）。
  */
-import { reciprocalRankFusion, type HybridChildFusion } from '../hybridRetrievalFusion.ts';
+import { reciprocalRankFusion, type HybridChildFusion } from './hybridRetrievalFusion.ts';
 
 /**
  * Upper bound of fallback expansion variants; a v1 constant not exposed in settings.

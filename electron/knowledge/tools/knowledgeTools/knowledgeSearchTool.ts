@@ -9,11 +9,11 @@
  * 合并跨路结果并返回带引用号的父块证据用于终答标注。
  */
 
-import { mergeKnowledgeBaseRetrievals, retrieveKnowledgeBaseEvidence } from '../../knowledgeBaseRag.ts';
+import { mergeKnowledgeBaseRetrievals, retrieveKnowledgeBaseEvidence } from '../../search/knowledgeBaseRag.ts';
 import type { ReActTool, ReActToolExecution } from '../../reactAgent/toolRegistry.ts';
 import { compactObservationText, escapeXmlAttribute, escapeXmlText, toBoundedPublicToolResultText, type KnowledgeToolContext } from '../knowledgeToolContext.ts';
 import type { KnowledgeEvidenceRecord } from './knowledgeSessionState';
-import { renderKnowledgeBaseImageTransportIndex } from '../../knowledgeBaseImageResolver.ts';
+import { renderKnowledgeBaseImageTransportIndex } from '../knowledgeBaseImageResolver.ts';
 import type { AssistantPublicToolResultView } from '../../assistant/assistantTurnTypes.ts';
 
 /** Per-query parent-chunk recall count; merged results are trimmed to Top 5. 单条查询的父块召回数；多路合并后再取 Top 5。 */

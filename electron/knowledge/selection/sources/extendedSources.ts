@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import { findMaterialsDocument } from '../../../library/materialsLibrary.ts';
 import { readMaterialParentWindow, searchMaterialChunks } from '../../../pipeline/materialChunkSearch.ts';
 import type { MaterialEmbeddingAdapter } from '../../../pipeline/materialEmbeddingAdapters.ts';
-import { retrieveKnowledgeBaseEvidence } from '../../knowledgeBaseRag.ts';
+import { retrieveKnowledgeBaseEvidence } from '../../search/knowledgeBaseRag.ts';
 import { LibraryEvidenceLedger } from '../../library/libraryEvidenceLedger.ts';
 import { getLibraryNoteRecord, type LibraryNoteSnapshotMap } from '../../library/libraryNoteSnapshot.ts';
 import { createLibraryNoteTools, searchLibraryNoteCandidates } from '../../library/libraryNoteTools.ts';

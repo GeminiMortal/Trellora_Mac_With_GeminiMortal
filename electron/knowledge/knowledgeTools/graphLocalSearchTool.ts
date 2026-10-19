@@ -2,7 +2,7 @@ import { runGraphLocalSearch, type GraphLocalSearchEvidence } from '../../pipeli
 import type { ReActTool, ReActToolExecution } from '../reactAgent/toolRegistry';
 import { compactObservationText, escapeXmlAttribute, escapeXmlText, type KnowledgeToolContext } from '../knowledgeToolContext';
 import type { KnowledgeEvidenceRecord } from './knowledgeSessionState';
-import { renderKnowledgeBaseImageTransportIndex } from '../knowledgeBaseImageResolver';
+import { renderKnowledgeBaseImageTransportIndex } from '../tools/knowledgeBaseImageResolver';
 
 const ENTITY_DESCRIPTION_LIMIT = 400;
 const RELATION_DESCRIPTION_LIMIT = 200;

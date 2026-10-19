@@ -52,7 +52,7 @@ import {
   resolveCurrentNoteMemoryBudgets,
   type CurrentNoteContextRuntimeInput,
 } from './currentNoteContextMemoryAdapter.ts';
-import { ProjectContextAdapter } from '../projectContextAdapter.ts';
+import { ProjectContextAdapter } from '../context/projectContextAdapter.ts';
 import { createContextProjectionDiagnostics } from '../context/contextProjectionDiagnostics.ts';
 import type { AssistantContextRuntimeMode, ContextMaterial, ContextProjectionDiagnostics } from '../context/contextRuntimeTypes.ts';
 import { resolveAssistantModelRuntimeProfile } from '../../../shared/effectiveContextWindow.ts';

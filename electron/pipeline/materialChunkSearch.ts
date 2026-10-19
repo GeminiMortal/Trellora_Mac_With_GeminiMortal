@@ -12,7 +12,7 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 import { getLibraryMetaDirectory } from '../files/treeOrder.ts';
 import { sqliteVecPackagedExtensionPath } from '../loadSqliteVec.ts';
-import { LEXICAL_KEYWORD_BOOST, RRF_RANK_CONSTANT, reciprocalRankFusion, type RrfChannelEntry } from '../knowledge/hybridRetrievalFusion.ts';
+import { LEXICAL_KEYWORD_BOOST, RRF_RANK_CONSTANT, reciprocalRankFusion, type RrfChannelEntry } from '../knowledge/search/hybridRetrievalFusion.ts';
 import { PipelineStageError } from './stageErrors.ts';
 import { scoreLexicalCandidates, type LexicalCorpusStats, type LexicalScoreBreakdown, type LexicalTermDf } from './lexicalScorer.ts';
 import { readMaterialEmbeddingProfile, readMaterialEmbeddingProfileFromDatabase } from './materialEmbeddingProfile.ts';

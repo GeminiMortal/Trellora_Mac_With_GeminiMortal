@@ -8,7 +8,7 @@
  * Wiki 节点工具的共享运行时上下文类型（方案 §4）。
  */
 
-import type { RerankAdapter } from '../knowledge/rerankAdapters.ts';
+import type { RerankAdapter } from '../knowledge/search/rerankAdapters.ts';
 import type { KnowledgeAgentSessionState } from '../knowledge/tools/knowledgeTools/knowledgeSessionState.ts';
 import type { KnowledgeToolContext, KnowledgeToolRetrievalContext } from '../knowledge/tools/knowledgeToolContext.ts';
 import type { WikiDocumentOutlineNode } from './wikiOutline.ts';

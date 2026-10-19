@@ -3,11 +3,11 @@
  * 在同文档当前子树之外做跨章节语义检索的 Wiki 工具。
  */
 
-import { mergeKnowledgeBaseRetrievals, retrieveKnowledgeBaseEvidence } from '../../knowledge/knowledgeBaseRag.ts';
+import { mergeKnowledgeBaseRetrievals, retrieveKnowledgeBaseEvidence } from '../../knowledge/search/knowledgeBaseRag.ts';
 import type { ReActTool, ReActToolExecution } from '../../knowledge/reactAgent/toolRegistry.ts';
 import { compactObservationText, escapeXmlAttribute, escapeXmlText } from '../../knowledge/tools/knowledgeToolContext.ts';
 import type { KnowledgeEvidenceRecord } from '../../knowledge/tools/knowledgeTools/knowledgeSessionState.ts';
-import { renderKnowledgeBaseImageTransportIndex } from '../../knowledge/knowledgeBaseImageResolver.ts';
+import { renderKnowledgeBaseImageTransportIndex } from '../../knowledge/tools/knowledgeBaseImageResolver.ts';
 import type { WikiToolContext } from '../wikiToolContext.ts';
 import { collectCrossNodeHeadingIds } from '../wikiNodeScope.ts';
 import {

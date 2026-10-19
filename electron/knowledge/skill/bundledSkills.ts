@@ -12,6 +12,7 @@ export const bundledSkillNames: Readonly<Record<string, string>> = {
   'builtin-knowledge': 'builtin-knowledge',
   'builtin-learning': 'builtin-learning',
   'builtin-organize': 'builtin-organize',
+  'builtin-edit': 'builtin-edit',
   'generate-experiment-report': '实验报告生成',
   'generate-study-doc': '学习文档生成',
 };

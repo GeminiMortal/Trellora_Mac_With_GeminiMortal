@@ -2,8 +2,8 @@ import { readMaterialParentWindow } from '../../pipeline/materialChunkSearch';
 import { findMaterialsDocument } from '../../library/materialsLibrary';
 import type { ReActTool, ReActToolExecution } from '../reactAgent/toolRegistry';
 import { compactObservationText, escapeXmlAttribute, escapeXmlText, toBoundedPublicToolResultText, type KnowledgeToolContext } from '../knowledgeToolContext';
-import { renderKnowledgeBaseImageTransportIndex } from '../knowledgeBaseImageResolver';
-import type { AssistantPublicToolResultView } from '../assistantTurnTypes';
+import { renderKnowledgeBaseImageTransportIndex } from '../tools/knowledgeBaseImageResolver';
+import type { AssistantPublicToolResultView } from '../assistant/assistantTurnTypes.ts';
 
 const DEFAULT_WINDOW = 1;
 const MAX_WINDOW = 5;

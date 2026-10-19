@@ -14,7 +14,7 @@ import { readMaterialParentWindow, searchMaterialChunks } from '../../pipeline/m
 import { fetchWebPage, parsePublicWebUrl } from '../../websearch/webFetchClient.ts';
 import { getAiProviderConfig } from '../ai/aiProvider.ts';
 import type { CurrentNoteSnapshot } from '../currentNote/currentNoteSnapshot.ts';
-import { retrieveKnowledgeBaseEvidence } from '../knowledgeBaseRag.ts';
+import { retrieveKnowledgeBaseEvidence } from '../search/knowledgeBaseRag.ts';
 import { selectionEditProfiles } from './selectionEditProfiles.ts';
 import { type SelectionEditExtendedSourceRuntime } from './sources/extendedSources.ts';
 import { SelectionEditEvidenceSession } from './selectionEditEvidenceSession.ts';

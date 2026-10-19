@@ -3,11 +3,11 @@
  * 在当前节点子树内做语义混合检索（向量 + 关键词）的 Wiki 工具。
  */
 
-import { mergeKnowledgeBaseRetrievals, retrieveKnowledgeBaseEvidence } from '../../knowledge/knowledgeBaseRag.ts';
+import { mergeKnowledgeBaseRetrievals, retrieveKnowledgeBaseEvidence } from '../../knowledge/search/knowledgeBaseRag.ts';
 import type { ReActTool, ReActToolExecution } from '../../knowledge/reactAgent/toolRegistry.ts';
 import { compactObservationText, escapeXmlAttribute, escapeXmlText } from '../../knowledge/tools/knowledgeToolContext.ts';
 import type { KnowledgeEvidenceRecord } from '../../knowledge/tools/knowledgeTools/knowledgeSessionState.ts';
-import { renderKnowledgeBaseImageTransportIndex } from '../../knowledge/knowledgeBaseImageResolver.ts';
+import { renderKnowledgeBaseImageTransportIndex } from '../../knowledge/tools/knowledgeBaseImageResolver.ts';
 import type { WikiToolContext } from '../wikiToolContext.ts';
 import {
   WIKI_NODE_SEARCH_MAX_QUERIES,

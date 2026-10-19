@@ -1,7 +1,7 @@
 import type { IpcMainInvokeEvent } from 'electron';
 import { findMaterialsDocument } from '../library/materialsLibrary.ts';
 import { readMaterialDocumentIndexStats } from '../pipeline/materialChunkSearch.ts';
-import { resolveRerankRuntime } from '../knowledge/rerankAdapters.ts';
+import { resolveRerankRuntime } from '../knowledge/search/rerankAdapters.ts';
 import { runReActLoop } from '../knowledge/reactAgent/reactEngine.ts';
 import { createReActChatTransport, type ReActChatMessage, type ReActChatTransport } from '../knowledge/reactAgent/reactChatTransport.ts';
 import { projectReActModelRoundEvent } from '../knowledge/reactAgent/reactPublicModelTrace.ts';
@@ -31,7 +31,7 @@ import type { AiTransportImage } from '../knowledge/ai/aiGenerationTransport.ts'
 import { resolveAssistantAnswerTemperature } from '../knowledge/assistant/assistantGenerationPolicy.ts';
 import { collectAiTransportImageHashes, materializeAssistantDocumentImages, parseAssistantDocumentAttachments } from '../knowledge/assistant/assistantDocumentAttachmentParser.ts';
 import { AttachmentContextProvider, renderAttachmentMetadata, renderAttachmentRange, renderDocumentImageTransportIndex } from '../knowledge/context/attachmentContextProvider.ts';
-import { KnowledgeBaseImageResolver, renderKnowledgeBaseImageTransportIndex } from '../knowledge/knowledgeBaseImageResolver.ts';
+import { KnowledgeBaseImageResolver, renderKnowledgeBaseImageTransportIndex } from '../knowledge/tools/knowledgeBaseImageResolver.ts';
 import type { MineruRuntimeConfig } from '../pipeline/types.ts';
 import { estimateTokenCount, type AssistantContextUsage } from '../knowledge/model/tokenEstimator.ts';
 import type { HubStore } from '../store';

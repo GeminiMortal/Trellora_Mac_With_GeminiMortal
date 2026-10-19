@@ -11,11 +11,11 @@
 
 import type { MaterialEmbeddingAdapter } from '../../pipeline/materialEmbeddingAdapters';
 import type { MaterialEmbeddingProfile } from '../../pipeline/materialEmbeddingTypes';
-import type { RerankAdapter } from '../rerankAdapters.ts';
+import type { RerankAdapter } from '../search/rerankAdapters.ts';
 import type { KnowledgeAgentSessionState } from './knowledgeTools/knowledgeSessionState';
 import type { WebSearchProviderAdapter, WebSearchRuntimeConfig } from '../../websearch/webSearchTypes.ts';
 import type { AiTransportImage } from '../ai/aiGenerationTransport.ts';
-import type { KnowledgeBaseVisualEvidence, KnowledgeBaseVisualMapping } from '../knowledgeBaseImageResolver.ts';
+import type { KnowledgeBaseVisualEvidence, KnowledgeBaseVisualMapping } from './knowledgeBaseImageResolver.ts';
 
 /**
  * Retrieval dependencies assembled per query: path validation, Jieba tokenization,

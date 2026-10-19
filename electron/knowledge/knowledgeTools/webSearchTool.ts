@@ -1,6 +1,6 @@
 import type { ReActTool, ReActToolExecution } from '../reactAgent/toolRegistry';
 import type { WebSearchResult } from '../../websearch/webSearchTypes';
-import type { AssistantPublicToolResultView } from '../assistantTurnTypes';
+import type { AssistantPublicToolResultView } from '../assistant/assistantTurnTypes.ts';
 import { compactObservationText, escapeXmlAttribute, escapeXmlText, type WebSearchToolContext } from '../knowledgeToolContext';
 
 /**

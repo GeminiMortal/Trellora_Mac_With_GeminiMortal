@@ -11,7 +11,7 @@ import { getCurrentNoteSnapshotBlock } from '../../currentNote/currentNoteSnapsh
 import { createCurrentNoteTools } from '../../currentNote/currentNoteTools.ts';
 import type { ReActTool, ReActToolExecution } from '../../reactAgent/toolRegistry';
 import type { SelectionEditResearchToolContext } from '../../selectionEditAgentRuntime.ts';
-import { createExpansionRangeReader } from '../../selectionExpansionRead.ts';
+import { createExpansionRangeReader } from '../../selection/selectionExpansionRead.ts';
 
 /**
  * Budget constants for current-note tools: query term limits, search result

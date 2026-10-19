@@ -13,7 +13,7 @@ import type { QaAgentMessageInput, QaCanonicalRoute, QaMemoryPreparation, QaProj
 import { UserProfileExtractionQueue } from '../userProfile/userProfileExtractionQueue.ts';
 import type { UserProfileExtractionScheduleInput } from '../userProfile/userProfileTypes.ts';
 import { ContextMemoryRegistry } from '../context/contextMemoryRegistry.ts';
-import { ProjectContextAdapter } from '../projectContextAdapter.ts';
+import { ProjectContextAdapter } from '../context/projectContextAdapter.ts';
 import { QaContextMemoryAdapter } from './qaContextMemoryAdapter.ts';
 import { estimateTokenCount } from '../model/tokenEstimator.ts';
 import { UserProfileContextAdapter } from '../userProfile/userProfileContextAdapter.ts';

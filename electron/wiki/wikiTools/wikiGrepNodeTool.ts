@@ -15,7 +15,7 @@ import {
   isWikiNodeDescendantOf,
 } from '../wikiNodeScope.ts';
 import { WIKI_GREP_CONTEXT_CHARS, WIKI_GREP_MAX_MATCHES } from '../wikiNodeBudget.ts';
-import { renderKnowledgeBaseImageTransportIndex } from '../../knowledge/knowledgeBaseImageResolver.ts';
+import { renderKnowledgeBaseImageTransportIndex } from '../../knowledge/tools/knowledgeBaseImageResolver.ts';
 
 /**
  * wiki_grep_node tool (plan §4.5 rule 4): performs literal exact-match retrieval within the

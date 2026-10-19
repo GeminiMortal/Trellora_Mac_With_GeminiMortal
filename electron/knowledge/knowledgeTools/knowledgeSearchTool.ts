@@ -1,9 +1,9 @@
-import { mergeKnowledgeBaseRetrievals, retrieveKnowledgeBaseEvidence } from '../knowledgeBaseRag';
+import { mergeKnowledgeBaseRetrievals, retrieveKnowledgeBaseEvidence } from '../search/knowledgeBaseRag';
 import type { ReActTool, ReActToolExecution } from '../reactAgent/toolRegistry';
 import { compactObservationText, escapeXmlAttribute, escapeXmlText, toBoundedPublicToolResultText, type KnowledgeToolContext } from '../knowledgeToolContext';
 import type { KnowledgeEvidenceRecord } from './knowledgeSessionState';
-import { renderKnowledgeBaseImageTransportIndex } from '../knowledgeBaseImageResolver';
-import type { AssistantPublicToolResultView } from '../assistantTurnTypes';
+import { renderKnowledgeBaseImageTransportIndex } from '../tools/knowledgeBaseImageResolver';
+import type { AssistantPublicToolResultView } from '../assistant/assistantTurnTypes.ts';
 
 /** 单条查询的父块召回数；多路合并后再取 Top 5（方案 §4.3）。 */
 const PER_QUERY_PARENT_TOP_K = 3;

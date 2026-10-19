@@ -5,7 +5,7 @@
  * 当前笔记的标题结构提取、行偏移映射和证据块索引。
  */
 import { createHash } from 'node:crypto';
-import { extractMarkdownEvidenceBlocks, type MarkdownEvidenceBlockKind } from '../markdownAst.ts';
+import { extractMarkdownEvidenceBlocks, type MarkdownEvidenceBlockKind } from '../tools/markdownAst.ts';
 import { isTechnicalIdentifier, normalizeTechnicalTerm } from '../index/lexicalMatchPolicy.ts';
 
 /**

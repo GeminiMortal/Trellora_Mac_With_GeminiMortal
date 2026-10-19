@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { findMaterialsDocument } from '../../library/materialsLibrary';
 import { readMaterialParentWindow, searchMaterialChunks } from '../../pipeline/materialChunkSearch';
 import type { MaterialEmbeddingAdapter } from '../../pipeline/materialEmbeddingAdapters';
-import { retrieveKnowledgeBaseEvidence } from '../knowledgeBaseRag';
+import { retrieveKnowledgeBaseEvidence } from '../search/knowledgeBaseRag';
 import { LibraryEvidenceLedger } from '../libraryEvidenceLedger';
 import { getLibraryNoteRecord, type LibraryNoteSnapshotMap } from '../libraryNoteSnapshot';
 import { createLibraryNoteTools, searchLibraryNoteCandidates } from '../libraryNoteTools';

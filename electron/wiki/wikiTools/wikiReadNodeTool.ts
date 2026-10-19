@@ -8,7 +8,7 @@ import { compactObservationText, escapeXmlAttribute, escapeXmlText } from '../..
 import type { WikiToolContext } from '../wikiToolContext.ts';
 import { findWikiNode, formatWikiNodePath, getWikiNodeBreadcrumb, isWikiNodeDescendantOf } from '../wikiNodeScope.ts';
 import { WIKI_NODE_READ_WINDOW_CHARS } from '../wikiNodeBudget.ts';
-import { renderKnowledgeBaseImageTransportIndex } from '../../knowledge/knowledgeBaseImageResolver.ts';
+import { renderKnowledgeBaseImageTransportIndex } from '../../knowledge/tools/knowledgeBaseImageResolver.ts';
 
 /**
  * wiki_read_node tool (plan §4.3): deep-reads node markdown (default: current node; also allows
