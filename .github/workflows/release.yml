@@ -62,10 +62,14 @@ jobs:
         run: |
           python3 -m pip install -r pipeline-python/requirements.txt --target pipeline-python/.deps
 
+      - name: Resolve Python path
+        id: python
+        run: echo "path=$(python3 -c 'import sys; print(sys.executable)')" >> "$GITHUB_OUTPUT"
+
       - name: Build macOS package
         run: pnpm run build:mac
         env:
-          MENGHAN_PIPELINE_PYTHON: python3
+          MENGHAN_PIPELINE_PYTHON: ${{ steps.python.outputs.path }}
 
       - name: Verify build outputs
         run: |
@@ -125,10 +129,15 @@ jobs:
         run: |
           python -m pip install -r pipeline-python/requirements.txt --target pipeline-python/.deps
 
+      - name: Resolve Python path
+        id: python
+        shell: bash
+        run: echo "path=$(python -c 'import sys; print(sys.executable)')" >> "$GITHUB_OUTPUT"
+
       - name: Build Windows package
         run: pnpm run build:win
         env:
-          MENGHAN_PIPELINE_PYTHON: python
+          MENGHAN_PIPELINE_PYTHON: ${{ steps.python.outputs.path }}
 
       - name: Verify build outputs
         shell: bash
