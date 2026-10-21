@@ -1,0 +1,206 @@
+# Release build & publish for Trellora (macOS arm64 + Windows x64).
+# Trellora 发布构建：macOS arm64 与 Windows x64 双平台，tag 触发自动发布 Release。
+#
+# 用法 / Usage:
+#   - push 一个 v* 格式的 tag（例如 git tag v1.2.5 && git push origin v1.2.5）
+#   - 或在 Actions 标签页手动触发（workflow_dispatch），产物会存到 run artifacts
+#
+# 设计说明 / Design notes:
+#   - mac 与 win 各自独立 job：python 依赖安装、原生模块编译、打包均在原生平台 runner 完成
+#   - pnpm 通过 package.json 里的 packageManager 字段自动对齐版本
+#   - 原生依赖（better-sqlite3 / node-pty / esbuild）由 pnpm 安装脚本 + electron-rebuild 编译
+#   - macOS 不需要开发者证书：afterPack 钩子做 ad-hoc 重签名（build-mac-packages.mjs）
+#   - Windows 无签名证书：跳过签名，产物即最终用户分发版
+
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '发布 tag（留空则仅构建、不创建 Release）'
+        required: false
+        default: ''
+
+permissions:
+  contents: write   # 创建 Release 并上传资产
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # macOS (Apple Silicon)
+  # ---------------------------------------------------------------------------
+  build-mac:
+    name: Build macOS arm64
+    runs-on: macos-latest   # Apple Silicon runner (M1)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install pipeline Python deps
+        run: |
+          python3 -m pip install -r pipeline-python/requirements.txt --target pipeline-python/.deps
+
+      - name: Build macOS package
+        run: pnpm run build:mac
+        env:
+          MENGHAN_PIPELINE_PYTHON: python3
+
+      - name: Verify build outputs
+        run: |
+          ls -la trellora/
+          test -f trellora/Trellora-*-arm64.dmg
+          test -f trellora/Trellora-*-arm64-mac.zip
+          test -f trellora/latest-mac.yml
+
+      - name: Generate checksums
+        run: |
+          cd trellora
+          shasum -a 256 Trellora-*.dmg Trellora-*.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-artifacts
+          path: |
+            trellora/Trellora-*-arm64.dmg
+            trellora/Trellora-*-arm64-mac.zip
+            trellora/latest-mac.yml
+            trellora/SHA256SUMS.txt
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Windows x64
+  # ---------------------------------------------------------------------------
+  build-win:
+    name: Build Windows x64
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: 'x64'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install pipeline Python deps
+        run: |
+          python -m pip install -r pipeline-python/requirements.txt --target pipeline-python/.deps
+
+      - name: Build Windows package
+        run: pnpm run build:win
+        env:
+          MENGHAN_PIPELINE_PYTHON: python
+
+      - name: Verify build outputs
+        shell: bash
+        run: |
+          ls -la trellora/
+          test -f trellora/Trellora-*-setup-x64.exe
+          test -f trellora/Trellora-*-portable-x64.exe
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          cd trellora
+          shasum -a 256 Trellora-*.exe > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-artifacts
+          path: |
+            trellora/Trellora-*-setup-x64.exe
+            trellora/Trellora-*-portable-x64.exe
+            trellora/SHA256SUMS.txt
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Publish to GitHub Releases
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish Release
+    needs: [build-mac, build-win]
+    runs-on: ubuntu-latest
+    # 仅在 push tag 时发布；workflow_dispatch 手动跑时除非指定 tag，否则只出 artifacts
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag != '')
+    steps:
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-artifacts
+          path: ./artifacts/mac
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: win-artifacts
+          path: ./artifacts/win
+
+      - name: Determine tag name
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create / update Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            ./artifacts/mac/Trellora-*-arm64.dmg
+            ./artifacts/mac/Trellora-*-arm64-mac.zip
+            ./artifacts/mac/latest-mac.yml
+            ./artifacts/mac/SHA256SUMS.txt
+            ./artifacts/win/Trellora-*-setup-x64.exe
+            ./artifacts/win/Trellora-*-portable-x64.exe
+            ./artifacts/win/SHA256SUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
