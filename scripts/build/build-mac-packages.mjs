@@ -47,7 +47,7 @@ const env = { ...process.env };
 if (!env.ELECTRON_MIRROR) env.ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/';
 const cli = createRequire(import.meta.url).resolve('electron-builder/out/cli/cli.js');
 await new Promise((resolve, reject) => {
-  const child = spawn(process.execPath, [cli, '--mac', ...process.argv.slice(2)], { cwd: root, env, stdio: 'inherit' });
+  const child = spawn(process.execPath, [cli, '--mac', '--publish', 'never', ...process.argv.slice(2)], { cwd: root, env, stdio: 'inherit' });
   child.once('error', reject); child.once('exit', code => code === 0 ? resolve() : reject(new Error(`macOS package build exited ${code}`)));
 });
 

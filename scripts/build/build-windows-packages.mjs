@@ -10,7 +10,7 @@ const temporary = await fs.mkdtemp(path.join(staging, 'windows-builder-'));
 try {
   const cli = createRequire(import.meta.url).resolve('electron-builder/out/cli/cli.js');
   await new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [cli, ...process.argv.slice(2)], { cwd: process.cwd(), env: { ...process.env, TEMP: temporary, TMP: temporary }, windowsHide: true, stdio: 'inherit' });
+    const child = spawn(process.execPath, [cli, '--publish', 'never', ...process.argv.slice(2)], { cwd: process.cwd(), env: { ...process.env, TEMP: temporary, TMP: temporary }, windowsHide: true, stdio: 'inherit' });
     child.once('error', reject); child.once('exit', code => code === 0 ? resolve() : reject(new Error(`Windows package build exited ${code}`)));
   });
 } finally {
