@@ -12,7 +12,7 @@ trellora/
 menghan/
 menghan-dark-theme/
 menghan-dark-theme-update/
-release/
+/release/
 *.exe
 # Published Windows packages (keep each file below GitHub's 100 MiB limit).
 !/downloads/*.exe
