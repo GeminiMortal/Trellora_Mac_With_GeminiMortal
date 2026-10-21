@@ -147,11 +147,16 @@ jobs:
           test -f trellora/Trellora-*-portable-x64.exe
 
       - name: Generate checksums
-        shell: bash
+        shell: pwsh
         run: |
-          cd trellora
-          shasum -a 256 Trellora-*.exe > SHA256SUMS.txt
-          cat SHA256SUMS.txt
+          Set-Location trellora
+          $files = Get-ChildItem Trellora-*.exe
+          $lines = foreach ($f in $files) {
+            $hash = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($f.Name)"
+          }
+          $lines | Set-Content SHA256SUMS.txt
+          Get-Content SHA256SUMS.txt
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
