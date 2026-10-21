@@ -31,7 +31,7 @@ export default function WeekView({ anchorDate, occurrences, onSelectSlot, onSele
       {/* Day headers */}
       <div style={{ display: 'grid', gridTemplateColumns: `50px repeat(7, 1fr)`, borderBottom: '1px solid var(--mantine-color-default-border)' }}>
         <div />
-        {columns.map((col, i) => (
+        {columns.map((col) => (
           <div
             key={col.date}
             style={{

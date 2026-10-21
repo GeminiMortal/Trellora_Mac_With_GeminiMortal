@@ -54,6 +54,7 @@ import { KnowledgeAssistant, type KnowledgeAssistantProps } from '../knowledge/K
 import { getMaterialsIconOption } from '../../utils/pipeline/materialsIcons.ts';
 import { relocateWorkspacePath, type WorkspaceDataChange } from '../../utils/wiki/workspaceDataEvents.ts';
 import type { MaterialsDocument, MaterialsLibrarySummary } from '../../electron';
+import { showToast } from '../../utils/ui/feedback.ts';
 
 interface MaterialsViewProps {
   onCreateLibrary: () => void;
@@ -245,8 +246,8 @@ export default function MaterialsView({
     try {
       const summary = await window.electronAPI.syncMaterialsFromNotes(selectedPath);
       await refreshDocuments(selectedPath);
-      window.alert(t("同步完成：更新 {0} 篇，新增 {1} 篇，{2} 篇无变化。", { '0': String(summary.updated), '1': String(summary.added), '2': String(summary.unchanged) })
-        + (summary.missingSources > 0 ? t("另有 {0} 篇源笔记已删除，资料快照保持原样。", { '0': String(summary.missingSources) }) : ''));
+      showToast({ message: t("同步完成：更新 {0} 篇，新增 {1} 篇，{2} 篇无变化。", { '0': String(summary.updated), '1': String(summary.added), '2': String(summary.unchanged) })
+        + (summary.missingSources > 0 ? t("另有 {0} 篇源笔记已删除，资料快照保持原样。", { '0': String(summary.missingSources) }) : '') });
     } catch (syncError) {
       setError(toMessage(syncError, t("从笔记库同步失败。")));
     } finally {
@@ -888,7 +889,7 @@ export default function MaterialsView({
             onContextMenu={(event) => { event.preventDefault(); setDocContextMenu(null); }}
           />
           <Paper className="materials-ctx-menu" shadow="md" radius="md" style={{ top: docContextMenu?.y, left: docContextMenu?.x }}>
-            <UnstyledButton
+            <UnstyledButton aria-label="同步资料"
               className="materials-ctx-item"
               onClick={() => {
                 setRenameDocumentValue(contextMenuDocument.name);
@@ -898,7 +899,7 @@ export default function MaterialsView({
             >
               <Pencil size={14} /> {t("重命名")}
             </UnstyledButton>
-            <UnstyledButton
+            <UnstyledButton aria-label="导入文档"
               className="materials-ctx-item danger"
               onClick={() => {
                 setDeletingDocument(contextMenuDocument);

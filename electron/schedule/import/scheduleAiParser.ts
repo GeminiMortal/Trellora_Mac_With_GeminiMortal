@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { ScheduleImportDraft, ScheduleImportPreviewResult } from '../../../shared/schedule.ts';
 import type { AiJsonGenerationOptions, AiProviderConfig } from '../../knowledge/aiProvider.ts';
-import { generateAiJsonWithOptions } from '../../knowledge/aiProvider.ts';
+
 
 export interface AiParseOptions {
   generateJson: (options: AiJsonGenerationOptions) => Promise<unknown>;
@@ -14,7 +14,7 @@ export interface AiParseOptions {
   signal?: AbortSignal;
 }
 
-const SCHEDULE_IMPORT_JSON_SCHEMA = {
+const _SCHEDULE_IMPORT_JSON_SCHEMA = {
   name: 'schedule_import',
   strict: true as const,
   schema: {

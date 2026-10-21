@@ -57,6 +57,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     startupAppearance: readStartupAppearance(process.argv),
     waitForStartup: () => ipcRenderer.invoke('startup:ready'),
     ping: () => ipcRenderer.invoke('ping'),
+    plugin: {
+      listCommands: () => ipcRenderer.invoke('plugin:list-commands'),
+      invokeCommand: (commandId: string, args?: { trigger?: 'command-palette' | 'sidebar' | 'toolbar'; payload?: unknown }) => ipcRenderer.invoke('plugin:invoke-command', commandId, args),
+      list: () => ipcRenderer.invoke('plugin:list'),
+      installFromUrl: (url: string) => ipcRenderer.invoke('plugin:install-from-url', url),
+      installFromZip: (zipPath: string) => ipcRenderer.invoke('plugin:install-from-zip', zipPath),
+      enable: (id: string) => ipcRenderer.invoke('plugin:enable', id),
+      disable: (id: string) => ipcRenderer.invoke('plugin:disable', id),
+      uninstall: (id: string) => ipcRenderer.invoke('plugin:uninstall', id),
+    },
     // File System APIs
     // 文件系统 API
     selectDirectory: () => ipcRenderer.invoke('select-directory'),

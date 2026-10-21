@@ -4,7 +4,7 @@
  */
 import { useMemo } from 'react';
 import type { ScheduleOccurrence } from '../../../../shared/schedule.ts';
-import { buildMonthGrid, WEEKDAY_LABELS } from '../data/scheduleViewState.ts';
+import { buildMonthGrid } from '../data/scheduleViewState.ts';
 import { isHoliday, isMakeupWorkDay } from '../data/holidays.ts';
 
 interface YearViewProps {
@@ -16,8 +16,6 @@ interface YearViewProps {
 
 export default function YearView({ anchorDate, occurrences, onSelectMonth, onSelectDate }: YearViewProps) {
   const year = anchorDate.getFullYear();
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
   // Count occurrences per date
   const occCountByDate = useMemo(() => {

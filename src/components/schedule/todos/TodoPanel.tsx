@@ -3,8 +3,7 @@
  * 待办面板 — 侧栏面板，按截止日期分组显示待办项。
  */
 import { useMemo } from 'react';
-import { Stack, Text, Checkbox, Group, Badge, ActionIcon, ScrollArea } from '@mantine/core';
-import { Circle, CircleCheck, Clock, AlertTriangle } from 'lucide-react';
+import { Stack, Text, Checkbox, Group, Badge, ScrollArea } from '@mantine/core';
 import { t, useI18n } from '../../../i18n/index.ts';
 import type { ScheduleOccurrence, TodoStatus } from '../../../../shared/schedule.ts';
 

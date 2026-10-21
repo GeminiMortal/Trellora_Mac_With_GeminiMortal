@@ -2,7 +2,7 @@
  * MonthView — monthly calendar grid with event chips.
  * 月视图 — 带事件芯片的月历网格。支持拖选日期范围创建日程。
  */
-import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import type { ScheduleOccurrence } from '../../../../shared/schedule.ts';
 import { buildMonthGrid, WEEKDAY_LABELS } from '../data/scheduleViewState.ts';
 import { getHolidayInfo, isMakeupWorkDay } from '../data/holidays.ts';
@@ -25,9 +25,7 @@ export default function MonthView({ anchorDate, occurrences, onSelectDate, onSel
   // ── Drag-select state ──────────────────────────────────────────────────────
   const [dragStart, setDragStart] = useState<string | null>(null);
   const [dragEnd, setDragEnd] = useState<string | null>(null);
-  const isDragging = dragStart !== null && dragEnd !== null;
 
-  const getDateIndex = useCallback((date: string) => flatCells.findIndex((c) => c.date === date), [flatCells]);
 
   const handleCellMouseDown = useCallback((date: string) => {
     setDragStart(date);

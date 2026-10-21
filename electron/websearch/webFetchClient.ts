@@ -112,7 +112,7 @@ export function fetchWebPageViaNet(input: { url: string; signal: AbortSignal }):
 
   return new Promise((resolve, reject) => {
     let redirectCount = 0;
-    let currentUrl = parsed.toString();
+    const currentUrl = parsed.toString();
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     const doRequest = (url: string) => {

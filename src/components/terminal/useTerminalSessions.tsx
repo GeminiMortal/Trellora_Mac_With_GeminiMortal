@@ -43,6 +43,9 @@ interface TerminalSessionsContextValue {
 
 const TerminalSessionsContext = createContext<TerminalSessionsContextValue | null>(null);
 
+// Provider 与消费 hook 同文件是 React 惯用模式（共享 Context）；Fast Refresh 规则
+// 针对"仅导出组件"的 HMR 优化，此处定向豁免以保留 idiomatic 结构。
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTerminalSessionsProvider() {
   const ctx = useContext(TerminalSessionsContext);
   if (!ctx) throw new Error('useTerminalSessions must be used within TerminalSessionsProvider');
@@ -77,6 +80,9 @@ export function TerminalSessionsProvider({ children, themeMode }: { children: Re
     }
   }, [selectedShell]);
 
+  // 有意空依赖：仅在挂载时检测一次可用 shell。refreshShells 自身依赖 selectedShell，
+  // 若加入依赖会在每次切换 shell 时重复检测，非预期行为。
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { refreshShells(); }, []);
 
   // Refresh theme on all terminals when theme changes

@@ -25,15 +25,36 @@ interface NavItem {
   icon: LucideIcon;
 }
 
-const navItems: NavItem[] = [
-  { id: 'home', label: '助手', icon: MessageSquare },
-  { id: 'notes', label: '笔记', icon: FileText },
-  { id: 'sources', label: '资料', icon: Upload },
-  { id: 'wiki', label: 'Wiki', icon: Sparkles },
-  { id: 'graph', label: '地图', icon: Map },
-  { id: 'calendar', label: '日程', icon: Calendar },
-  { id: 'terminal', label: '终端', icon: SquareTerminal },
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
+  {
+    label: '核心',
+    items: [
+      { id: 'home', label: '助手', icon: MessageSquare },
+      { id: 'notes', label: '笔记', icon: FileText },
+    ],
+  },
+  {
+    label: '知识',
+    items: [
+      { id: 'sources', label: '文档库', icon: Upload },
+      { id: 'wiki', label: 'Wiki', icon: Sparkles },
+      { id: 'graph', label: '知识图谱', icon: Map },
+    ],
+  },
+  {
+    label: '工具',
+    items: [
+      { id: 'calendar', label: '日程', icon: Calendar },
+      { id: 'terminal', label: '终端', icon: SquareTerminal },
+    ],
+  },
 ];
+
 
 /** 全局导航独立于笔记侧栏，折叠侧栏后仍可管理全部笔记库。 */
 export default function NavRail({ activeView, tourSelected, onNavigate, onOpenSettings, onOpenFile, onRecoverFiles, onRecentFiles, onPendingFiles, pendingFileCount = 0 }: NavRailProps) {
@@ -47,26 +68,28 @@ export default function NavRail({ activeView, tourSelected, onNavigate, onOpenSe
           </ThemeIcon>
         </Tooltip>
         <div className="app-nav-divider" />
-        <Stack gap={4} align="center">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Tooltip key={item.id} label={item.id === 'home' ? t("AI 助手") : t(item.label)} position="right" withArrow>
-                <UnstyledButton
-                  className={`app-nav-item ${activeView === item.id ? 'active' : ''}`}
-                  data-onboarding-anchor={`menu-${item.id}`}
-                  data-tour-selected={tourSelected === item.id || undefined}
-                  aria-label={t(item.label)}
-                  aria-current={activeView === item.id ? 'page' : undefined}
-                  onClick={() => onNavigate(item.id)}
-                >
-                  <Icon size={16} strokeWidth={1.8} />
-                  <Text component="span" className="app-nav-item-label">{t(item.label)}</Text>
-                </UnstyledButton>
-              </Tooltip>
-            );
-          })}
-        </Stack>
+        {navGroups.map((group, groupIndex) => (
+          <Stack key={group.label} gap={4} align="center" style={groupIndex > 0 ? { marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border-subtle, rgba(0,0,0,0.08))' } : undefined}>
+            {group.items.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Tooltip key={item.id} label={item.id === 'home' ? t("AI 助手") : t(item.label)} position="right" withArrow>
+                  <UnstyledButton
+                    className={`app-nav-item ${activeView === item.id ? 'active' : ''}`}
+                    data-onboarding-anchor={`menu-${item.id}`}
+                    data-tour-selected={tourSelected === item.id || undefined}
+                    aria-label={t(item.label)}
+                    aria-current={activeView === item.id ? 'page' : undefined}
+                    onClick={() => onNavigate(item.id)}
+                  >
+                    <Icon size={16} strokeWidth={1.8} />
+                    <Text component="span" className="app-nav-item-label">{t(item.label)}</Text>
+                  </UnstyledButton>
+                </Tooltip>
+              );
+            })}
+          </Stack>
+        ))}
       </Stack>
 
       <Stack className="app-nav-rail-bottom" gap={4} align="center">

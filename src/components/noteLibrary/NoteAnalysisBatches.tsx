@@ -42,7 +42,7 @@ export default function NoteAnalysisBatches({ analysis, run, onCancel, onResume 
     {run && run.state !== 'completed' && analysis ? <Text size="xs" c="dimmed">{t("新版分析尚未完成，上方保留上一次完成的概览。")}</Text> : null}
     {run?.error ? <Text size="xs" c="red" role="alert">{run.error.message}</Text> : null}
     {error ? <Text size="xs" c="red" role="alert">{error}</Text> : null}
-    <UnstyledButton className="note-overview-toggle" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
+    <UnstyledButton aria-label="查看分析批次" className="note-overview-toggle" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
       <span>{fullDocument ? t("全文来源与摘要") : t("批次总结")} · {completed}/{total} {t("· 模型请求")} {requests} {t("次")}</span>
       <span>{expanded ? t("收起") : t("展开")}{expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}</span>
     </UnstyledButton>

@@ -2,7 +2,7 @@
  * RecurrenceEditor — UI for editing recurrence rules.
  * 重复规则编辑器 — 编辑重复规则的 UI。
  */
-import { Stack, Select, Group, MultiSelect, Switch, TextInput, NumberInput } from '@mantine/core';
+import { Stack, Select, Group, MultiSelect, TextInput, NumberInput } from '@mantine/core';
 import { t, useI18n } from '../../../i18n/index.ts';
 import type { RecurrenceRule } from '../../../../shared/schedule.ts';
 

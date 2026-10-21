@@ -4,7 +4,7 @@
 
 # Trellora
 
-**A local-first AI knowledge workspace for macOS (Apple Silicon)**
+**A local-first AI knowledge workspace (macOS · Windows)**
 
 Where ideas grow connected.
 
@@ -12,7 +12,7 @@ Markdown notes, source documents, AI conversations, and connected knowledge in o
 
 [简体中文](README.md) · **English**
 
-[![Platform](https://img.shields.io/badge/platform-macOS_arm64-black)](#quick-start)
+[![Platform](https://img.shields.io/badge/platform-macOS_arm64_·_Windows_x64-black)](#quick-start)
 [![Local First](https://img.shields.io/badge/data-local_first-26745C)](#data-and-privacy)
 [![Stack](https://img.shields.io/badge/stack-Electron_·_React_·_TypeScript-3178C6)](#architecture)
 
@@ -26,7 +26,7 @@ Trellora is for developers, students, and knowledge workers who regularly read, 
 
 The workflow is **collect → parse and index → read and ask → save as notes → connect → reuse**. Note libraries support writing; materials libraries preserve and retrieve sources; Wiki supports chapter-based learning; Map reveals relationships across documents; the assistant connects these workflows.
 
-The current target is **macOS (Apple Silicon arm64)**, and development is ongoing. This README describes the current working tree. Model, embedding, web search, and PDF cloud parsing requirements are stated where relevant. See the [desktop distribution acceptance record](docs/verification/desktop-distribution-acceptance.md) for release validation status.
+The project supports **macOS (Apple Silicon arm64)** and **Windows x64** (since v1.2.3); published downloads are currently macOS-first, and Windows builds are covered in [Quick start](#quick-start). Development is ongoing. This README describes the current working tree. Model, embedding, web search, and PDF cloud parsing requirements are stated where relevant. See the [desktop distribution acceptance record](docs/verification/desktop-distribution-acceptance.md) for release validation status.
 
 ![Trellora notes workspace with the English interface and dark theme](docs/assets/screenshots/notes-en-dark.png)
 
@@ -54,13 +54,16 @@ The current target is **macOS (Apple Silicon arm64)**, and development is ongoin
 | AI conversations and writing | Open chat, current-note, and knowledge-base scopes; streaming, cancellation, tool activity, source citations, attachments, and saving answers as notes |
 | Wiki learning workspace | Chapter tree and canvas, source reading, node analysis, full Wiki generation, chapter retries, derived nodes, and organized learning results |
 | Memory and personalization | Conversation history and search, long-term memory, original conversation links, manual and explicit saves, optional extraction, and reviewable changes |
+| Schedule and courses | Events, todos, course timetables, and reminders; year/month/week/day views, recurrence (including odd/even weeks), categories; CSV/Excel course import and AI-assisted import (image/URL/text) with batch revert |
+| Built-in terminal | Interactive shell with multi-tab sessions; zsh/bash on macOS, PowerShell/CMD/Git Bash/WSL on Windows; `Ctrl+\`` opens the bottom terminal panel |
+| Plugins (experimental) | Plugin SDK and manifest; command palette/sidebar/toolbar extensions; tiered permissions (L1 disclosure, L2 user confirmation); install from URL or ZIP |
 | Desktop experience and recovery | Chinese/English UI, light/dark themes, five palettes, onboarding, note backups, full workspace backup/restore, relocation, and diagnostics |
 
 Editing, file browsing, and note keyword search work without AI configuration. Vector retrieval needs an embedding model; AI answers and generation need a usable model; Map needs graph enrichment enabled and completed in the materials pipeline.
 
 ## Menus and screenshots
 
-The main rail contains **Assistant, Notes, Materials, Wiki, and Map**. **Open, Libraries, and Settings** are available at the bottom. Screenshots include an Electron demo running the current source and actual-use screens supplied by the user. English and Chinese screens and different themes are included; document text remains in its original language. See [showcase assets](docs/assets/README.md) for provenance.
+The main rail contains **Assistant, Notes, Materials, Wiki, Map, Schedule, and Terminal**. **Open, Libraries, and Settings** are available at the bottom. Screenshots include an Electron demo running the current source and actual-use screens supplied by the user. English and Chinese screens and different themes are included; document text remains in its original language. See [showcase assets](docs/assets/README.md) for provenance.
 
 ### Assistant
 
@@ -129,6 +132,16 @@ This screenshot shows the **actual state before graph enrichment has produced a 
 
 ![Map controls and the graph preparation state](docs/assets/screenshots/map-zh-light.png)
 
+### Schedule
+
+Manage events, todos, and course timetables. Year/month/week/day views, event/todo creation, categories and colors, jump-to-today, and navigation are included; recurrence supports daily/weekly/monthly and odd/even-week courses, and per-occurrence edits never rewrite the original item. Reminders arrive as system notifications.
+
+Courses can be imported from CSV/Excel (including common education-system encodings), or parsed with AI from images, URLs, and plain text (requires a model). Each import batch can be reverted as a whole.
+
+### Terminal
+
+An interactive shell embedded in the app with multi-tab sessions: zsh/bash on macOS, and PowerShell, CMD, Git Bash, and WSL (when installed) on Windows. `Ctrl+\`` opens the bottom terminal panel from any view; switching views keeps sessions alive, and processes are cleaned up on exit.
+
 ### Open
 
 Open MD, Markdown, TXT, and other supported text files directly with `Ctrl+O`. The menu also provides recent files, standalone draft recovery, and pending open requests.
@@ -149,13 +162,14 @@ Create libraries, enter registered libraries, copy their locations, remove regis
 
 ### Settings
 
-Settings has ten sections organized under Workspace, Documents, AI settings, and System:
+Settings has eleven sections organized under Workspace, Documents, AI settings, and System:
 
 | Section | Content |
 | --- | --- |
 | General | Onboarding; system/light/dark appearance; five palettes; comfortable/compact density; Chinese/English; startup behavior and web-link handling |
 | Workspace & backups | Workspace path, open folder, relocation, switching workspaces, complete backup/restore, and external-library handling |
 | Editor | Default mode, autosave delay, preview preference, font size, line/paragraph spacing, default zoom, paste policy, Markdown formatting, selection toolbar, focus and typewriter modes |
+| Shortcuts | Built-in shortcuts: search, terminal panel, sidebar, settings, theme toggle, new/save note, edit/preview switch, schedule navigation |
 | Document parsing | MinerU connection, upload consent, and processing capability status |
 | Web search | Providers, connection details, availability checks, and provider-specific parameters |
 | Text expansion | Target length, style, audience, thinking intensity, and related expansion settings |
@@ -185,21 +199,15 @@ Settings has ten sections organized under Workspace, Documents, AI settings, and
 
 ## Download
 
-**macOS (Apple Silicon) · Trellora v1.2.0**
+**macOS (Apple Silicon) · Trellora v1.2.4**
 
 | Edition | Download | Usage |
 | --- | --- | --- |
-| DMG installer | [Gitee Releases · v1.2.0](https://gitee.com/GeminiMortal/trellora/releases/tag/v1.2.0) | Merge split parts, open DMG, drag Trellora to Applications |
-| Source | [Gitee tag v1.2.0](https://gitee.com/GeminiMortal/trellora/releases/tag/v1.2.0) | ZIP / TAR.GZ available directly |
+| DMG installer | [GitHub Releases · v1.2.4](https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/releases/tag/v1.2.4) | Open `Trellora-1.2.4-arm64.dmg`, drag Trellora to Applications |
+| Auto-update ZIP | [GitHub Releases · v1.2.4](https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/releases/tag/v1.2.4) | `Trellora-1.2.4-arm64-mac.zip` used by in-app updates |
+| Source | [GitHub tag v1.2.4](https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/releases/tag/v1.2.4) | ZIP / TAR.GZ available directly |
 
-Gitee limits attachments to 100 MB. The DMG is split into two parts (`Trellora-1.2.0-arm64.dmg.part_aa` + `Trellora-1.2.0-arm64.dmg.part_ab`). Merge after download:
-
-```bash
-# macOS / Linux
-cat Trellora-1.2.0-arm64.dmg.part_* > Trellora-1.2.0-arm64.dmg
-```
-
-Open `Trellora-1.2.0-arm64.dmg` and drag Trellora.app into Applications.
+Open `Trellora-1.2.4-arm64.dmg` and drag Trellora.app into Applications.
 
 The app is distributed with an ad-hoc signature. If macOS Gatekeeper blocks it, right-click Trellora.app → Open, or allow it in System Settings → Privacy & Security.
 
@@ -213,7 +221,7 @@ See the [distribution, backup, and recovery guide](docs/桌面分发与备份恢
 
 ### Run from source
 
-Prepare macOS (Apple Silicon), Git, Node.js, and pnpm (use pnpm 9 or later).
+Prepare macOS (Apple Silicon) or Windows x64, Git, Node.js, and pnpm (use pnpm 9 or later).
 
 ```bash
 git clone https://gitee.com/GeminiMortal/trellora.git
@@ -286,6 +294,7 @@ shared/           Cross-process types, contracts, limits, and defaults
 pipeline-python/  NDJSON Worker, processing stages, and Python tests
 build/            Branding, built-in skills, and installer configuration
 scripts/          Build, functional, Electron, and package validation
+plugins/          Plugin SDK, manifest, and examples (experimental)
 docs/             Product/architecture docs, showcase assets, acceptance records
 ```
 
@@ -298,6 +307,7 @@ docs/             Product/architecture docs, showcase assets, acceptance records
 | Materials and artifacts | Stored separately; artifacts under `.menghan-meta/pipeline/` |
 | Conversation history/long-term memory | Workspace `ConversationMemory/qa-memory.db`; some legacy conversation stores remain compatible |
 | Skills | Workspace `AI-Skill/` |
+| Schedule and reminders | Workspace `.menghan-meta/schedule/schedule.db`; course import batches are revertible |
 | Note backups | `.menghan-backups/`; full workspace backup is a separate workflow |
 | Settings/keys/standalone recovery | Electron `userData`; keys are encrypted using `safeStorage` |
 
@@ -332,6 +342,14 @@ pnpm run release:manifest
 
 The builder locates the interpreter through `python3`; set `MENGHAN_PIPELINE_PYTHON` to a specific Python 3 when necessary. Versions come from `package.json.version`. Output names are `trellora/Trellora-<version>-arm64.dmg` and `trellora/Trellora-<version>-arm64-mac.zip`. Packaging uses the `afterPack` hook for ad-hoc re-signing (avoids Gatekeeper "damaged" when no developer certificate is configured). Use `ELECTRON_MIRROR` when direct GitHub access is unreliable.
 
+Windows packaging runs on a Windows host (the NSIS step uses a private temp directory to avoid system-temp virtualization issues):
+
+```bash
+pnpm run build:win
+```
+
+Windows artifacts are `trellora/Trellora-<version>-setup-x64.exe` (NSIS installer) and `trellora/Trellora-<version>-portable-x64.exe` (portable), both bundling the Python runtime; when the bundled runtime is missing the worker falls back to system Python (common install locations and PATH are probed).
+
 ## Documentation and participation
 
 | Document | Content |
@@ -342,6 +360,7 @@ The builder locates the interpreter through `python3`; set `MENGHAN_PIPELINE_PYT
 | [Memory domain contract](docs/Trellora-2.0-WeKnora记忆架构严格对齐改造方案.md) | Implementation phases and numeric contracts |
 | [Desktop acceptance](docs/verification/desktop-distribution-acceptance.md) | Verified behavior and remaining release gates |
 | [Showcase assets](docs/assets/README.md) | Screenshot provenance and presentation references |
+| [Documentation sync record](docs/文档同步更新记录-2026-10-20.md) | Change list and rationale for the 2026-10-20 documentation sync |
 
 Report issues through [Gitee Issues](https://gitee.com/GeminiMortal/trellora/issues), including version, UI language, reproduction steps, and relevant diagnostics without keys or private documents. Read [AGENTS.md](AGENTS.md) before contributing changes, particularly process responsibilities, original-content protection, and phased contracts.
 

@@ -3,7 +3,7 @@
  * 导入服务 — 编排 解析 → 预览 → 提交 管线。
  */
 import type Database from 'better-sqlite3';
-import type { ScheduleImportSourceType, ScheduleImportPreviewResult, ScheduleImportCommitRequest, ScheduleImportCommitResult } from '../../../shared/schedule.ts';
+import type { ScheduleImportPreviewResult, ScheduleImportCommitRequest, ScheduleImportCommitResult } from '../../../shared/schedule.ts';
 import type { RawImportRow, ColumnMapping } from './scheduleImportTypes.ts';
 import { parseWeekday, parsePeriodRange, parseWeekRange } from './scheduleImportTypes.ts';
 import { parseCsvFile } from './scheduleCsvParser.ts';
@@ -26,7 +26,7 @@ export class ScheduleImportService {
    */
   async previewCsv(filePath: string): Promise<ScheduleImportPreviewResult> {
     try {
-      const { rows, headers, encoding, delimiter, autoMapping } = parseCsvFile(filePath);
+      const { rows, encoding, autoMapping } = parseCsvFile(filePath);
       if (rows.length === 0) {
         return { status: 'failed', code: 'PARSE_EMPTY', message: '文件内容为空。' };
       }
@@ -57,7 +57,7 @@ export class ScheduleImportService {
    */
   async previewExcel(filePath: string): Promise<ScheduleImportPreviewResult> {
     try {
-      const { rows, headers, sheetName, autoMapping } = await parseExcelFile(filePath);
+      const { rows, autoMapping } = await parseExcelFile(filePath);
       if (rows.length === 0) {
         return { status: 'failed', code: 'PARSE_EMPTY', message: '工作表内容为空。' };
       }

@@ -2,23 +2,11 @@
  * CourseForm — form for creating/editing course schedule items.
  * 课表表单 — 创建/编辑课表项的表单。
  */
-import { useState, useEffect, useMemo } from 'react';
-import { Stack, TextInput, Select, Group, NumberInput, Text, Badge } from '@mantine/core';
+import { useMemo } from 'react';
+import { Stack, TextInput, Select, Group, NumberInput, Text } from '@mantine/core';
 import { t, useI18n } from '../../../i18n/index.ts';
-import type { CourseMeta, RecurrenceRule, CourseTimeSettings } from '../../../../shared/schedule.ts';
-
-interface CourseFormData {
-  title: string;
-  location: string;
-  teacher: string;
-  dayOfWeek: number;
-  startPeriod: number;
-  endPeriod: number;
-  weekParity: 'all' | 'odd' | 'even';
-  startDate: string;       // YYYY-MM-DD term start
-  endDate: string;         // YYYY-MM-DD term end
-  termName: string;
-}
+import type { CourseTimeSettings } from '../../../../shared/schedule.ts';
+import type { CourseFormData } from './courseFormHelpers.ts';
 
 interface CourseFormProps {
   value: CourseFormData;
@@ -134,40 +122,3 @@ export default function CourseForm({ value, onChange, courseTimes }: CourseFormP
     </Stack>
   );
 }
-
-/**
- * Build a RecurrenceRule from course form data.
- */
-export function buildCourseRecurrence(data: CourseFormData): RecurrenceRule {
-  return {
-    frequency: 'weekly_pattern',
-    interval: 1,
-    byWeekday: [data.dayOfWeek],
-    byMonthDay: [],
-    weekParity: data.weekParity,
-    anchorStart: data.startDate,
-    endsOn: data.endDate,
-    excludedDates: [],
-  };
-}
-
-/**
- * Build CourseMeta from course form data.
- */
-export function buildCourseMeta(data: CourseFormData, courseTimes?: CourseTimeSettings): CourseMeta {
-  const startSlot = courseTimes?.find(s => s.period === data.startPeriod);
-  const endSlot = courseTimes?.find(s => s.period === data.endPeriod);
-  return {
-    courseName: data.title,
-    teacher: data.teacher || null,
-    classroom: data.location || null,
-    dayOfWeek: data.dayOfWeek,
-    startPeriod: data.startPeriod,
-    endPeriod: data.endPeriod,
-    startTime: startSlot?.startTime ?? null,
-    endTime: endSlot?.endTime ?? null,
-    termId: null,
-  };
-}
-
-export type { CourseFormData };

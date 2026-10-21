@@ -1,7 +1,7 @@
 {
   "name": "trellora",
   "private": true,
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "AI-native local-first Markdown knowledge management for macOS and Windows",
   "author": "GeminiMortal",
   "homepage": "https://github.com/GeminiMortal/Trellora",
@@ -56,6 +56,7 @@
     "rebuild:native": "electron-rebuild -f -w better-sqlite3 -w node-pty",
     "ensure:native": "node scripts/build/ensure-electron-native.mjs",
     "lint": "eslint .",
+    "audit:ipc": "node scripts/audit-ipc-coverage.mjs",
     "verify:default-remote-consent": "node scripts/verify/verify-default-remote-consent.mjs",
     "verify:model-configuration": "node scripts/build/run-electron-node.mjs scripts/verify/verify-model-configuration.mjs",
     "verify:model-configuration-electron": "node scripts/verify/verify-model-configuration-electron.mjs",
@@ -304,7 +305,9 @@
     "verify:desktop-portable": "node scripts/verify/verify-desktop-runtime.mjs --packaged",
     "verify:desktop-faults": "node scripts/verify/verify-desktop-faults.mjs",
     "verify:desktop-ui": "node scripts/verify/verify-desktop-ui.mjs",
-    "benchmark:desktop-backup": "node scripts/benchmark/benchmark-desktop-backup.mjs"
+    "benchmark:desktop-backup": "node scripts/benchmark/benchmark-desktop-backup.mjs",
+    "verify:plugin-system": "node scripts/verify/verify-plugin-system.mjs",
+    "audit:plugin": "node scripts/validate-plugin-manifest.mjs plugins/examples/hello-command"
   },
   "devDependencies": {
     "@codemirror/autocomplete": "^6.20.3",

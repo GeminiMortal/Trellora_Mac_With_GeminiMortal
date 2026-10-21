@@ -2,7 +2,7 @@
  * ImportPreviewTable — editable preview of import drafts.
  * 导入预览表 — 可编辑的导入草稿预览。
  */
-import { Table, TextInput, Select, Checkbox, Badge, ScrollArea, ActionIcon } from '@mantine/core';
+import { Table, TextInput, Select, Badge, ScrollArea, ActionIcon } from '@mantine/core';
 import { Trash } from 'lucide-react';
 import { t, useI18n } from '../../../i18n/index.ts';
 import type { ScheduleImportDraft } from '../../../../shared/schedule.ts';
@@ -121,7 +121,7 @@ export default function ImportPreviewTable({ drafts, onChange }: ImportPreviewTa
                 )}
               </Table.Td>
               <Table.Td>
-                <ActionIcon size="xs" variant="subtle" color="red" onClick={() => removeDraft(i)}>
+                <ActionIcon aria-label="删除此行" size="xs" variant="subtle" color="red" onClick={() => removeDraft(i)}>
                   <Trash size={12} />
                 </ActionIcon>
               </Table.Td>

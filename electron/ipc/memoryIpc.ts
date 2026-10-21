@@ -17,8 +17,7 @@ import type { MemoryConsolidationService } from '../knowledge/memory/memoryConso
 import type { MemoryTopicService } from '../knowledge/memory/memoryTopicService.ts';
 import type { QaMemoryOrchestrator } from '../knowledge/qa/qaMemoryOrchestrator.ts';
 import type { QaSessionScope } from '../knowledge/qa/qaMemoryTypes.ts';
-import type { ManualMemoryInput, MemoryExtractionRuntimeStatus, MemoryItemPatch, MemoryItemListQuery, MemoryItemPageQuery, MemoryPageQuery, MemoryProposalReview, WorkspaceMemoryConfig } from '../knowledge/memory/memoryTypes.ts';
-import type { MemoryTurnStatusService } from '../knowledge/memory/memoryTurnStatusService.ts';
+import type { ManualMemoryInput, MemoryItemPatch, MemoryItemListQuery, MemoryItemPageQuery, MemoryPageQuery, MemoryProposalReview, WorkspaceMemoryConfig } from '../knowledge/memory/memoryTypes.ts';
 import type { AssistantSessionScopeRegistry } from '../knowledge/assistant/assistantSessionScope.ts';
 import type { BrowserWindow } from 'electron';
 

@@ -16,7 +16,6 @@ try {
   const actualHelper = path.join(ptyBuildDir, 'spawn-helper');
   if (fs.existsSync(actualHelper)) {
     // Monkey-patch the native pty module's fork to fix the helperPath argument
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const ptyNative = require('node-pty/build/Release/pty.node');
     const origFork = ptyNative.fork;
     if (origFork && typeof origFork === 'function') {
@@ -82,13 +81,13 @@ function handleMessage(msg: { type: string; [key: string]: unknown }): void {
           const logDir = path.join(os.homedir(), '.trellora');
           if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
           const logFile = path.join(logDir, 'terminal-debug.log');
-          const log = (m: string) => { try { fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${m}\n`); } catch {} };
+          const log = (m: string) => { try { fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${m}\n`); } catch { /* ignore */ } };
           log(`SPAWN REQUEST: shell=${shell}, args=${JSON.stringify(shellArgs)}, cwd=${cwd}`);
           log(`Shell exists: ${fs.existsSync(shell)}, platform: ${process.platform}`);
           log(`CWD exists: ${fs.existsSync(cwd)}`);
           log(`PATH: ${env?.PATH || process.env.PATH}`);
         } catch (e) {
-          try { require('fs').appendFileSync('/tmp/trellora-debug.log', `[${new Date().toISOString()}] LOG INIT FAILED: ${e}\n`); } catch {}
+          try { require('fs').appendFileSync('/tmp/trellora-debug.log', `[${new Date().toISOString()}] LOG INIT FAILED: ${e}\n`); } catch { /* ignore */ }
         }
 
         let pty: IPty;
@@ -106,7 +105,7 @@ function handleMessage(msg: { type: string; [key: string]: unknown }): void {
             fs.appendFileSync(logFile, `[${new Date().toISOString()}] SPAWN FAILED: ${spawnErr instanceof Error ? spawnErr.message : String(spawnErr)}\n`);
             fs.appendFileSync(logFile, `[${new Date().toISOString()}] SPAWN FAILED stack: ${spawnErr instanceof Error ? spawnErr.stack : 'no stack'}\n`);
           } catch (e) {
-            try { require('fs').appendFileSync('/tmp/trellora-debug.log', `[${new Date().toISOString()}] SPAWN FAILED LOG FAILED: ${e}\n`); } catch {}
+            try { require('fs').appendFileSync('/tmp/trellora-debug.log', `[${new Date().toISOString()}] SPAWN FAILED LOG FAILED: ${e}\n`); } catch { /* ignore */ }
           }
           throw spawnErr;
         }

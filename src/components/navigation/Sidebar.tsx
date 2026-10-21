@@ -423,11 +423,11 @@ const OutlinePanel: React.FC<{
             </div>
             {headings.length > 0 ? (
                 <>
-                    <div className="outline-list" role="tree" aria-label={t("当前笔记目录")}>
+                    <div className="outline-list virtualized-list" role="tree" aria-label={t("当前笔记目录")}>
                         {visibleRows.map((row) => (
                             <div
                                 key={row.key}
-                                className="outline-row"
+                                className="outline-row virtualized-tree-node"
                                 role="treeitem"
                                 aria-level={row.depth + 1}
                                 aria-expanded={row.hasChildren ? !row.isCollapsed : undefined}

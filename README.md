@@ -4,10 +4,10 @@
 
 # Trellora
 
-**macOS（Apple Silicon）本地优先 AI 知识工作台**
+**本地优先 AI 知识工作台（macOS · Windows）**
 
 > [!NOTE]
-> 本仓库是对原项目 [Trellora](https://gitee.com/eleven-lxs/trellora) 的 **macOS 适配版本**，原项目面向 Windows x64。适配内容包括：sqlite-vec 原生扩展按平台加载（darwin-arm64 / win32-x64）、Python Worker 跨平台路径（打包版回退系统 python3）、electron-builder mac 打包配置（dmg/zip）与 afterPack ad-hoc 签名修复、跨平台的内部渲染器 IPC 校验。
+> 本仓库在原项目 [Trellora](https://gitee.com/eleven-lxs/trellora) 基础上做了 macOS 适配，并在 v1.2.3 起加入 Windows x64 支持：sqlite-vec 原生扩展按平台加载（darwin-arm64 / windows-x64）、Python Worker 跨平台路径（打包版回退系统 python3，Windows 探测常见安装位置与 PATH）、终端按平台提供 shell（macOS：zsh/bash；Windows：PowerShell/CMD/Git Bash/WSL）、electron-builder mac 打包（dmg/zip）与 `build:win` Windows 打包（NSIS/portable）共存，另有 afterPack ad-hoc 签名修复与跨平台的内部渲染器 IPC 校验。
 
 Where ideas grow connected.
 
@@ -15,8 +15,7 @@ Where ideas grow connected.
 
 **简体中文** · [English](README.en.md)
 
-[![Platform](https://img.shields.io/badge/platform-macOS_arm64-black)](#快速开始)
-[![Upstream](https://img.shields.io/badge/upstream-Windows_x64-0078D4)](https://gitee.com/eleven-lxs/trellora)
+[![Platform](https://img.shields.io/badge/platform-macOS_arm64_·_Windows_x64-black)](#快速开始)
 [![Local First](https://img.shields.io/badge/data-local_first-26745C)](#数据与隐私)
 [![Stack](https://img.shields.io/badge/stack-Electron_·_React_·_TypeScript-3178C6)](#技术架构)
 
@@ -30,7 +29,7 @@ Trellora 面向需要持续阅读、写作和整理资料的开发者、学生�
 
 产品围绕一条完整的知识工作流程展开：**收集资料 → 解析和索引 → 阅读与提问 → 整理为笔记 → 建立关联 → 持续复用**。笔记库用于主动写作，资料库用于保留和检索来源，Wiki 用于按章节学习，地图用于发现跨文档关系，助手把这些能力连接起来。
 
-本仓库当前目标平台是 **macOS（Apple Silicon arm64）**；上游原项目面向 Windows x64。项目仍在持续开发。本文描述当前工作树的界面和实现；需要模型、Embedding、联网搜索或 PDF 云解析的功能，会在对应位置注明条件。
+本仓库当前支持 **macOS（Apple Silicon arm64）** 与 **Windows x64**（v1.2.3 起）；已发布的下载目前以 macOS 为主，Windows 构建见[快速开始](#快速开始)。项目仍在持续开发。本文描述当前工作树的界面和实现；需要模型、Embedding、联网搜索或 PDF 云解析的功能，会在对应位置注明条件。
 
 ![Trellora Markdown 笔记工作台](docs/assets/screenshots/notes-zh-light.png)
 
@@ -58,13 +57,16 @@ Trellora 面向需要持续阅读、写作和整理资料的开发者、学生�
 | AI 问答与写作 | 自由问答、当前笔记、个人知识库三种范围；流式回答、停止生成、工具过程、来源引用、附件与回答存为笔记 |
 | Wiki 学习空间 | 章节目录与节点画布、原文阅读、节点分析、完整 Wiki 生成、章节重试、派生节点和学习成果整理 |
 | 记忆与个性化 | 会话历史、历史对话搜索、长期记忆、原对话来源查看；手动保存、明确要求记住、可选自动提炼与待确认变更 |
+| 日程与课表 | 事件、待办、课表与提醒；年 / 月 / 周 / 日视图、重复规则（含单双周）、分类颜色；CSV / Excel 课表导入与 AI 辅助导入（图片 / URL / 文本），批次可整体撤销 |
+| 内置终端 | 应用内交互式 shell，多标签会话；macOS 提供 zsh / bash，Windows 提供 PowerShell / CMD / Git Bash / WSL；`Ctrl+\`` 呼出底部终端面板 |
+| 插件（实验性） | 插件 SDK 与清单；命令面板/侧栏/工具栏扩展；权限分层（L1 披露、L2 需用户确认）；从 URL 或 ZIP 安装 |
 | 桌面体验与恢复 | 中英文界面、深浅主题、五种配色、首次使用引导、笔记备份、工作区完整备份与恢复、存储迁移和诊断 |
 
 基础编辑、文件浏览和笔记关键词搜索不要求配置 AI。向量检索需要 Embedding；AI 回答和生成需要可用模型；地图需要先在资料流水线启用并完成图谱增强。
 
 ## 菜单与截图
 
-左侧导航包含 **助手、笔记、资料、Wiki、地图**，底部提供 **打开、笔记库、设置**。截图包含当前源码运行的 Electron 演示界面，以及用户提供的实际使用界面；同时展示中文、英文和不同主题。截图来源见 [展示资源说明](docs/assets/README.md)。
+左侧导航包含 **助手、笔记、资料、Wiki、地图、日程、终端**，底部提供 **打开、笔记库、设置**。截图包含当前源码运行的 Electron 演示界面，以及用户提供的实际使用界面；同时展示中文、英文和不同主题。截图来源见 [展示资源说明](docs/assets/README.md)。
 
 ### 助手
 
@@ -126,6 +128,16 @@ Wiki 提供节点分析与完整 Wiki 生成，支持引导式和自动模式。
 
 ![地图入口、社区和实体视图及图谱准备提示](docs/assets/screenshots/map-zh-light.png)
 
+### 日程
+
+用于管理事件、待办与课表。提供年 / 月 / 周 / 日四种视图、新建日程或待办、分类与颜色、今天定位和前后导航；重复规则支持每日 / 每周 / 每月与单双周课程，单次修改不改动原条目。提醒通过系统通知送达。
+
+课表支持 CSV / Excel 导入（兼容常见教育系统导出编码），也可通过图片、网页链接或文本使用 AI 辅助解析（需配置模型）；每批导入可整体撤销。
+
+### 终端
+
+应用内嵌的交互式 shell，支持多标签会话。macOS 使用 zsh / bash，Windows 提供 PowerShell、CMD、Git Bash 与 WSL（已安装时）。快捷键 `Ctrl+\`` 在任意界面呼出底部终端面板，切换界面不会中断已有会话；应用退出时统一清理终端进程。
+
 ### 打开
 
 用于直接打开本地 MD、Markdown、TXT 及其他受支持的文本文件，快捷键为 `Ctrl+O`。下拉菜单还包含最近文件、恢复独立文件草稿和待打开文件队列。
@@ -146,13 +158,14 @@ macOS 版通过右键 → 打开方式选择 Trellora 打开 `.md`、`.markdown`
 
 ### 设置
 
-设置按照工作区配置、文档处理、AI 设置和系统分组，共有十个子菜单：
+设置按照工作区配置、文档处理、AI 设置和系统分组，共有十一个子菜单：
 
 | 子菜单 | 功能与内容 |
 | --- | --- |
 | 通用 | 首次使用引导；跟随系统、浅色或深色；五种配色；舒适 / 紧凑密度；简体中文 / English；启动行为和网页链接打开方式 |
 | 工作区与备份 | 工作区位置、打开目录、更改存储位置、打开其他工作区、完整备份与恢复及关联外部库的处理 |
 | 编辑器 | 默认编辑模式、自动保存延迟、预览偏好、正文字号、行距、段落间距、默认缩放、粘贴行为、Markdown 自动格式化、选区工具栏、专注和打字机模式 |
+| 快捷键 | 内置快捷键一览：搜索、终端面板、侧栏、设置、主题切换、新建/保存笔记、编辑/预览切换与日程导航 |
 | 文档解析 | MinerU 配置、连接与上传同意，以及文档处理相关能力状态 |
 | 联网搜索 | 搜索服务商、连接信息、可用性验证和服务商专属参数 |
 | 选区扩写优化 | 目标长度、写作风格、目标读者、思考强度和扩写相关设置 |
@@ -182,21 +195,15 @@ macOS 版通过右键 → 打开方式选择 Trellora 打开 `.md`、`.markdown`
 
 ## 下载软件
 
-**macOS（Apple Silicon）· Trellora v1.2.0**
+**macOS（Apple Silicon）· Trellora v1.2.4**
 
 | 版本 | 下载 | 使用方式 |
 | --- | --- | --- |
-| DMG 安装镜像 | [Gitee Releases · v1.2.0](https://gitee.com/GeminiMortal/trellora/releases/tag/v1.2.0) | 合并分卷后打开 DMG，将 Trellora 拖入"应用程序" |
-| 源码包 | [Gitee tag v1.2.0](https://gitee.com/GeminiMortal/trellora/releases/tag/v1.2.0) | ZIP / TAR.GZ 可直接下载 |
+| DMG 安装镜像 | [GitHub Releases · v1.2.4](https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/releases/tag/v1.2.4) | 打开 `Trellora-1.2.4-arm64.dmg`，将 Trellora 拖入"应用程序" |
+| 自动更新 ZIP | [GitHub Releases · v1.2.4](https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/releases/tag/v1.2.4) | 应用内更新使用的 `Trellora-1.2.4-arm64-mac.zip` |
+| 源码包 | [GitHub tag v1.2.4](https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/releases/tag/v1.2.4) | ZIP / TAR.GZ 可直接下载 |
 
-由于 Gitee 附件限制 100MB，DMG 已分卷上传（`Trellora-1.2.0-arm64.dmg.part_aa` + `Trellora-1.2.0-arm64.dmg.part_ab`），下载后合并：
-
-```bash
-# macOS / Linux
-cat Trellora-1.2.0-arm64.dmg.part_* > Trellora-1.2.0-arm64.dmg
-```
-
-合并后打开 `Trellora-1.2.0-arm64.dmg`，将 Trellora.app 拖入"应用程序"即可。
+下载后打开 `Trellora-1.2.4-arm64.dmg`，将 Trellora.app 拖入"应用程序"即可。
 
 应用使用 ad-hoc 签名分发。首次打开如被 macOS Gatekeeper 拦截，请右键点击 Trellora.app → "打开"，或到"系统设置 → 隐私与安全性"允许运行。
 
@@ -210,7 +217,7 @@ cat Trellora-1.2.0-arm64.dmg.part_* > Trellora-1.2.0-arm64.dmg
 
 ### 从源码启动
 
-准备 macOS（Apple Silicon）、Git、Node.js 和 pnpm（使用 pnpm 9 或更高版本）。
+准备 macOS（Apple Silicon）或 Windows x64、Git、Node.js 和 pnpm（使用 pnpm 9 或更高版本）。
 
 ```bash
 git clone https://gitee.com/GeminiMortal/trellora.git
@@ -283,6 +290,7 @@ shared/           跨进程类型、配置合同、限额和默认值
 pipeline-python/  NDJSON Worker、结构化阶段与 Python 测试
 build/            品牌资源、内置技能与安装器配置
 scripts/          构建、功能验证、Electron 与发行包验证
+plugins/          插件 SDK、清单与示例（实验性）
 docs/             产品、架构、展示资源和实施验收记录
 ```
 
@@ -295,6 +303,7 @@ docs/             产品、架构、展示资源和实施验收记录
 | 原始资料与流水线产物 | 资料库中分别保存；阶段产物位于 `.menghan-meta/pipeline/` |
 | 问答历史与长期记忆 | 工作区 `ConversationMemory/qa-memory.db`；部分旧库会话存储保留兼容 |
 | 技能文件 | 工作区 `AI-Skill/` |
+| 日程与提醒 | 工作区 `.menghan-meta/schedule/schedule.db`；课表导入批次可撤销 |
 | 库内笔记备份 | `.menghan-backups/`；完整工作区备份使用独立流程 |
 | 设置、密钥与独立文件恢复草稿 | Electron `userData`；API Key 通过 `safeStorage` 加密保存 |
 
@@ -329,6 +338,14 @@ pnpm run release:manifest
 
 构建脚本通过 `python3` 定位解释器；必要时将 `MENGHAN_PIPELINE_PYTHON` 指向特定 Python 3。产物版本取自 `package.json.version`，输出格式为 `trellora/Trellora-<version>-arm64.dmg` 和 `trellora/Trellora-<version>-arm64-mac.zip`。打包经 `afterPack` 钩子自动做 ad-hoc 重签名（未配置开发者证书时，避免 Gatekeeper 报"已损坏"）。GitHub 直连不稳定时默认走 npmmirror 镜像下载 Electron，可用 `ELECTRON_MIRROR` 覆盖。
 
+Windows 打包在 Windows 环境执行（NSIS 构建会用私有临时目录规避系统临时目录虚拟化问题）：
+
+```bash
+pnpm run build:win
+```
+
+Windows 产物为 `trellora/Trellora-<version>-setup-x64.exe`（NSIS 安装包）与 `trellora/Trellora-<version>-portable-x64.exe`（免安装版），均含打包的 Python runtime；找不到内置 runtime 时回退系统 Python（探测常见安装位置与 PATH）。
+
 ## 文档与参与
 
 | 文档 | 内容 |
@@ -339,6 +356,7 @@ pnpm run release:manifest
 | [记忆域主合同](docs/Trellora-2.0-WeKnora记忆架构严格对齐改造方案.md) | 记忆改造阶段与数值合同 |
 | [桌面分发验收](docs/verification/desktop-distribution-acceptance.md) | 已验证项目与仍待完成的发行门 |
 | [展示资源说明](docs/assets/README.md) | 截图来源、演示数据及 README 编排参考 |
+| [文档同步更新记录](docs/文档同步更新记录-2026-10-20.md) | 2026-10-20 文档同步的变更清单与依据 |
 
 反馈问题时，请附上应用版本、界面语言、复现步骤和相关诊断（日志位于 `~/Library/Application Support/trellora/logs`）；避免包含密钥或私人资料。提交代码前阅读 [AGENTS.md](AGENTS.md)，遵守进程职责、用户原文保护及分阶段合同。
 

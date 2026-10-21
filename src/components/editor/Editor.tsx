@@ -47,6 +47,7 @@ import 'katex/dist/katex.min.css';
 import SelectionActionOverlay from '../selection/SelectionActionOverlay.tsx';
 import type { SelectionSnapshot } from '../../editor/behavior/selectionActions.ts';
 import type { SelectionExpansionApplyRequest } from '../../editor/behavior/selectionExpansion.ts';
+import { showToast } from '../../utils/ui/feedback.ts';
 import {
     CODE_LANGUAGE_ICON_MARKS,
     CODE_LANGUAGE_OPTIONS,
@@ -281,7 +282,7 @@ const Editor: React.FC<EditorProps> = ({ content, preferences = defaultEditorPre
                 const notePath = notePathRef.current;
                 void window.electronAPI.readClipboardText().then(text => {
                     if (editor && notePathRef.current === notePath && !view.isDestroyed && view.editable && view.state.doc === doc && view.state.selection.eq(selection)) pasteLiteralText(editor, text);
-                }).catch(error => window.alert(String(error)));
+                }).catch(error => showToast({ message: String(error) }));
                 return true;
             },
             handlePaste: (view, event) => {
@@ -319,7 +320,7 @@ const Editor: React.FC<EditorProps> = ({ content, preferences = defaultEditorPre
                         view.focus();
                     }
                 })().catch((error) => {
-                    window.alert(t("图片粘贴失败：{0}", { '0': error instanceof Error ? error.message : String(error) }));
+                    showToast({ message: t("图片粘贴失败：{0}", { '0': error instanceof Error ? error.message : String(error) }) });
                 });
                 return true;
             },
@@ -650,7 +651,7 @@ const Editor: React.FC<EditorProps> = ({ content, preferences = defaultEditorPre
         if (sources.length === 0) return;
         event.preventDefault();
         void insertImageSources(sources).catch((error) => {
-            window.alert(`图片导入失败：${error instanceof Error ? error.message : String(error)}`);
+            showToast({ message: `图片导入失败：${error instanceof Error ? error.message : String(error)}` });
         });
     };
 

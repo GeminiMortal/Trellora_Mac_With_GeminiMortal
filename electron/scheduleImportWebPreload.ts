@@ -39,8 +39,8 @@ function injectUI(): void {
     return b;
   };
 
-  const back = mkBtn('←', '后退', () => { try { window.history.back(); } catch {} });
-  const fwd = mkBtn('→', '前进', () => { try { window.history.forward(); } catch {} });
+  const back = mkBtn('←', '后退', () => { try { window.history.back(); } catch { /* ignore */ } });
+  const fwd = mkBtn('→', '前进', () => { try { window.history.forward(); } catch { /* ignore */ } });
   const refresh = mkBtn('↻', '刷新', () => location.reload());
 
   const urlInput = document.createElement('input');

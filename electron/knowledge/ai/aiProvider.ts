@@ -21,6 +21,8 @@ import {
   StructuredOutputContractError,
 } from '../plan/structuredOutputContract.ts';
 
+import { getPluginAiProvider, isPluginAiProvider } from './pluginAiProviders.ts';
+
 export type { AiProviderConfig, AiProviderKind } from './aiTypes.ts';
 
 let activeConfig: AiProviderConfig = { kind: 'ollama' };
@@ -213,6 +215,25 @@ export async function generateAiText(input: AiJsonGenerationOptions & { format?:
   if (jsonSchema) {
     assertStructuredOutputToolName(jsonSchema.name);
     assertSupportedStructuredOutputSchema(jsonSchema.schema);
+  }
+  // Plugin AI providers take precedence over built-in transports when the config
+  // references a plugin-registered provider id.
+  // 当配置引用了插件注册的 provider id 时，插件 AI Provider 优先于内建传输。
+  if (config.provider && isPluginAiProvider(config.provider)) {
+    const plugin = getPluginAiProvider(config.provider)!;
+    const response = await plugin.generate({
+      prompt: request.prompt,
+      system: request.systemPrompt,
+      model: input.model,
+      maxTokens: request.maxOutputTokens,
+      temperature: request.temperature,
+      signal: request.signal,
+      format: input.format,
+    });
+    onUsage?.(response.usage ?? {});
+    onRawResponse?.(response.text);
+    if (!response.text) throw new Error('插件 AI Provider 未返回内容。');
+    return response.text;
   }
   if (config.kind === 'ollama') {
     const text = await generateOllamaText({

@@ -29,7 +29,7 @@ export default function WikiStartModal({ opened, documentTitle, onStart }: WikiS
     >
       <Radio.Group value={mode} onChange={(value) => setMode(value as WikiBuildMode)} aria-label={t("Wiki 生成模式")}>
         <div className="wiki-start-mode-grid">
-          <UnstyledButton className={`wiki-start-mode ${mode === 'guided' ? 'selected' : ''}`} onClick={() => setMode('guided')}>
+          <UnstyledButton aria-label="创建 Wiki" className={`wiki-start-mode ${mode === 'guided' ? 'selected' : ''}`} onClick={() => setMode('guided')}>
             <Group justify="space-between" align="flex-start" wrap="nowrap">
               <ThemeIcon variant="light" color="teal" radius="sm" size={36}><ListTree size={19} /></ThemeIcon>
               <Radio value="guided" aria-label={t("按节点分析")} />
@@ -39,7 +39,7 @@ export default function WikiStartModal({ opened, documentTitle, onStart }: WikiS
               <Text size="sm" c="dimmed">{t("立即查看完整目录骨架，自己选择章节逐个分析。")}</Text>
             </Stack>
           </UnstyledButton>
-          <UnstyledButton className={`wiki-start-mode ${mode === 'auto' ? 'selected' : ''}`} onClick={() => setMode('auto')}>
+          <UnstyledButton aria-label="导入 Wiki" className={`wiki-start-mode ${mode === 'auto' ? 'selected' : ''}`} onClick={() => setMode('auto')}>
             <Group justify="space-between" align="flex-start" wrap="nowrap">
               <ThemeIcon variant="light" color="blue" radius="sm" size={36}><Sparkles size={19} /></ThemeIcon>
               <Radio value="auto" aria-label={t("AI 整篇生成")} />

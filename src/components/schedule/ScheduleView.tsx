@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { t, useI18n } from '../../i18n/index.ts';
-import type { ScheduleOccurrence, ScheduleCreateRequest, ScheduleItem, ScheduleReminderFiredEvent, ScheduleCategory, CourseTimeSettings } from '../../../shared/schedule.ts';
+import type { ScheduleOccurrence, ScheduleCreateRequest, ScheduleItem, ScheduleReminderFiredEvent, ScheduleCategory, CourseTimeSettings, TodoStatus } from '../../../shared/schedule.ts';
 import { createElectronScheduleDataSource } from './data/scheduleElectronDataSource.ts';
 import type { ScheduleDataSource } from './data/scheduleElectronDataSource.ts';
 import { visibleRange, navigateDate, type CalendarViewMode } from './data/scheduleViewState.ts';
@@ -39,7 +39,7 @@ export default function ScheduleView() {
   const [modalOpened, setModalOpened] = useState(false);
   const [importOpened, setImportOpened] = useState(false);
   const [notifCenterOpened, setNotifCenterOpened] = useState(false);
-  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const [unreadNotifCount] = useState(0);
   const [editingItem, setEditingItem] = useState<ScheduleItem | null>(null);
   const [defaultDate, setDefaultDate] = useState<string | undefined>();
   const [defaultHour, setDefaultHour] = useState<number | undefined>();
@@ -174,7 +174,7 @@ export default function ScheduleView() {
     }
   }, [dataSource, editingItem]);
 
-  const handleToggleTodoStatus = useCallback(async (id: string, status: 'pending' | 'done') => {
+  const handleToggleTodoStatus = useCallback(async (id: string, status: TodoStatus) => {
     try {
       await dataSource.setTodoStatus(id, status);
     } catch {
@@ -205,8 +205,7 @@ export default function ScheduleView() {
         await dataSource.updateOccurrence({
           itemId: occ.item.id,
           occurrenceStart: occ.startAt,
-          startAt: newStartAt,
-          endAt: newEndAt,
+          patch: { startAt: newStartAt, endAt: newEndAt },
         });
       } else {
         await dataSource.updateItem({
@@ -245,7 +244,7 @@ export default function ScheduleView() {
   }, [modalOpened, importOpened, notifCenterOpened, handleToday, handleViewChange, handleNewEvent, handleNavigate]);
 
   // ── Month drag-select range handler ──────────────────────────────────────
-  const handleSelectRange = useCallback((startDate: string, endDate: string) => {
+  const handleSelectRange = useCallback((startDate: string, _endDate: string) => {
     setEditingItem(null);
     setDefaultKind('event');
     setDefaultDate(startDate + 'T08:00:00');

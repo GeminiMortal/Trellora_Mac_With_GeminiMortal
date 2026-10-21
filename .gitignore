@@ -38,6 +38,9 @@ shared/*.js
 delete/
 .codex/
 
+# Local AI agent memory stores
+.memsearch/
+
 # Logs and temporary files
 logs/
 *.log

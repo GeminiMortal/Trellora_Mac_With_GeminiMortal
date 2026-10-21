@@ -12,6 +12,7 @@ import { WIKI_QUICK_ACTIONS, type WikiActionKind } from '../../../electron/wiki/
 import type { WikiGenerationJob, WikiMapNode, WikiNodeAiRequestOptions, WikiNodeAiState, WikiNodeCitation, WikiRetrievalState } from './data/wikiTypes.ts';
 import type { ResolvedTheme } from '../../utils/ui/theme.ts';
 import WikiGenerationProgress from './WikiGenerationProgress.tsx';
+import { showToast } from '../../utils/ui/feedback.ts';
 
 interface WikiAssistantTabProps {
   node: WikiMapNode;
@@ -137,7 +138,7 @@ export default function WikiAssistantTab({
     try {
       addAttachments(await window.electronAPI.selectAssistantAttachments());
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : '无法添加附件。');
+      showToast({ message: error instanceof Error ? error.message : '无法添加附件。' });
     }
   };
 

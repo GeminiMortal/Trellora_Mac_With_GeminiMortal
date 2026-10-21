@@ -13,7 +13,7 @@ import path from 'node:path';
 import type { MaterialsDocument } from '../library/materialsLibrary.ts';
 import { findMaterialsDocument, listMaterialsDocuments, markMaterialsDocumentVectorState } from '../library/materialsLibrary.ts';
 import type { AiProviderConfig } from '../knowledge/ai/aiTypes.ts';
-import { resolveParsingRoute } from './routes.ts';
+import { getCustomParsingRoute, resolveParsingRoute } from './routes.ts';
 import {
   cleanupStageTempDirectory,
   commitAmbiguityStage,
@@ -1205,6 +1205,19 @@ export class PipelineOrchestrator {
         signal: active.abortController.signal,
         onProgress: (progress) => this.emitProgress(active, 'parse', progress.completed, progress.total, 'document', progress.message),
       });
+    } else if (layout.route === 'custom') {
+      const customRoute = getCustomParsingRoute(layout.document.extension);
+      if (!customRoute) throw new PipelineStageError('UNSUPPORTED_FORMAT', unsupportedFormatError(layout.document.extension).message, false);
+      const output = await customRoute.handler({
+        inputPath: layout.document.absolutePath,
+        outputDir: tempDirectory,
+        extension: layout.document.extension,
+        signal: active.abortController.signal,
+        onProgress: (completed, total, message) => this.emitProgress(active, 'parse', completed, total, 'document', message),
+      });
+      // The plugin handler writes markdown into tempDirectory; verify it produced a manifest-ready output.
+      // 插件处理器把 markdown 写入 tempDirectory；校验其产出可用。
+      if (!output?.markdownFile) throw new PipelineStageError('PARSE_OUTPUT_INVALID', '插件解析器未返回 markdownFile。', false);
     } else {
       throw new PipelineStageError('UNSUPPORTED_FORMAT', unsupportedFormatError(layout.document.extension).message, false);
     }

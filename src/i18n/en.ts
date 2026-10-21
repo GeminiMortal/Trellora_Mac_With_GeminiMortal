@@ -1360,7 +1360,6 @@ export const english: Record<string, string> = {
   '选择终端': 'Select terminal',
   '以此终端新建': 'New with this terminal',
   '未检测到可用终端': 'No available terminals detected',
-  '默认': 'Default',
   '或从网页导入': 'Or import from web page',
   '输入课表网页地址': 'Enter course schedule URL',
   '解析网页': 'Parse URL',

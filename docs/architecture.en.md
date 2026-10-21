@@ -2,7 +2,7 @@
 
 [简体中文](architecture.md) · **English** · [Product README](../README.en.md)
 
-This document describes the working tree inspected on 2026-10-05. Repository-relative links lead to implementation; Mermaid diagrams render on GitHub. Current implementation takes precedence over older design assumptions. Memory changes follow the [memory domain contract](Trellora-2.0-WeKnora记忆架构严格对齐改造方案.md).
+This document describes the working tree inspected on 2026-10-20. Repository-relative links lead to implementation; Mermaid diagrams render on GitHub. Current implementation takes precedence over older design assumptions. Memory changes follow the [memory domain contract](Trellora-2.0-WeKnora记忆架构严格对齐改造方案.md).
 
 ## Contents
 
@@ -16,6 +16,8 @@ This document describes the working tree inspected on 2026-10-05. Repository-rel
 - [Model gateway and AI Agents](#model-gateway-and-ai-agents)
 - [History working memory and long-term memory](#history-working-memory-and-long-term-memory)
 - [Wiki workspace](#wiki-workspace)
+- [Schedule workspace](#schedule-workspace)
+- [Terminal workspace](#terminal-workspace)
 - [Materials graph and Map](#materials-graph-and-map)
 - [Built-in skills and web capabilities](#built-in-skills-and-web-capabilities)
 - [Data layout and recovery](#data-layout-and-recovery)
@@ -25,7 +27,7 @@ This document describes the working tree inspected on 2026-10-05. Repository-rel
 
 ## Overall architecture and process boundaries
 
-Trellora is a **local-first macOS Electron desktop application**. React owns interaction; Electron owns filesystem/database access; Node Workers and a Python Sidecar perform isolated computation. Core operation requires no separate web backend, Redis, PostgreSQL, or external vector database.
+Trellora is a **local-first Electron desktop application**. Its primary target is macOS (Apple Silicon arm64); Windows x64 support has been added (platform-keyed sqlite-vec loading for darwin-arm64/windows-x64, cross-platform Python Worker and terminal detection, and a `build:win` packaging chain). React owns interaction; Electron owns filesystem/database access; Node Workers and a Python Sidecar perform isolated computation. Core operation requires no separate web backend, Redis, PostgreSQL, or external vector database.
 
 ```mermaid
 flowchart TB
@@ -85,25 +87,28 @@ flowchart TB
 | [App.tsx](../src/App.tsx) | Workspace, navigation, library switching, current note |
 | [src/components/](../src/components/) | All product views and recovery UI |
 | [src/editor/](../src/editor/) | Tiptap extensions, code/math nodes, paste/input, selection coordinates |
-| [src/wiki/](../src/wiki/) | State, layout, tasks, data sources |
+| [src/components/wiki/](../src/components/wiki/) | State, layout, tasks, data sources |
 | [src/i18n/](../src/i18n/) | Chinese keys, English mappings, language subscriptions |
 | [main.ts](../electron/main.ts), [preload.ts](../electron/preload.ts) | Lifecycle, assembly, handlers, bridge |
 | [electron/documents/](../electron/documents/) | Standalone sessions, codecs, queue, resources, AI, recovery |
 | [electron/knowledge/](../electron/knowledge/) | Indexes, retrieval, model protocols, Agents, context, memory |
 | [electron/pipeline/](../electron/pipeline/) | Stages, artifacts, vector/graph projections |
 | [electron/wiki/](../electron/wiki/) | Source scopes, tools, derived nodes, AI content, import |
+| [electron/schedule/](../electron/schedule/) | Schedule items, recurrence, reminders, course import |
+| [electron/terminal/](../electron/terminal/) | Terminal sessions, PTY host process, shell detection |
 | [electron/websearch/](../electron/websearch/) | Providers and web fetching |
 | [electron/backup/](../electron/backup/) | Snapshots, archives, restore, maintenance pause |
 | [shared/](../shared/) | Cross-process contracts, defaults, limits |
 | [pipeline_worker/](../pipeline-python/pipeline_worker/) | NDJSON and Python stages |
 | [builtin-skills/](../build/builtin-skills/) | Packaged definitions/templates |
 | [scripts/](../scripts/), [verification/](verification/) | Builds, focused checks, Electron/package evidence |
+| [plugins/](../plugins/), [electron/plugins/](../electron/plugins/) | Plugin SDK, manifest, examples (experimental); host, loading, tiered permissions |
 
 Much of the assembly and IPC remains in `main.ts`/`App.tsx`; follow calls into domain modules rather than treating component names as the complete architecture.
 
 ## UI and IPC
 
-[NavRail.tsx](../src/components/NavRail.tsx) defines eight primary entries; [SettingsPanel.tsx](../src/components/SettingsPanel.tsx) defines ten settings sections. See the [README](../README.en.md#menus-and-screenshots) for user-facing details.
+[NavRail.tsx](../src/components/navigation/NavRail.tsx) defines the primary entries — assistant, notes, materials, Wiki, map, schedule, and terminal — plus open, libraries, and settings at the bottom; [SettingsPanel.tsx](../src/components/settings/SettingsPanel.tsx) defines eleven settings sections. See the [README](../README.en.md#menus-and-screenshots) for user-facing details.
 
 The chain is **React → `window.electronAPI` → preload `ipcRenderer.invoke` → main handler → domain service → files/database/Worker → result/event → UI**. Types live in [electron.d.ts](../src/electron.d.ts) and `shared/`.
 
@@ -114,6 +119,8 @@ The chain is **React → `window.electronAPI` → preload `ipcRenderer.invoke` �
 | Pipeline | `startMaterialsPipeline`, `cancelMaterialsPipeline`, `getMaterialsPipelineStatus` | Queue, cancellation, actual state |
 | Wiki | `getWikiDocumentOutline`, `addWikiDerivedNode`, `reorderWikiSiblingNodes` | Structure, nodes, ordering |
 | Documents | `openDocumentRequest`, `updateDocumentDraft`, `saveDocument`, `joinDocumentLibrary` | Bound sessions, versions, writes |
+| Schedule | `listScheduleOccurrences`, `createScheduleItem`, `scheduleImportPreviewCsv`, `revertScheduleImport` | Recurrence expansion, items/reminders, import batches |
+| Terminal | `createTerminal`, `resizeTerminal`, `killTerminal`, `writeTerminal` (events `onTerminalData`/`onTerminalExit`) | PTY sessions, data relay, exit notifications |
 | Settings | `getAppPreferences`, `saveAppPreferences` | Normalization/persistence |
 | Onboarding | `getOnboardingState`, `saveOnboardingState`, `importOnboardingSample` | Progress, samples, practice |
 | Relocation | `startWorkspaceMigration` and related methods | Preview, journal, switching |
@@ -124,11 +131,11 @@ The engineering contract's `pipeline:*` names are proposals; current channels in
 
 ### Editors and Markdown
 
-[Editor.tsx](../src/components/Editor.tsx) integrates Tiptap/ProseMirror; CodeMirror handles source mode; [MarkdownPreview.tsx](../src/components/MarkdownPreview.tsx) handles preview. Parsing/rendering includes [markdown.ts](../src/utils/markdown.ts), [preview.ts](../src/utils/preview.ts), [MarkdownContent.tsx](../src/components/MarkdownContent.tsx).
+[Editor.tsx](../src/components/editor/Editor.tsx) integrates Tiptap/ProseMirror; CodeMirror handles source mode; [MarkdownPreview.tsx](../src/components/markdown/MarkdownPreview.tsx) handles preview. Parsing/rendering includes [markdown.ts](../src/utils/markdown/markdown.ts), [preview.ts](../src/utils/ui/preview.ts), [MarkdownContent.tsx](../src/components/markdown/MarkdownContent.tsx).
 
 Built-in content includes headings, lists, tasks, tables, images, links, code, math, Mermaid, Wiki links. Extensions handle code/formulas/Markdown input/paste; DOMPurify sanitizes output. Mode switching converts between Markdown and the editor model; fidelity requires the dedicated checks.
 
-[EditorWordCount.tsx](../src/components/EditorWordCount.tsx) displays counts, [EditorZoomControl.tsx](../src/components/EditorZoomControl.tsx) controls zoom, [editorPreferences.ts](../shared/editorPreferences.ts) centralizes typography, spacing, paste, selection, writing modes.
+[EditorWordCount.tsx](../src/components/editor/EditorWordCount.tsx) displays counts, [EditorZoomControl.tsx](../src/components/editor/EditorZoomControl.tsx) controls zoom, [editorPreferences.ts](../shared/editorPreferences.ts) centralizes typography, spacing, paste, selection, writing modes.
 
 ### Durable writes and projections
 
@@ -152,19 +159,19 @@ sequenceDiagram
   S->>I: Projection and backup maintenance
 ```
 
-[noteSaveService.ts](../electron/noteSaveService.ts), [atomicTextWrite.ts](../electron/atomicTextWrite.ts), [noteCloseCoordinator.ts](../electron/noteCloseCoordinator.ts) coordinate saving/closing/recovery; [noteBackups.ts](../electron/noteBackups.ts) maintains backups; [noteIndex.ts](../electron/noteIndex.ts) and [indexCoordinator.ts](../electron/knowledge/indexCoordinator.ts) update indexes.
+[noteSaveService.ts](../electron/note/noteSaveService.ts), [atomicTextWrite.ts](../electron/atomicTextWrite.ts), [noteCloseCoordinator.ts](../electron/note/noteCloseCoordinator.ts) coordinate saving/closing/recovery; [noteBackups.ts](../electron/note/noteBackups.ts) maintains backups; [noteIndex.ts](../electron/note/noteIndex.ts) and [indexCoordinator.ts](../electron/knowledge/index/indexCoordinator.ts) update indexes.
 
 A durable write and successful indexing are separate outcomes. An index error must not imply the original was unsaved. Switching, delayed saves, external changes, closing require revision/draft coordination so late results cannot overwrite newer content.
 
 ### Selection AI
 
-[SelectionActionOverlay.tsx](../src/components/SelectionActionOverlay.tsx) calls [selectionEditCoordinator.ts](../electron/knowledge/selectionEditCoordinator.ts) and [selectionExpansionCoordinator.ts](../electron/knowledge/selectionExpansionCoordinator.ts). Permitted note/material/web evidence supports proposals; application validates the current document/selection.
+[SelectionActionOverlay.tsx](../src/components/selection/SelectionActionOverlay.tsx) calls [selectionEditCoordinator.ts](../electron/knowledge/selection/selectionEditCoordinator.ts) and [selectionExpansionCoordinator.ts](../electron/knowledge/selection/selectionExpansionCoordinator.ts). Permitted note/material/web evidence supports proposals; application validates the current document/selection.
 
 [selectionExpansionPolicy.ts](../shared/selectionExpansionPolicy.ts) sets default target `1.8×` meaningful characters, full-note threshold `12,000`, target ceiling `40,000`. Targets are not model-output guarantees; quality/range checks remain necessary.
 
 ## Standalone documents
 
-[ExternalDocumentWorkspace.tsx](../src/components/ExternalDocumentWorkspace.tsx) uses [DocumentSessionService](../electron/documents/documentSessionService.ts), separately from library saving. Registered library files route back to Notes.
+[ExternalDocumentWorkspace.tsx](../src/components/externalDocument/ExternalDocumentWorkspace.tsx) uses [DocumentSessionService](../electron/documents/documentSessionService.ts), separately from library saving. Registered library files route back to Notes.
 
 | Module | Capability |
 | --- | --- |
@@ -181,7 +188,7 @@ Drafts save automatically; originals save explicitly. Writes check disk hashes, 
 
 ### Registration
 
-[materialsLibrary.ts](../electron/materialsLibrary.ts) handles registrations, manifests, IDs, types, hashes; [MaterialsView.tsx](../src/components/MaterialsView.tsx) lists/previews; [MaterialsPipelineView.tsx](../src/components/MaterialsPipelineView.tsx) exposes config/status/artifacts. Stages read originals and write separate artifacts; SQLite stores projections, not all large stage files.
+[materialsLibrary.ts](../electron/library/materialsLibrary.ts) handles registrations, manifests, IDs, types, hashes; [MaterialsView.tsx](../src/components/materials/MaterialsView.tsx) lists/previews; [MaterialsPipelineView.tsx](../src/components/pipeline/MaterialsPipelineView.tsx) exposes config/status/artifacts. Stages read originals and write separate artifacts; SQLite stores projections, not all large stage files.
 
 ### Stages
 
@@ -265,8 +272,8 @@ Keys include source, config, engine/protocol, upstream versions. [artifactStore.
 | Entry | Implementation/purpose |
 | --- | --- |
 | Note keyword search | MiniSearch/local note index; model-free titles/paths/text |
-| Current-note tools | [currentNoteTools.ts](../electron/knowledge/currentNoteTools.ts), [currentNoteLexicalIndex.ts](../electron/knowledge/currentNoteLexicalIndex.ts); saved snapshots/sections |
-| Note knowledge | [indexCoordinator.ts](../electron/knowledge/indexCoordinator.ts), [metaDatabase.ts](../electron/knowledge/metaDatabase.ts); chunks, metadata, vectors |
+| Current-note tools | [currentNoteTools.ts](../electron/knowledge/currentNote/currentNoteTools.ts), [currentNoteLexicalIndex.ts](../electron/knowledge/currentNote/currentNoteLexicalIndex.ts); saved snapshots/sections |
+| Note knowledge | [indexCoordinator.ts](../electron/knowledge/index/indexCoordinator.ts), [metaDatabase.ts](../electron/knowledge/index/metaDatabase.ts); chunks, metadata, vectors |
 | Materials hybrid | [materialChunkSearch.ts](../electron/pipeline/materialChunkSearch.ts); FTS/lexical and vectors, configured combination/rerank |
 | Graph | Entities/communities traced to source chunks |
 | History/memory | Separate data/scopes/limits, not interchangeable document evidence |
@@ -290,23 +297,23 @@ See [materialVectorGenerationService.ts](../electron/pipeline/materialVectorGene
 
 ### Model adapters
 
-[aiProvider.ts](../electron/knowledge/aiProvider.ts), [modelHub.ts](../electron/knowledge/modelHub.ts), [modelConfigurationService.ts](../electron/knowledge/modelConfigurationService.ts) manage profiles, selection, persistence, impacts. Provider, endpoint, protocol, model are separate fields.
+[aiProvider.ts](../electron/knowledge/ai/aiProvider.ts), [modelHub.ts](../electron/knowledge/ai/modelHub.ts), [modelConfigurationService.ts](../electron/knowledge/ai/modelConfigurationService.ts) manage profiles, selection, persistence, impacts. Provider, endpoint, protocol, model are separate fields.
 
 | Protocol | Transport |
 | --- | --- |
-| Ollama Chat | [ollamaClient.ts](../electron/knowledge/ollamaClient.ts) |
-| OpenAI Chat Completions | [openAiCompletionsTransport.ts](../electron/knowledge/openAiCompletionsTransport.ts) |
-| OpenAI Responses | [openAiResponsesTransport.ts](../electron/knowledge/openAiResponsesTransport.ts) |
-| Anthropic Messages | [anthropicMessagesTransport.ts](../electron/knowledge/anthropicMessagesTransport.ts) |
-| Google GenerateContent | [googleGenerateContentTransport.ts](../electron/knowledge/googleGenerateContentTransport.ts) |
+| Ollama Chat | [ollamaClient.ts](../electron/knowledge/ai/ollamaClient.ts) |
+| OpenAI Chat Completions | [openAiCompletionsTransport.ts](../electron/knowledge/ai/openAiCompletionsTransport.ts) |
+| OpenAI Responses | [openAiResponsesTransport.ts](../electron/knowledge/ai/openAiResponsesTransport.ts) |
+| Anthropic Messages | [anthropicMessagesTransport.ts](../electron/knowledge/ai/anthropicMessagesTransport.ts) |
+| Google GenerateContent | [googleGenerateContentTransport.ts](../electron/knowledge/ai/googleGenerateContentTransport.ts) |
 
-[aiGenerationTransport.ts](../electron/knowledge/aiGenerationTransport.ts) handles requests/streaming. Generation, embedding, rerank are separate. Provider integration does not imply every model supports tools, images, or thinking. Capabilities and [modelCallCoordinator.ts](../electron/knowledge/modelCallCoordinator.ts) govern context/output budgets.
+[aiGenerationTransport.ts](../electron/knowledge/ai/aiGenerationTransport.ts) handles requests/streaming. Generation, embedding, rerank are separate. Provider integration does not imply every model supports tools, images, or thinking. Capabilities and [modelCallCoordinator.ts](../electron/knowledge/ai/modelCallCoordinator.ts) govern context/output budgets.
 
 ### Three routes
 
-- **Open chat:** Question, attachments, applicable history; optional web tools through [chatWebAgentTurn.ts](../electron/knowledge/chatWebAgentTurn.ts).
-- **Current note:** Saved snapshots/body/chapters/neighbors; direct and tool routes including [currentNoteAgentGraph.ts](../electron/knowledge/currentNoteAgentGraph.ts).
-- **Knowledge base:** Selected materials library, retrieval/source reading/graph/applicable web tools through [knowledgeAgentTurn.ts](../electron/knowledge/knowledgeAgentTurn.ts).
+- **Open chat:** Question, attachments, applicable history; optional web tools through [chatWebAgentTurn.ts](../electron/knowledge/agent/chatWebAgentTurn.ts).
+- **Current note:** Saved snapshots/body/chapters/neighbors; direct and tool routes including [currentNoteAgentGraph.ts](../electron/knowledge/currentNote/currentNoteAgentGraph.ts).
+- **Knowledge base:** Selected materials library, retrieval/source reading/graph/applicable web tools through [knowledgeAgentTurn.ts](../electron/knowledge/agent/knowledgeAgentTurn.ts).
 
 ### Tool execution
 
@@ -330,16 +337,16 @@ Several execution models coexist; a `Graph` filename does not itself imply LangG
 
 | Entry | Implementation | Built-in tasks |
 | --- | --- | --- |
-| [agentGraph.ts](../electron/knowledge/agentGraph.ts) | LangGraph `Annotation`/`StateGraph`, supervisor dispatch | Summaries, tags, note analysis, answers, learning plans, organization proposals |
-| [currentNoteAgentGraph.ts](../electron/knowledge/currentNoteAgentGraph.ts) | Custom plans/actions/evidence/budget control | Chapter search, selective reading, evidence synthesis, answers |
-| [libraryPlanAgentGraph.ts](../electron/knowledge/libraryPlanAgentGraph.ts) | Custom library snapshots/structured actions/plans | Note-library lookup, section reading, organization reasoning |
+| [agentGraph.ts](../electron/knowledge/agent/agentGraph.ts) | LangGraph `Annotation`/`StateGraph`, supervisor dispatch | Summaries, tags, note analysis, answers, learning plans, organization proposals |
+| [currentNoteAgentGraph.ts](../electron/knowledge/currentNote/currentNoteAgentGraph.ts) | Custom plans/actions/evidence/budget control | Chapter search, selective reading, evidence synthesis, answers |
+| [libraryPlanAgentGraph.ts](../electron/knowledge/library/libraryPlanAgentGraph.ts) | Custom library snapshots/structured actions/plans | Note-library lookup, section reading, organization reasoning |
 | [reactEngine.ts](../electron/knowledge/reactAgent/reactEngine.ts) | Bounded ReAct with route-supplied tools/policies | Materials questions, applicable web/Wiki tools |
 
 ReAct defaults are **6 iterations, 8 model calls, 10 tool calls, 1 empty-response retry**, and **2 repeated-content rounds** before a break. Callers can override them; maintenance summaries have additional budgets. See [reactEngineTypes.ts](../electron/knowledge/reactAgent/reactEngineTypes.ts). These constrain execution rather than guarantee answer accuracy.
 
-Knowledge tools include `knowledge_search`, `grep_chunks`, `list_knowledge_chunks`, `get_document_info`, `graph_local_search`, `graph_global_search`, `web_search`, web fetching, `read_skill`, `search_conversations`, `search_memory`. Availability follows [toolCapabilityCatalog.ts](../electron/knowledge/toolCapabilityCatalog.ts), scope, capabilities, configuration.
+Knowledge tools include `knowledge_search`, `grep_chunks`, `list_knowledge_chunks`, `get_document_info`, `graph_local_search`, `graph_global_search`, `web_search`, web fetching, `read_skill`, `search_conversations`, `search_memory`. Availability follows [toolCapabilityCatalog.ts](../electron/knowledge/model/toolCapabilityCatalog.ts), scope, capabilities, configuration.
 
-[assistantCitationGuard.ts](../electron/knowledge/assistantCitationGuard.ts) constrains citations; [assistantNote.ts](../electron/assistantNote.ts) saves answers as notes. Tool names proposed by models do not grant arbitrary filesystem/cross-library access; contexts and services enforce scope.
+[assistantCitationGuard.ts](../electron/knowledge/assistant/assistantCitationGuard.ts) constrains citations; [assistantNote.ts](../electron/assistant/assistantNote.ts) saves answers as notes. Tool names proposed by models do not grant arbitrary filesystem/cross-library access; contexts and services enforce scope.
 
 ## History working memory and long-term memory
 
@@ -361,8 +368,8 @@ flowchart TB
 
 | Capability | Responsibility | Source |
 | --- | --- | --- |
-| History | Sessions/messages/turns/tools/complete or aborted status | [qaMemoryDatabase.ts](../electron/knowledge/qaMemoryDatabase.ts), [qaMemoryRepository.ts](../electron/knowledge/qaMemoryRepository.ts) |
-| Working memory | Recent history, summaries, observations within a model window | [qaMemoryOrchestrator.ts](../electron/knowledge/qaMemoryOrchestrator.ts), [qaCanonicalHistory.ts](../electron/knowledge/qaCanonicalHistory.ts), [toolResultBudget.ts](../electron/knowledge/reactAgent/toolResultBudget.ts) |
+| History | Sessions/messages/turns/tools/complete or aborted status | [qaMemoryDatabase.ts](../electron/knowledge/qa/qaMemoryDatabase.ts), [qaMemoryRepository.ts](../electron/knowledge/qa/qaMemoryRepository.ts) |
+| Working memory | Recent history, summaries, observations within a model window | [qaMemoryOrchestrator.ts](../electron/knowledge/qa/qaMemoryOrchestrator.ts), [qaCanonicalHistory.ts](../electron/knowledge/qa/qaCanonicalHistory.ts), [toolResultBudget.ts](../electron/knowledge/reactAgent/toolResultBudget.ts) |
 | Conversation search | Relevant earlier Q&A with scopes/limits | [searchConversationsTool.ts](../electron/knowledge/knowledgeTools/searchConversationsTool.ts) |
 | Long-term memory | Independent profile/preference/fact/task/interest items | [memory/](../electron/knowledge/memory/), [searchMemoryTool.ts](../electron/knowledge/knowledgeTools/searchMemoryTool.ts) |
 
@@ -402,7 +409,7 @@ Effective behavior depends on model window, route, mode. The `200,000`-token fal
 
 ## Wiki workspace
 
-[wikiOutline.ts](../electron/wikiOutline.ts) reads materials structure/source blocks/line layout; [wikiLayout.ts](../src/wiki/wikiLayout.ts) lays out nodes; [WikiMapCanvas.tsx](../src/components/wiki/WikiMapCanvas.tsx) uses React Flow.
+[wikiOutline.ts](../electron/wiki/wikiOutline.ts) reads materials structure/source blocks/line layout; [wikiLayout.ts](../src/components/wiki/data/wikiLayout.ts) lays out nodes; [WikiMapCanvas.tsx](../src/components/wiki/WikiMapCanvas.tsx) uses React Flow.
 
 ```mermaid
 flowchart LR
@@ -417,7 +424,7 @@ flowchart LR
 
 | Capability | Source |
 | --- | --- |
-| Outline/select/collapse/zoom/order | [WikiView.tsx](../src/components/wiki/WikiView.tsx), [wikiViewState.ts](../src/wiki/wikiViewState.ts), [wikiElectronDataSource.ts](../src/wiki/wikiElectronDataSource.ts) |
+| Outline/select/collapse/zoom/order | [WikiView.tsx](../src/components/wiki/WikiView.tsx), [wikiViewState.ts](../src/components/wiki/data/wikiViewState.ts), [wikiElectronDataSource.ts](../src/components/wiki/data/wikiElectronDataSource.ts) |
 | Guided/automatic/full generation/node analysis/retries | UI/data-source tasks/events |
 | Node/cross-chapter scope | [wikiNodeScope.ts](../electron/wiki/wikiNodeScope.ts), [wikiScopePolicy.ts](../electron/wiki/wikiScopePolicy.ts) |
 | Rewrite/retrieval/source sufficiency | [wikiQueryRewrite.ts](../electron/wiki/wikiQueryRewrite.ts), [wikiRetrievalCycle.ts](../electron/wiki/wikiRetrievalCycle.ts), [wikiDirectEvidenceGate.ts](../electron/wiki/wikiDirectEvidenceGate.ts) |
@@ -426,6 +433,37 @@ flowchart LR
 | Note import | [wikiNoteImport.ts](../electron/wiki/wikiNoteImport.ts), copies Markdown/supported images |
 
 Source/derived nodes are distinguished. Generated content persists under `.menghan-meta/wiki/` with hashes to detect stale sources. Wiki AI content is document learning output, separate from workspace long-term memory. Structure browsing requires no model; generation does. Source/generated output remain separate.
+
+## Schedule workspace
+
+The schedule stores events, todos, and course timetables in a calendar scoped to the workspace. [ScheduleView.tsx](../src/components/schedule/ScheduleView.tsx) provides year/month/week/day views, event/todo creation, categories and colors, jump-to-today, and navigation; [ScheduleSidebar.tsx](../src/components/schedule/ScheduleSidebar.tsx) and the todo panel sit alongside.
+
+The data contract lives in [shared/schedule.ts](../shared/schedule.ts): item kinds are `event`, `todo`, and `course`; recurrence supports daily/weekly/monthly and odd/even-week patterns (`weekly_pattern`) with intervals, weekday sets, end dates, and excluded dates. Expansion happens in [scheduleRecurrence.ts](../electron/schedule/scheduleRecurrence.ts); per-occurrence edits are stored as overrides instead of rewriting the item.
+
+| Module | Responsibility |
+| --- | --- |
+| [scheduleService.ts](../electron/schedule/scheduleService.ts) | Item/reminder CRUD, recurrence expansion, overrides |
+| [scheduleDatabase.ts](../electron/schedule/scheduleDatabase.ts) | Workspace `.menghan-meta/schedule/schedule.db` (SQLite, WAL) |
+| [scheduleReminderService.ts](../electron/schedule/scheduleReminderService.ts) | Reminder scheduling, system notifications, power-event recovery |
+| [import/](../electron/schedule/import/) | CSV/Excel course parsing (GBK fallback) and AI-assisted import (image/URL/text; needs a model) |
+
+Course imports are recorded in batches and can be reverted as a whole (`schedule:revert-import`). AI parsing runs only when the user explicitly picks that source; local CSV/Excel parsing needs no model. Schedule data belongs to the workspace and is covered by full workspace backups.
+
+## Terminal workspace
+
+The terminal embeds an interactive shell inside the app. [TerminalView.tsx](../src/components/terminal/TerminalView.tsx) is the full multi-tab view in the main navigation; `Ctrl+\`` toggles the bottom [TerminalPanel.tsx](../src/components/terminal/TerminalPanel.tsx) from any view. Both share the same sessions, held at the app root by [useTerminalSessions.tsx](../src/components/terminal/useTerminalSessions.tsx), so switching views does not kill processes.
+
+```text
+Renderer (@xterm/xterm)
+    ⇅ preload terminal:* channels
+TerminalService (Electron main)
+    ⇅ fork + NDJSON messages
+TerminalHost (separate Node process, node-pty)
+    ⇅ PTY
+user-selected shell
+```
+
+[terminalService.ts](../electron/terminal/terminalService.ts) lazily starts and reuses a single [terminalHost.ts](../electron/terminal/terminalHost.ts) child process; the host creates PTY sessions with `node-pty` and fixes the double-unpacked `app.asar.unpacked` helperPath bug in packaged builds. Shell selection is platform-keyed: macOS tries `$SHELL`, `/bin/zsh`, `/bin/bash` in order; Windows offers PowerShell, CMD, Git Bash, and WSL when present. `terminal:write` uses a direct `ipcMain.on` path so keystrokes bypass the maintenance barrier; every other channel still requires the internal-renderer origin. Sessions are cleaned up on app exit without leaving background processes.
 
 ## Materials graph and Map
 
@@ -450,7 +488,7 @@ See [entities_stage.py](../pipeline-python/pipeline_worker/entities_stage.py), [
 
 `graphKey` includes entity-stage keys, Leiden config, schema, related inputs; artifacts use `.menghan-meta/graph/<graphKey>/`. Defaults: resolution `1.0`, maxDepth `4`, minSplitSize `3`, seed `42`.
 
-[LibraryGraphView.tsx](../src/components/LibraryGraphView.tsx) renders Map; [graphLocalSearch.ts](../electron/pipeline/graphLocalSearch.ts)/[graphGlobalSearch.ts](../electron/pipeline/graphGlobalSearch.ts) retrieve. Summaries support broad understanding, not original citations. Missing projections return capability feedback and ordinary search alternatives.
+[LibraryGraphView.tsx](../src/components/library/LibraryGraphView.tsx) renders Map; [graphLocalSearch.ts](../electron/pipeline/graphLocalSearch.ts)/[graphGlobalSearch.ts](../electron/pipeline/graphGlobalSearch.ts) retrieve. Summaries support broad understanding, not original citations. Missing projections return capability feedback and ordinary search alternatives.
 
 Development `graphify-out/` is separate: Graphify assists source navigation, without participating in product runtime or user-material processing.
 
@@ -466,9 +504,9 @@ Development `graphify-out/` is separate: Graphify assists source navigation, wit
 | [generate-study-doc](../build/builtin-skills/generate-study-doc/SKILL.md) | Read specified documents and use study templates |
 | [generate-experiment-report](../build/builtin-skills/generate-experiment-report/SKILL.md) | Reports grounded in recorded experiments/data, marking gaps |
 
-[assistantSkills.ts](../electron/knowledge/assistantSkills.ts), [skillDirectoryLoader.ts](../electron/knowledge/skillDirectoryLoader.ts), [skillDefinitionResolver.ts](../electron/knowledge/skillDefinitionResolver.ts), [skillImportService.ts](../electron/knowledge/skillImportService.ts) load/resolve/import; [readSkillTool.ts](../electron/knowledge/knowledgeTools/readSkillTool.ts) reads resources.
+[assistantSkills.ts](../electron/knowledge/assistant/assistantSkills.ts), [skillDirectoryLoader.ts](../electron/knowledge/skill/skillDirectoryLoader.ts), [skillDefinitionResolver.ts](../electron/knowledge/skill/skillDefinitionResolver.ts), [skillImportService.ts](../electron/knowledge/skill/skillImportService.ts) load/resolve/import; [readSkillTool.ts](../electron/knowledge/knowledgeTools/readSkillTool.ts) reads resources.
 
-[aiSkillWorkspace.ts](../electron/knowledge/aiSkillWorkspace.ts) synchronizes workspace `AI-Skill/`. Definitions structure prompts/templates; registration/scope still enforce authority. Skills are not arbitrary code plugins or local-shell authorization.
+[aiSkillWorkspace.ts](../electron/knowledge/skill/aiSkillWorkspace.ts) synchronizes workspace `AI-Skill/`. Definitions structure prompts/templates; registration/scope still enforce authority. Skills are not arbitrary code plugins or local-shell authorization.
 
 ### Web integration
 
@@ -483,6 +521,8 @@ Development `graphify-out/` is separate: Graphify assists source navigation, wit
   ConversationMemory/
     qa-memory.db              History, memory, related metadata
   AI-Skill/                   Managed skills
+  .menghan-meta/
+    schedule/                 Schedule database (schedule.db: events, todos, courses, reminders)
 
 <note-library>/
   *.md / folders / assets     User files
@@ -514,16 +554,16 @@ Backups include mappings, hashes, consistent snapshots, selected associated libr
 
 ### Relocation
 
-[workspaceMigrationService.ts](../electron/workspaceMigrationService.ts)/[workspaceMigrationWorker.ts](../electron/workspaceMigrationWorker.ts) relocate workspace-owned data. [WorkspaceMigrationDialog.tsx](../src/components/WorkspaceMigrationDialog.tsx) blocks unrelated actions and shows recovery choices.
+[workspaceMigrationService.ts](../electron/workspace/workspaceMigrationService.ts)/[workspaceMigrationWorker.ts](../electron/workspace/workspaceMigrationWorker.ts) relocate workspace-owned data. [WorkspaceMigrationDialog.tsx](../src/components/settings/WorkspaceMigrationDialog.tsx) blocks unrelated actions and shows recovery choices.
 
 Preview precedes copy/map; validation precedes publication/UI refresh. Originals stay; external libraries keep locations. Journals allow resume or retaining the original root; [dataRootLocks.ts](../electron/dataRootLocks.ts) handles ownership. Updating only a configured path would omit drafts, sessions, attachments, skills, associations.
 
 ## Themes language and onboarding
 
-- **Themes:** [lightColorSchemes.ts](../shared/lightColorSchemes.ts), [theme.ts](../src/utils/theme.ts), `Application.tsx` manage five palettes, system/light/dark, density, persistence, shared startup appearance.
+- **Themes:** [lightColorSchemes.ts](../shared/lightColorSchemes.ts), [theme.ts](../src/utils/ui/theme.ts), `Application.tsx` manage five palettes, system/light/dark, density, persistence, shared startup appearance.
 - **Language:** [i18n/index.ts](../src/i18n/index.ts) implements subscribed `t()`/`useI18n()`, Chinese keys/English mapping, fallback text. It does not translate user documents or recreate editors.
 - **Onboarding:** [OnboardingGuide.tsx](../src/components/onboarding/OnboardingGuide.tsx)/[electron/onboarding/](../electron/onboarding/) implement menus → AI → first question, states `pending`/`skipped`/`completed`. Existing models permit direct practice; connection and real-answer completion are separate.
-- **Diagnostics:** [CapabilityPanel.tsx](../src/components/CapabilityPanel.tsx), settings/logs distinguish configured, connected, actual-call, packaged acceptance.
+- **Diagnostics:** [CapabilityPanel.tsx](../src/components/settings/CapabilityPanel.tsx), settings/logs distinguish configured, connected, actual-call, packaged acceptance.
 
 ## Development build and validation
 
@@ -547,7 +587,7 @@ pnpm build
 pnpm run release:manifest
 ```
 
-[build-pipeline-runtime.mjs](../scripts/build-pipeline-runtime.mjs) assembles CPython/stdlib/Worker/Jieba/graph dependencies, validates hello, writes manifest. It requires a CPython installation, not just a venv, and accepts `MENGHAN_PIPELINE_PYTHON`.
+[build-pipeline-runtime.mjs](../scripts/build/build-pipeline-runtime.mjs) assembles CPython/stdlib/Worker/Jieba/graph dependencies, validates hello, writes manifest. It requires a CPython installation, not just a venv, and accepts `MENGHAN_PIPELINE_PYTHON`.
 
 electron-builder carries runtime/skills via `extraResources`, native SQLite/sqlite-vec and applicable Workers via `asarUnpack`. [build-mac-packages.mjs](../scripts/build/build-mac-packages.mjs) creates DMG/ZIP; Mac uses `icon.icns` as the app icon. Actual manifests establish signing status.
 

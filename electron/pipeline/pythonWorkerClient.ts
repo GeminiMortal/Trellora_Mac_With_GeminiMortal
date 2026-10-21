@@ -230,7 +230,14 @@ export class PythonWorkerClient {
       shell: false,
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: process.env,
+      // Minimal env: the worker reads no env vars itself (verified: pipeline_worker/*.py
+      // never touch os.environ; interpreter resolution happens Electron-side before spawn;
+      // packaged builds even pass -E). Forwarding the full parent env would only leak
+      // unrelated user credentials from the login shell into the worker process.
+      // 最小化环境：Worker 自身不读任何环境变量（pipeline_worker/*.py 不访问
+      // os.environ；解释器在 spawn 前已由 Electron 侧定位；打包形态还带 -E）。
+      // 全量转发父进程环境只会把登录 shell 里无关的用户凭据带进 Worker。
+      env: buildWorkerEnvironment(),
     });
     this.child = child;
     child.stdout.setEncoding('utf8');
@@ -474,6 +481,27 @@ function findCompatibleSystemPython(): Promise<string | null> {
     return null;
   })();
   return systemPythonProbe;
+}
+
+/**
+ * Build the minimal environment for the Python worker process.
+ * The worker never reads configuration from env (credentials travel via stdin NDJSON
+ * params only), so only locale/encoding/OS essentials are forwarded — anything else
+ * from the user's login shell is deliberately dropped.
+ * 为 Python Worker 构建最小化环境。Worker 不从环境变量读取任何配置（凭据仅经
+ * stdin NDJSON 参数传递），只转发 locale/编码/系统基础项，登录 shell 中的其余
+ * 变量（含无关凭据）一律不透传。
+ */
+function buildWorkerEnvironment(): Record<string, string> {
+  const env: Record<string, string> = {
+    PATH: process.env.PATH ?? '/usr/bin:/bin',
+    HOME: process.env.HOME ?? '',
+    LANG: process.env.LANG ?? 'zh_CN.UTF-8',
+  };
+  if (process.env.TMPDIR !== undefined) env.TMPDIR = process.env.TMPDIR;
+  if (process.env.TZ !== undefined) env.TZ = process.env.TZ;
+  if (process.env.SSL_CERT_FILE !== undefined) env.SSL_CERT_FILE = process.env.SSL_CERT_FILE;
+  return env;
 }
 
 async function resolveWorkerCommand(): Promise<WorkerCommand> {

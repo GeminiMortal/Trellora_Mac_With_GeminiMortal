@@ -86,7 +86,7 @@ export default function WikiDocumentListPane({
               return (
                 <Tooltip key={document.id} label={document.outlineHint} disabled={ready} position="right" withArrow>
                   <div>
-                    <UnstyledButton
+                    <UnstyledButton aria-label="搜索文档"
                       className="wiki-document-list-item"
                       data-state={document.outlineState}
                       data-active={document.id === selectedDocumentId || undefined}

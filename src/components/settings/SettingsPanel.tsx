@@ -1,5 +1,6 @@
 import { getAppLanguage, localizeOptions, t, useI18n } from '../../i18n/index.ts';
 import CapabilityPanel from './CapabilityPanel.tsx';
+import PluginManagementPanel from './PluginManagementPanel.tsx';
 import ReleaseCheck from '../release/ReleaseCheck.tsx';
 import FirstRunGuide from '../onboarding/FirstRunGuide.tsx';
 import type { OnboardingModelDraft } from '../onboarding/OnboardingGuide.tsx';
@@ -26,8 +27,9 @@ import ProviderSelect from '../provider/ProviderSelect.tsx';
 import { UserInformationSettings } from './UserInformationSettings.tsx';
 import LightColorSchemePicker from './LightColorSchemePicker.tsx';
 import EditorPreferencesSettings from './EditorPreferencesSettings.tsx';
+import { showConfirm } from '../../utils/ui/feedback.ts';
 
-export type SettingsSection = 'general' | 'library' | 'editor' | 'shortcuts' | 'user-information' | 'parsing' | 'web-search' | 'ai-writing' | 'model' | 'skills' | 'about';
+export type SettingsSection = 'general' | 'library' | 'editor' | 'shortcuts' | 'user-information' | 'parsing' | 'web-search' | 'ai-writing' | 'model' | 'skills' | 'plugins' | 'about';
 type ModelSettingsTab = 'profiles' | 'config' | 'add';
 
 /** Compared only in renderer memory; keys never enter guide state or logs. */
@@ -95,6 +97,7 @@ const sections: Array<{ id: SettingsSection; label: string; group: string; icon:
   { id: 'ai-writing', label: '选区扩写优化', group: 'AI 设置', icon: Sparkles },
   { id: 'model', label: '模型配置', group: 'AI 设置', icon: Bot },
   { id: 'skills', label: 'AI 助手技能', group: 'AI 设置', icon: Sparkles },
+  { id: 'plugins', label: '插件管理', group: '系统', icon: Sparkles },
   { id: 'user-information', label: '个性化', group: 'AI 设置', icon: UserRound },
   { id: 'about', label: '关于与诊断', group: '系统', icon: Info },
 ];
@@ -782,7 +785,7 @@ export default function SettingsPanel({
   };
 
   const removeDirectorySkill = async (name: string) => {
-    if (!window.confirm(t("确定删除目录技能“{0}”及其文件夹吗？此操作不可恢复。", { '0': name }))) return;
+    if (!await showConfirm({ message: t("确定删除目录技能“{0}”及其文件夹吗？此操作不可恢复。", { '0': name }) })) return;
     setError(null);
     setFeedback(null);
     try {
@@ -1409,6 +1412,12 @@ export default function SettingsPanel({
               </SettingsSection>
             </Tabs.Panel>
 
+            <Tabs.Panel value="plugins">
+              <SettingsSection group={t("系统")} title={t("插件管理")}>
+                <PluginManagementPanel />
+              </SettingsSection>
+            </Tabs.Panel>
+
             <Tabs.Panel value="about">
               <SettingsSection group={t("系统")} title={t("关于与诊断")}>
                 <CapabilityPanel />
@@ -1455,7 +1464,7 @@ const modelCategoryOptions: Array<{ value: ModelSlotId; label: string; descripti
 function ModelCategoryPicker({ value, modelSettings, modelHub, onChange }: { value: ModelSlotId | null; modelSettings: AiModelSettings; modelHub: ModelHub; onChange: (value: ModelSlotId) => void }) {
   useI18n();
   return <Box className="settings-model-category-picker" role="radiogroup" aria-label={t("选择模型用途")}>
-    {modelCategoryOptions.map((option) => <UnstyledButton key={option.value} className="settings-model-category-option" data-active={option.value === value || undefined} role="radio" aria-checked={option.value === value} onClick={() => onChange(option.value)}>
+    {modelCategoryOptions.map((option) => <UnstyledButton aria-label="选择主题" key={option.value} className="settings-model-category-option" data-active={option.value === value || undefined} role="radio" aria-checked={option.value === value} onClick={() => onChange(option.value)}>
       <ThemeIcon className="settings-model-category-icon" size={30} radius="md" variant={option.value === value ? 'light' : 'transparent'} color="brand" aria-hidden="true">{option.icon}</ThemeIcon>
       <Box className="settings-model-category-copy">
         <Text component="span" fw={700} size="sm">{t(option.label)}</Text>

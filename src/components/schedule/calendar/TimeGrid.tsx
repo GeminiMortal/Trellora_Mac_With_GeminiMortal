@@ -93,7 +93,7 @@ export default function TimeGrid({ columns, occurrences, onSelectSlot, onSelectO
     });
   }, [columns, onMoveOccurrence]);
 
-  const handleDragMove = useCallback((e: React.MouseEvent) => {
+  const _handleDragMove = useCallback((e: React.MouseEvent) => {
     if (!drag) return;
     const dy = e.clientY - drag.startY;
     const deltaMin = Math.round(dy / (HOUR_HEIGHT / 60) / SNAP_MINUTES) * SNAP_MINUTES;
@@ -218,7 +218,7 @@ export default function TimeGrid({ columns, occurrences, onSelectSlot, onSelectO
         ref={colsRef}
         style={{ display: 'grid', gridTemplateColumns: `repeat(${columns.length}, 1fr)` }}
       >
-        {columns.map((col, colIdx) => {
+        {columns.map((col) => {
           const colOccs = occsByColumn.get(col.date) ?? [];
           const layout = computeTimeGridLayout(colOccs);
 

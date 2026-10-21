@@ -127,13 +127,13 @@ export default function TerminalTabs({ onTogglePanel, showCollapse }: TerminalTa
         </div>
 
         <Tooltip label={t('新建终端')} position="bottom">
-          <ActionIcon variant="subtle" size="sm" onClick={() => create()}>
+          <ActionIcon aria-label="关闭终端标签" variant="subtle" size="sm" onClick={() => create()}>
             <Plus size={14} />
           </ActionIcon>
         </Tooltip>
         {showCollapse && onTogglePanel && (
           <Tooltip label={t('收起终端')} position="bottom">
-            <ActionIcon variant="subtle" size="sm" onClick={onTogglePanel}>
+            <ActionIcon aria-label="新建终端" variant="subtle" size="sm" onClick={onTogglePanel}>
               <X size={14} />
             </ActionIcon>
           </Tooltip>

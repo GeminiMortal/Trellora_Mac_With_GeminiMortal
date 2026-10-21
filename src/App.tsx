@@ -46,6 +46,8 @@ import LibraryManagerView from './components/library/LibraryManagerView.tsx';
 import { useOnboarding } from './components/onboarding/useOnboarding.ts';
 import { OnboardingAiTask, OnboardingBar, OnboardingCompletion, OnboardingMenus, type OnboardingModelDraft } from './components/onboarding/OnboardingGuide.tsx';
 import { Button } from '@mantine/core';
+import ConfirmModal from './components/ui/ConfirmModal.tsx';
+import ShortcutsModal from './components/ui/ShortcutsModal.tsx';
 import WikiView from './components/wiki/WikiView.tsx';
 import type { WikiNoteSource } from './components/wiki/WikiOpenInNotesModal.tsx';
 import CreateLibraryModal from './components/library/CreateLibraryModal.tsx';
@@ -62,6 +64,7 @@ import type { SelectionExpansionApplyRequest, SelectionExpansionDraftSession } f
 import { primarySelectionEditQualityIssue, selectionEditQualityIssueLabel } from '../electron/knowledge/selection/selectionEditQuality.ts';
 import { collapseAllFolders } from './utils/note/fileTreeState.ts';
 import { applyAppearance, resolveTheme, type ResolvedTheme } from './utils/ui/theme.ts';
+import { showToast, showConfirm } from './utils/ui/feedback.ts';
 import {
   formatSavedEditorImageMarkdown,
   getClipboardImageSources,
@@ -131,6 +134,8 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
   const [isReady, setIsReady] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ path: string; isDirectory: boolean } | null>(null);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isCreateLibraryModalOpen, setIsCreateLibraryModalOpen] = useState(false);
   const [materialsModal, setMaterialsModal] = useState<{ opened: boolean; mode: MaterialsLibraryModalMode; upgradePath: string | null }>({ opened: false, mode: 'create', upgradePath: null });
   const [materialsRefreshKey, setMaterialsRefreshKey] = useState(0);
@@ -226,7 +231,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
     void window.electronAPI.readClipboardText().then(text => {
       if (!text || currentPathRef.current !== notePath || sourceEditorRef.current?.view !== view || !view.state.facet(CodeMirrorView.editable) || view.state.doc !== doc || !view.state.selection.eq(selection)) return;
       view.dispatch({ changes: { from: selection.main.from, to: selection.main.to, insert: text }, selection: { anchor: selection.main.from + text.length }, userEvent: 'input.paste' });
-    }).catch(error => window.alert(String(error)));
+    }).catch(error => showToast({ message: String(error) }));
     return true;
   } }])], []);
   const currentIsMarkdown = noteMeta?.kind === 'markdown';
@@ -404,7 +409,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
       } else if ((progress.state === 'failed' || progress.state === 'partial') && !notifiedNoteAnalysisFailuresRef.current.has(progress.runId)) {
         notifiedNoteAnalysisFailuresRef.current.add(progress.runId);
         const noteName = progress.notePath.replace(/\\/g, '/').split('/').at(-1) || t("当前笔记");
-        window.alert(t("笔记“{0}”分析未完成：\n{1}", { '0': noteName, '1': progress.error?.message || t("分析失败，请查看分析状态后重试。") }));
+        showToast({ message: t("笔记“{0}”分析未完成：\n{1}", { '0': noteName, '1': progress.error?.message || t("分析失败，请查看分析状态后重试。") }) });
       }
       if (currentPathRef.current !== progress.notePath) return;
       void loadNoteAnalysisResults(progress.notePath).catch((error: unknown) => {
@@ -511,6 +516,12 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
       if (mod && !event.shiftKey && event.key === 'b') {
         event.preventDefault();
         setIsLeftSidebarCollapsed((prev) => !prev);
+        return;
+      }
+      // Cmd/Ctrl + / — toggle keyboard shortcuts reference
+      if (mod && event.key === '/') {
+        event.preventDefault();
+        setIsShortcutsOpen((prev) => !prev);
         return;
       }
     };
@@ -887,7 +898,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
 
   externalLibraryOpener.current = async (targetLibrary, filePath) => {
     if (normalizePathForCompare(targetLibrary) !== normalizePathForCompare(libraryPath ?? '')) {
-      if (!window.confirm(t('该文件属于另一个笔记库，是否切换并打开？'))) return false;
+      if (!await showConfirm({ message: t('该文件属于另一个笔记库，是否切换并打开？') })) return false;
       await window.electronAPI.activateLibrary(targetLibrary); resetCurrentNote(); await Promise.all([loadFiles(), loadLibraries()]);
     }
     const opened = await handleSelectFile(filePath);
@@ -1068,7 +1079,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
     const model = aiProviderConfig.model || status.models[0]?.name;
     if (!status.available || !model) {
       const message = status.message || t("请先在“模型”设置中选择可用模型。");
-      window.alert(message);
+      showToast({ message: message });
       throw new Error(message);
     }
 
@@ -1080,7 +1091,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
       await loadNoteAnalysisResults(analysisPath);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      window.alert(t("笔记分析未完成：{0}", { '0': message }));
+      showToast({ message: t("笔记分析未完成：{0}", { '0': message }) });
       throw error;
     } finally {
       setIsStartingNoteAnalysis(false);
@@ -1099,7 +1110,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
       await window.electronAPI.resumeNoteAnalysis(noteAnalysisRun.runId);
       await loadNoteAnalysisResults(noteAnalysisRun.notePath);
     } catch (error) {
-      window.alert(t("恢复笔记分析失败：{0}", { '0': error instanceof Error ? error.message : String(error) }));
+      showToast({ message: t("恢复笔记分析失败：{0}", { '0': error instanceof Error ? error.message : String(error) }) });
       throw error;
     }
   };
@@ -1144,7 +1155,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
         window.electronAPI.getSelectionExpansionSettings(),
       ]);
       if (!capabilities.enabled) {
-        window.alert(t("选区扩写优化尚未启用。"));
+        showToast({ message: t("选区扩写优化尚未启用。") });
         return;
       }
       setIsRightPanelCollapsed(false);
@@ -1159,7 +1170,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
         evidence: [],
       });
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : t("无法打开选区扩写设置。"));
+      showToast({ message: error instanceof Error ? error.message : t("无法打开选区扩写设置。") });
     }
   }, [handleSavePreferences]);
 
@@ -1173,7 +1184,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
       const saved = await window.electronAPI.saveSelectionExpansionSettings(settings);
       setSelectionExpansionSession((current) => current ? { ...current, settings: saved } : current);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : t("扩写默认设置保存失败。"));
+      showToast({ message: error instanceof Error ? error.message : t("扩写默认设置保存失败。") });
     }
   }, []);
 
@@ -1372,7 +1383,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
       });
       view.focus();
     })().catch((error) => {
-      window.alert(t("图片粘贴失败：{0}", { '0': error instanceof Error ? error.message : String(error) }));
+      showToast({ message: t("图片粘贴失败：{0}", { '0': error instanceof Error ? error.message : String(error) }) });
     });
   }, [handleSaveEditorImage, saveController]);
 
@@ -1388,7 +1399,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
     setIsCreateModalOpen(true);
   };
 
-  const handleCreateFile = async (fileName: string, parentDirectoryPath?: string | null) => {
+  const handleCreateFile = useCallback(async (fileName: string, parentDirectoryPath?: string | null) => {
     if (!window.electronAPI) return;
     const saved = await flushPendingSave();
     if (!saved) return;
@@ -1398,26 +1409,13 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
       await loadFiles();
       await handleSelectFile(newFilePath);
     } catch (error) {
-      window.alert(t("新建笔记失败：{0}", { '0': error instanceof Error ? error.message : String(error) }));
+      showToast({ message: t("新建笔记失败：{0}", { '0': error instanceof Error ? error.message : String(error) }) });
     }
-  };
+  }, [flushPendingSave, loadFiles, handleSelectFile]);
 
   const createFolderFromModal = async (folderName: string, parentDirectoryPath?: string | null) => {
     if (!window.electronAPI) return;
     if (!folderName.trim()) return;
-
-    try {
-      await window.electronAPI.createFolder(parentDirectoryPath ?? null, folderName.trim());
-      await loadFiles();
-    } catch (error: any) {
-      alert(t("新建文件夹失败: {0}", { '0': error.message }));
-    }
-  };
-
-  const _handleCreateFolder = async (parentDirectoryPath?: string | null) => {
-    if (!window.electronAPI) return;
-    const folderName = window.prompt(t("请输入文件夹名称"));
-    if (!folderName?.trim()) return;
 
     try {
       await window.electronAPI.createFolder(parentDirectoryPath ?? null, folderName.trim());
@@ -1504,7 +1502,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
       return;
     }
 
-    if (window.confirm(t("笔记“{0}”不存在，是否创建？", { '0': target }))) {
+    if (await showConfirm({ message: t("笔记“{0}”不存在，是否创建？", { '0': target }) })) {
       const newPath = await window.electronAPI.createLinkedNote(target, sourcePath);
       if (newPath) {
         await loadFiles();
@@ -1539,14 +1537,14 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
 
   const handleRestoreBackup = async (backupId: string) => {
     if (!window.electronAPI || !currentPath || !backupId) return;
-    if (!window.confirm(t("确定要恢复这个历史版本吗？当前内容会被覆盖。"))) return;
+    if (!await showConfirm({ message: t("确定要恢复这个历史版本吗？当前内容会被覆盖。") })) return;
     await saveController.mutate(async () => {
       if (await saveController.commitMutation((request) => window.electronAPI.mutateNote({ ...request, action: 'restore', backupId }))) { setContent(saveController.content); void loadBackups(currentPath); }
     });
   };
 
   const handleReloadDisk = async () => {
-    if (!saveController.snapshot || !window.confirm(t("重新加载会放弃当前未保存的草稿，是否继续？"))) return;
+    if (!saveController.snapshot || !await showConfirm({ message: t("重新加载会放弃当前未保存的草稿，是否继续？") })) return;
     saveController.freeze(true);
     try {
       const snapshot = await window.electronAPI.refreshNoteEditSession(saveController.snapshot.editSessionId);
@@ -1571,7 +1569,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
   /** 导出点击时的编辑内容快照；HTML/PDF 共用渲染，PDF 采用便于打印的浅色样式。 */
   const handleExportNote = async (format: NoteExportFormat) => {
     if (!window.electronAPI || !currentPath || !currentIsMarkdown || exportingFormat) return;
-    if (!window.electronAPI.exportNote) { window.alert(t("应用代码已更新，请重启桌面应用后再导出笔记。")); return; }
+    if (!window.electronAPI.exportNote) { showToast({ message: t("应用代码已更新，请重启桌面应用后再导出笔记。") }); return; }
     const title = noteMeta?.title ?? currentPath.split(/[\\/]/).at(-1)?.replace(/\.(?:md|markdown)$/i, '') ?? 'note';
     setExportingFormat(format);
     try {
@@ -1583,7 +1581,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
       }
       await window.electronAPI.exportNote({ format, defaultName: title, content: output, sourcePath: currentPath });
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : t("{0} 导出失败：{1}", { '0': format.toUpperCase(), '1': String(error) }));
+      showToast({ message: error instanceof Error ? error.message : t("{0} 导出失败：{1}", { '0': format.toUpperCase(), '1': String(error) }) });
     } finally {
       setExportingFormat(null);
     }
@@ -1605,8 +1603,13 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
       }) ?? false;
     } catch (error) { alert(t("重命名失败: {0}", { '0': String(error) })); return false; }
   };
-  const handleDeleteFile = async (entryPath: string, isDirectory = false) => {
-    if (!window.electronAPI || !window.confirm(isDirectory ? t("确定要删除此文件夹吗？文件夹内的所有内容都会移入回收站。") : t("确定要删除此文件吗？它将被移入回收站。"))) return;
+  const handleDeleteFile = (entryPath: string, isDirectory = false) => {
+    if (!window.electronAPI) return;
+    setDeleteConfirm({ path: entryPath, isDirectory });
+  };
+
+  const executeDeleteFile = async (entryPath: string, _isDirectory: boolean) => {
+    if (!window.electronAPI) return;
     try {
       await saveController.mutate(async () => {
         if (await window.electronAPI.deleteEntry(entryPath)) {
@@ -1616,7 +1619,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
         }
       });
     } catch (error) {
-      window.alert(t("删除失败：{0}", { '0': error instanceof Error ? error.message : String(error) }));
+      showToast({ message: t("删除失败：{0}", { '0': error instanceof Error ? error.message : String(error) }) });
     }
   };
   const handleMoveEntry = async (sourcePath: string, targetDirectoryPath: string): Promise<string | null> => {
@@ -1700,7 +1703,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
     if (rich?.editor) rich.editor.commands.focus(undefined, { scrollIntoView: false });
     else sourceEditorRef.current?.view?.focus();
   }, []);
-  const saveWritingMode = (patch: Partial<AppPreferences>) => { void handleSavePreferences(patch).then(focusDocument).catch(error => window.alert(error instanceof Error ? error.message : String(error))); };
+  const saveWritingMode = (patch: Partial<AppPreferences>) => { void handleSavePreferences(patch).then(focusDocument).catch(error => showToast({ message: error instanceof Error ? error.message : String(error) })); };
   const sourceTypewriterTarget = useCallback(() => {
     const view = sourceEditorRef.current?.view;
     if (!view || saveView.frozen) return null;
@@ -1717,7 +1720,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
     const escape = (event: KeyboardEvent) => {
       if (!focusActive || isEditorInteractionBlocked || event.key !== 'Escape' || !canHandleEditorEscape(event) || hasVisibleOverlay('[role="dialog"], .mantine-Popover-dropdown, .selection-context-menu, .selection-floating-toolbar, .code-language-popover')) return;
       consumeEditorEscape(event);
-      void handleSavePreferences({ editorFocusModeEnabled: false }).then(focusDocument).catch(error => window.alert(String(error)));
+      void handleSavePreferences({ editorFocusModeEnabled: false }).then(focusDocument).catch(error => showToast({ message: String(error) }));
     };
     window.addEventListener('keydown', escape);
     return () => { panels.forEach(panel => { panel.inert = false; }); window.removeEventListener('keydown', escape); };
@@ -2119,6 +2122,21 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
           }
           setCreateEntryParentDirectory(null);
         }}
+      />
+      <ShortcutsModal isOpen={isShortcutsOpen} onClose={() => setIsShortcutsOpen(false)} />
+      <ConfirmModal
+        isOpen={deleteConfirm !== null}
+        title={deleteConfirm?.isDirectory ? t("删除文件夹") : t("删除文件")}
+        message={deleteConfirm?.isDirectory ? t("确定要删除此文件夹吗？文件夹内的所有内容都会移入回收站。") : t("确定要删除此文件吗？它将被移入回收站。")}
+        detail={deleteConfirm?.path}
+        variant="danger"
+        confirmText={t("删除")}
+        cancelText={t("取消")}
+        onConfirm={() => {
+          if (deleteConfirm) void executeDeleteFile(deleteConfirm.path, deleteConfirm.isDirectory);
+          setDeleteConfirm(null);
+        }}
+        onClose={() => setDeleteConfirm(null)}
       />
       <TagModal
         isOpen={isTagModalOpen}

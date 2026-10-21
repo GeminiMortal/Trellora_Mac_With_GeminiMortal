@@ -31,10 +31,10 @@ export default function ScheduleToolbar({
   return (
     <div className="schedule-toolbar">
       <div className="schedule-toolbar-nav">
-        <ActionIcon variant="subtle" size="sm" onClick={() => onNavigate(-1)}>
+        <ActionIcon aria-label="上一月" variant="subtle" size="sm" onClick={() => onNavigate(-1)}>
           <ChevronLeft size={16} />
         </ActionIcon>
-        <ActionIcon variant="subtle" size="sm" onClick={() => onNavigate(1)}>
+        <ActionIcon aria-label="下一月" variant="subtle" size="sm" onClick={() => onNavigate(1)}>
           <ChevronRight size={16} />
         </ActionIcon>
       </div>
@@ -62,13 +62,13 @@ export default function ScheduleToolbar({
       <div className="schedule-toolbar-actions">
         {onNotificationCenter && (
           <Indicator disabled={!unreadNotifications} size={8} offset={2} color="red">
-            <ActionIcon variant="subtle" size="sm" onClick={onNotificationCenter} title={t('通知中心')}>
+            <ActionIcon aria-label="上一周" variant="subtle" size="sm" onClick={onNotificationCenter} title={t('通知中心')}>
               <Bell size={16} />
             </ActionIcon>
           </Indicator>
         )}
         {onImport && (
-          <ActionIcon variant="subtle" size="sm" onClick={onImport} title={t('导入')}>
+          <ActionIcon aria-label="下一周" variant="subtle" size="sm" onClick={onImport} title={t('导入')}>
             <Import size={16} />
           </ActionIcon>
         )}

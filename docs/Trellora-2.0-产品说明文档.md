@@ -1,15 +1,15 @@
 # Trellora 2.0 产品说明文档
 
 > 文档类型：简要产品说明  
-> 适用平台：macOS arm64  
-> 更新日期：2026-08-27  
+> 适用平台：macOS arm64（主）· Windows x64（v1.2.3 起支持）  
+> 更新日期：2026-10-20  
 > 事实基线：当前工作区源码、README、依赖与打包配置（包含尚未提交的开发中改动）
 
 > 状态口径：正文中的“支持”表示当前源码已存在对应界面或实现，不等同于正式发布版已经通过运行验收；灰度、仅配置、规划中和待验收能力在第 8 节单独标明。
 
 ## 1. 产品概述
 
-Trellora 2.0 是一款面向个人与专业知识工作者的 **macOS 本地优先、AI 原生 Markdown 知识管理应用**。它以普通文件夹和 Markdown 文件保存用户内容，在提供富文本写作、文件管理、全文检索和知识关联能力的同时，引入资料解析流水线与可选择数据范围的 AI 助手，覆盖“记录—整理—检索—理解—复用”的主要知识工作环节。
+Trellora 2.0 是一款面向个人与专业知识工作者的 **本地优先、AI 原生 Markdown 知识管理应用**（主要面向 macOS arm64，v1.2.3 起支持 Windows x64）。它以普通文件夹和 Markdown 文件保存用户内容，在提供富文本写作、文件管理、全文检索和知识关联能力的同时，引入资料解析流水线与可选择数据范围的 AI 助手，覆盖“记录—整理—检索—理解—复用”的主要知识工作环节。
 
 产品的核心承诺是：
 
@@ -179,8 +179,8 @@ flowchart LR
 
 ### 8.1 运行条件
 
-- 目标系统：macOS arm64。
-- 发布目标：提供 DMG 和 ZIP 分发文件，并在包内携带资料流水线所需运行时；“单个分发文件”不代表应用内部没有 Worker 或配套资源。
+- 目标系统：macOS arm64（主）；Windows x64（v1.2.3 起支持构建与运行）。
+- 发布目标：macOS 提供 DMG 和 ZIP 分发文件，Windows 提供 NSIS 安装包与免安装版，并在包内携带资料流水线所需运行时；“单个分发文件”不代表应用内部没有 Worker 或配套资源。
 - 基础笔记功能无需登录；本地 AI 需要可用的 Ollama，远程 AI 需要用户自行配置服务与密钥。
 - PDF 结构化解析依赖 MinerU 云服务和用户明确授权；DOCX 解析在本机完成。
 
@@ -211,10 +211,10 @@ flowchart LR
 ## 10. 主要事实来源
 
 - `README.md`：产品定位、开发与发布说明。
-- `src/App.tsx`、`src/components/NavRail.tsx`：主导航、笔记工作台和页面编排。
-- `src/components/KnowledgePanel.tsx`、`src/components/AssistantWorkspaceView.tsx`：当前笔记助手与统一问答工作区。
-- `src/components/MaterialsView.tsx`、`src/components/MaterialsPipelineView.tsx`：资料库、文档预览和流水线界面。
+- `src/App.tsx`、`src/components/navigation/NavRail.tsx`：主导航、笔记工作台和页面编排。
+- `src/components/knowledge/KnowledgePanel.tsx`、`src/components/assistant/AssistantWorkspaceView.tsx`：当前笔记助手与统一问答工作区。
+- `src/components/materials/MaterialsView.tsx`、`src/components/pipeline/MaterialsPipelineView.tsx`：资料库、文档预览和流水线界面。
 - `electron/main.ts`、`electron/preload.ts`、`src/electron.d.ts`：主进程能力、IPC 暴露与类型边界。
 - `electron/pipeline/`、`pipeline-python/pipeline_worker/`：文档解析、结构化流水线与 Worker 协议。
 - `electron/knowledge/`：搜索、索引、AI、记忆、用户信息和知识库问答实现。
-- `package.json`：依赖、验证脚本和 macOS DMG/ZIP 打包配置。
+- `package.json`：依赖、验证脚本和 macOS DMG/ZIP、Windows NSIS/portable 打包配置。

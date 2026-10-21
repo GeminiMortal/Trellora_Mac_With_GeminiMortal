@@ -32,6 +32,8 @@ import type { CreateAssistantNoteResult } from '../../../shared/assistantNote.ts
 import ProviderIcon from '../provider/ProviderIcon.tsx';
 import type { SelectionExpansionDraftSession } from '../../editor/behavior/selectionExpansion.ts';
 import type { SelectionExpansionSettings } from '../../electron';
+import { showToast } from '../../utils/ui/feedback.ts';
+import { showConfirm } from '../../utils/ui/feedback.ts';
 
 /**
  * Props for the main KnowledgePanel sidebar component.
@@ -954,7 +956,7 @@ export function KnowledgeAssistant(props: KnowledgeAssistantProps) {
       await refreshAssistantMemory();
     } catch (error) {
       if (activeRequestIdRef.current === transitionId && turnContextKeyRef.current === turnContextKey) {
-        window.alert(error instanceof Error ? error.message : t("无法新建会话。"));
+        showToast({ message: error instanceof Error ? error.message : t("无法新建会话。") });
       }
     } finally {
       if (activeRequestIdRef.current === transitionId) {
@@ -986,7 +988,7 @@ export function KnowledgeAssistant(props: KnowledgeAssistantProps) {
       clearAttachments();
     } catch (error) {
       if (activeRequestIdRef.current === transitionId && turnContextKeyRef.current === turnContextKey) {
-        window.alert(error instanceof Error ? error.message : t("无法恢复会话。"));
+        showToast({ message: error instanceof Error ? error.message : t("无法恢复会话。") });
       }
     } finally {
       if (activeRequestIdRef.current === transitionId) {
@@ -1018,7 +1020,7 @@ export function KnowledgeAssistant(props: KnowledgeAssistantProps) {
   };
 
   const deleteAssistantSession = async () => {
-    if (!notePath || !assistantSessionId || !window.electronAPI || !window.confirm(t("删除当前 AI 会话及其引用？此操作无法撤销。"))) return;
+    if (!notePath || !assistantSessionId || !window.electronAPI || !await showConfirm({ message: t("删除当前 AI 会话及其引用？此操作无法撤销。") })) return;
     await window.electronAPI.deleteAssistantMemorySession(notePath, assistantSessionId);
     setAssistantSessionId(null);
     setDebugMemory(null);
@@ -1028,7 +1030,7 @@ export function KnowledgeAssistant(props: KnowledgeAssistantProps) {
   };
 
   const clearAssistantMemoryForNote = async () => {
-    if (!notePath || !window.electronAPI || !window.confirm(t("清空当前笔记的全部 AI 会话与引用？此操作无法撤销。"))) return;
+    if (!notePath || !window.electronAPI || !await showConfirm({ message: t("清空当前笔记的全部 AI 会话与引用？此操作无法撤销。") })) return;
     await window.electronAPI.clearAssistantMemoryNote(notePath);
     setAssistantSessionId(null);
     setDebugMemory(null);
@@ -1125,7 +1127,7 @@ export function KnowledgeAssistant(props: KnowledgeAssistantProps) {
       activeRequestIdRef.current = null;
       setActiveRequestId(null);
       if (submitted) setMessages((current) => current.map((entry) => entry.id === requestId ? { ...entry, state: 'error', statusMessage: undefined, error: message } : entry));
-      else window.alert(message);
+      else showToast({ message: message });
     } finally {
       // 取消、准备失败或 onboarding 拒绝发送时释放自己的锁，不能清掉后来请求的状态。
       if (!submitted && activeRequestIdRef.current === requestId) {
@@ -1145,7 +1147,7 @@ export function KnowledgeAssistant(props: KnowledgeAssistantProps) {
 
   const clearConversation = () => {
     if (props.workspaceMemory) {
-      void props.workspaceMemory.onNewSession().catch((error) => window.alert(error instanceof Error ? error.message : t("无法新建会话。")));
+      void props.workspaceMemory.onNewSession().catch((error) => showToast({ message: error instanceof Error ? error.message : t("无法新建会话。") }));
       return;
     }
     cancelActiveTurn();
@@ -1181,7 +1183,7 @@ export function KnowledgeAssistant(props: KnowledgeAssistantProps) {
       const selected = await window.electronAPI.selectAssistantAttachments(kind);
       addAttachments(selected);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : String(error));
+      showToast({ message: error instanceof Error ? error.message : String(error) });
     }
   };
   const selectedSkills = selectedSkillIds.flatMap((skillId) => {
@@ -1205,26 +1207,26 @@ const lastAssistantMessage = assistantMessages.at(-1);
         <Menu.Target><Button variant="subtle" color="gray" size="compact-sm">{activeAssistantSession?.title || (assistantMemoryMode === 'persistent' ? t("新对话") : assistantMemoryMode === 'session-only' ? t("仅本次") : t("不使用记忆"))} <ChevronDown size={13} /></Button></Menu.Target>
         <Menu.Dropdown>
           <Menu.Label>当前笔记会话</Menu.Label>
-          <Menu.Item onClick={() => void startNewAssistantSession().catch((error) => window.alert(error instanceof Error ? error.message : t("无法新建会话。")))}>{t("新建会话")}</Menu.Item>
+          <Menu.Item onClick={() => void startNewAssistantSession().catch((error) => showToast({ message: error instanceof Error ? error.message : t("无法新建会话。") }))}>{t("新建会话")}</Menu.Item>
           {assistantMemoryMode === 'persistent' && assistantSessions.length ? <>
             <Menu.Divider />
             <Menu.Label>继续会话</Menu.Label>
-            {assistantSessions.map((session) => <Menu.Item key={session.sessionId} onClick={() => void restoreAssistantSession(session).catch((error) => window.alert(error instanceof Error ? error.message : t("无法恢复会话。")))}>{session.sessionId === assistantSessionId ? '✓ ' : ''}{session.title}</Menu.Item>)}
+            {assistantSessions.map((session) => <Menu.Item key={session.sessionId} onClick={() => void restoreAssistantSession(session).catch((error) => showToast({ message: error instanceof Error ? error.message : t("无法恢复会话。") }))}>{session.sessionId === assistantSessionId ? '✓ ' : ''}{session.title}</Menu.Item>)}
           </> : null}
           {assistantMemoryMode === 'persistent' && assistantSessionId ? <>
             <Menu.Divider />
-            <Menu.Item onClick={() => void exportAssistantSession('markdown').catch((error) => window.alert(error instanceof Error ? error.message : t("导出失败。")))}>{t("导出为 Markdown")}</Menu.Item>
-            <Menu.Item onClick={() => void exportAssistantSession('json').catch((error) => window.alert(error instanceof Error ? error.message : t("导出失败。")))}>{t("导出为 JSON")}</Menu.Item>
-            <Menu.Item onClick={() => void archiveAssistantSession().catch((error) => window.alert(error instanceof Error ? error.message : t("归档失败。")))}>{t("归档当前会话")}</Menu.Item>
-            <Menu.Item color="red" onClick={() => void deleteAssistantSession().catch((error) => window.alert(error instanceof Error ? error.message : t("删除失败。")))}>{t("删除当前会话")}</Menu.Item>
-            <Menu.Item color="red" onClick={() => void clearAssistantMemoryForNote().catch((error) => window.alert(error instanceof Error ? error.message : t("清空失败。")))}>{t("清空当前笔记记忆")}</Menu.Item>
+            <Menu.Item onClick={() => void exportAssistantSession('markdown').catch((error) => showToast({ message: error instanceof Error ? error.message : t("导出失败。") }))}>{t("导出为 Markdown")}</Menu.Item>
+            <Menu.Item onClick={() => void exportAssistantSession('json').catch((error) => showToast({ message: error instanceof Error ? error.message : t("导出失败。") }))}>{t("导出为 JSON")}</Menu.Item>
+            <Menu.Item onClick={() => void archiveAssistantSession().catch((error) => showToast({ message: error instanceof Error ? error.message : t("归档失败。") }))}>{t("归档当前会话")}</Menu.Item>
+            <Menu.Item color="red" onClick={() => void deleteAssistantSession().catch((error) => showToast({ message: error instanceof Error ? error.message : t("删除失败。") }))}>{t("删除当前会话")}</Menu.Item>
+            <Menu.Item color="red" onClick={() => void clearAssistantMemoryForNote().catch((error) => showToast({ message: error instanceof Error ? error.message : t("清空失败。") }))}>{t("清空当前笔记记忆")}</Menu.Item>
           </> : null}
           <Menu.Divider />
           <Menu.Label>{t("记忆模式")}</Menu.Label>
-          {(['persistent', 'session-only', 'disabled'] as AssistantMemoryMode[]).map((mode) => <Menu.Item key={mode} onClick={() => void changeAssistantMemoryMode(mode).catch((error) => window.alert(error instanceof Error ? error.message : t("无法更新记忆模式。")))}>{assistantMemoryMode === mode ? '✓ ' : ''}{mode === 'persistent' ? t("本地持久化") : mode === 'session-only' ? t("仅本次启动") : t("不使用记忆")}</Menu.Item>)}
+          {(['persistent', 'session-only', 'disabled'] as AssistantMemoryMode[]).map((mode) => <Menu.Item key={mode} onClick={() => void changeAssistantMemoryMode(mode).catch((error) => showToast({ message: error instanceof Error ? error.message : t("无法更新记忆模式。") }))}>{assistantMemoryMode === mode ? '✓ ' : ''}{mode === 'persistent' ? t("本地持久化") : mode === 'session-only' ? t("仅本次启动") : t("不使用记忆")}</Menu.Item>)}
           {assistantMemoryMode === 'persistent' ? <Menu.Item onClick={() => {
             if (!window.electronAPI) return;
-            void window.electronAPI.backupAssistantMemory().catch((error) => window.alert(error instanceof Error ? error.message : t("备份失败。")));
+            void window.electronAPI.backupAssistantMemory().catch((error) => showToast({ message: error instanceof Error ? error.message : t("备份失败。") }));
           }}>{t("备份会话记忆库")}</Menu.Item> : null}
         </Menu.Dropdown>
       </Menu> : null}
@@ -2109,8 +2111,8 @@ function ContextProjectionDiagnosticsPanel({ diagnostics, onStartNewTopic }: {
     </section>;
   }
   const finalDenominator = Math.max(1, diagnostics.tokens.final);
-  const confirmNewTopic = () => {
-    const confirmed = window.confirm('新建话题会结束当前上下文链，并从空白会话开始；已有历史仍保留在本地，可从历史记录重新打开。是否继续？');
+  const confirmNewTopic = async () => {
+    const confirmed = await showConfirm({ message: '新建话题会结束当前上下文链，并从空白会话开始；已有历史仍保留在本地，可从历史记录重新打开。是否继续？' });
     if (confirmed) onStartNewTopic();
   };
   return <section className="assistant-debug-section assistant-context-diagnostics-section">
@@ -3244,7 +3246,7 @@ function SendNoteToMaterials({ notePath }: { notePath: string }) {
     try {
       const documents = await window.electronAPI.sendNoteToMaterials(notePath, targetPath);
       const imported = documents.find((document) => document.name.endsWith(notePath.split('/').pop() ?? '.md'));
-      window.alert(imported ? t("已入库：{0}", { '0': imported.name }) : t("已入库，可在资料库中查看。"));
+      showToast({ message: imported ? t("已入库：{0}", { '0': imported.name }) : t("已入库，可在资料库中查看。") });
       setOpened(false);
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : String(sendError));
@@ -3351,7 +3353,7 @@ function InfoTab(props: KnowledgePanelProps) {
       {props.noteAnalysis ? <>
         <CollapsibleAiContent resetKey={props.noteAnalysis.generatedAt}><Text className="note-overview-summary note-analysis-summary-text" size="sm">{props.noteAnalysis.summary}</Text></CollapsibleAiContent>
         {props.noteAnalysis.keyPoints.length ? <>
-          <UnstyledButton className="note-overview-toggle" onClick={() => setOverviewExpanded((value) => !value)} aria-expanded={overviewExpanded}>
+          <UnstyledButton aria-label="展开诊断" className="note-overview-toggle" onClick={() => setOverviewExpanded((value) => !value)} aria-expanded={overviewExpanded}>
             <span>{props.noteAnalysis.keyPoints.length} {t("个关键要点")}</span>
             <span>{overviewExpanded ? t("收起") : t("展开")}{overviewExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}</span>
           </UnstyledButton>

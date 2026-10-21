@@ -42,20 +42,6 @@ function addDays(dateStr: string, days: number): string {
   return toDateString(d.getFullYear(), d.getMonth() + 1, d.getDate());
 }
 
-function addWeeks(dateStr: string, weeks: number): string {
-  return addDays(dateStr, weeks * 7);
-}
-
-function addMonths(dateStr: string, months: number): string {
-  const { year, month, day } = parseDateComponents(dateStr);
-  const totalMonths = (year * 12 + month - 1) + months;
-  const newYear = Math.floor(totalMonths / 12);
-  const newMonth = (totalMonths % 12) + 1;
-  // Clamp day to last day of month
-  const lastDay = new Date(newYear, newMonth, 0).getDate();
-  return toDateString(newYear, newMonth, Math.min(day, lastDay));
-}
-
 function daysSince(a: string, b: string): number {
   const msPerDay = 86400000;
   return Math.round((new Date(b + 'T00:00:00').getTime() - new Date(a + 'T00:00:00').getTime()) / msPerDay);

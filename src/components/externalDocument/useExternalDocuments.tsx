@@ -3,6 +3,8 @@ import { Button, Group, Modal, Select, Stack, Text } from '@mantine/core';
 import type { DocumentEncoding, DocumentFormat, DocumentSnapshot, DocumentJoinRequest, DocumentJoinResult, DocumentOpenRequest } from '../../../shared/documentSession.ts';
 import { DocumentSaveController } from '../../utils/note/documentSaveController.ts';
 import { t } from '../../i18n/index.ts';
+import { showToast } from '../../utils/ui/feedback.ts';
+import { showConfirm } from '../../utils/ui/feedback.ts';
 
 type Choice = { title: string; message: string; options: { value: string; label: string }[]; select?: boolean; resolve: (value: string | null) => void };
 interface Options { beforeOpen: () => Promise<boolean>; openLibrary: (library: string, file: string) => Promise<boolean>; showNotes: () => void; blocked: boolean }
@@ -26,7 +28,7 @@ export function useExternalDocuments(options: Options) {
   const run = useCallback(async (action: () => Promise<void>, freezeEditor = true) => {
     if (busyRef.current || optionsRef.current.blocked || maintained.current) return;
     busyRef.current = true; setBusy(true); setEditingBlocked(freezeEditor);
-    try { await action(); } catch (error) { window.alert(String(error)); }
+    try { await action(); } catch (error) { showToast({ message: String(error) }); }
     finally { busyRef.current = false; setBusy(false); setEditingBlocked(false); await refreshRequestsRef.current(); }
   }, []);
   const save = useCallback(async (mode: 'save' | 'saveAs' = 'save', utf8 = false): Promise<boolean> => {
@@ -52,7 +54,7 @@ export function useExternalDocuments(options: Options) {
     if (!controller.snapshot) return;
     await controller.synchronize();
     const result = await window.electronAPI.closeDocument({ documentSessionId: controller.snapshot.documentSessionId, draftRevision: controller.revision, reason, transferToken });
-    if (result.recoveryMessage) window.alert(t(result.recoveryMessage));
+    if (result.recoveryMessage) showToast({ message: t(result.recoveryMessage) });
     controller.reset();
   }, [controller]);
   const prepareTransition = useCallback(async (): Promise<boolean> => {
@@ -85,7 +87,7 @@ export function useExternalDocuments(options: Options) {
     refreshRequestsRef.current = async () => {
       try {
         const requests = await window.electronAPI.listDocumentOpenRequests(); pendingFilesRef.current = requests; setPendingFiles(requests);
-        const failures = await window.electronAPI.takeDocumentOpenFailures(); if (failures.length) window.alert(failures.map(failure => `${failure.displayPath}\n${failure.message}`).join('\n\n'));
+        const failures = await window.electronAPI.takeDocumentOpenFailures(); if (failures.length) showToast({ message: failures.map(failure => `${failure.displayPath}\n${failure.message}`).join('\n\n') });
         return requests;
       } catch { return pendingFilesRef.current; }
     };
@@ -99,13 +101,13 @@ export function useExternalDocuments(options: Options) {
   const open = () => run(async () => { const request = await window.electronAPI.pickDocumentFile(); if (request) await drainRequestsRef.current(request.requestId); });
   const recent = () => run(async () => {
     const records = await window.electronAPI.listRecentDocuments();
-    if (!records.length) { window.alert(t('没有最近打开的独立文件。')); return; }
+    if (!records.length) { showToast({ message: t('没有最近打开的独立文件。') }); return; }
     const path = await ask(t('最近文件'), '', records.map(record => ({ value: record.displayPath, label: record.displayPath })), true);
     if (path) { const request = await window.electronAPI.openRecentDocument(path); await drainRequestsRef.current(request.requestId); }
   });
   const recover = () => run(async () => {
     const records = await window.electronAPI.listDocumentRecovery();
-    if (!records.length) { window.alert(t('没有需要恢复的独立文件草稿。')); return; }
+    if (!records.length) { showToast({ message: t('没有需要恢复的独立文件草稿。') }); return; }
     const id = await ask(t('恢复独立文件草稿'), t('恢复仅加载草稿，不会覆盖原文件。'), records.map(r => ({ value: r.recoveryId, label: `${r.displayPath} · ${new Date(r.updatedAt).toLocaleString()}` })), true);
     if (!id || !await optionsRef.current.beforeOpen()) return;
     // 先解决当前草稿，避免取消切换时丢失被恢复的旧记录。
@@ -113,7 +115,7 @@ export function useExternalDocuments(options: Options) {
     const snapshot = await window.electronAPI.restoreDocumentDraft(id); await finishSession(reason); controller.open(snapshot); optionsRef.current.showNotes();
   });
   const join = (libraries: { path: string; alias?: string; name?: string }[]) => run(async () => {
-    if (!libraries.length) { window.alert(t('请先创建或登记笔记库。')); return; }
+    if (!libraries.length) { showToast({ message: t('请先创建或登记笔记库。') }); return; }
     const library = pendingJoin.current && pendingJoin.current.request.documentSessionId === controller.snapshot?.documentSessionId && pendingJoin.current.request.draftRevision === controller.revision ? pendingJoin.current.request.libraryPath : await ask(t('加入笔记库'), t('复制当前草稿到笔记库，原文件保持现有内容。'), libraries.map(l => ({ value: l.path, label: l.alias ?? l.name ?? l.path })), true);
     if (!library || !controller.snapshot) return;
     await controller.synchronize();
@@ -123,11 +125,11 @@ export function useExternalDocuments(options: Options) {
     routing.current = true;
     try { if (await optionsRef.current.openLibrary(result.libraryPath, result.path)) { await finishSession('transferred', result.transferToken); pendingJoin.current = null; } }
     finally { routing.current = false; }
-    if (result.indexState === 'degraded') window.alert(t('副本已保存，索引更新失败，请在笔记库重建索引。'));
+    if (result.indexState === 'degraded') showToast({ message: t('副本已保存，索引更新失败，请在笔记库重建索引。') });
   });
   const reload = (chooseEncoding = false) => run(async () => {
     if (!controller.snapshot) return;
-    if (controller.dirty && !window.confirm(t('重新加载会放弃当前修改，是否继续？'))) return;
+    if (controller.dirty && !await showConfirm({ message: t('重新加载会放弃当前修改，是否继续？') })) return;
     await controller.synchronize();
     const encoding = chooseEncoding ? await ask(t('选择文本编码'), '', [{ value: 'utf8', label: 'UTF-8' }, { value: 'utf16le', label: 'UTF-16 LE' }, { value: 'utf16be', label: 'UTF-16 BE' }, { value: 'gbk', label: 'GBK' }, { value: 'gb18030', label: 'GB18030' }], true) : controller.snapshot.format.encoding;
     if (!encoding) return;
@@ -151,7 +153,7 @@ export function useExternalDocuments(options: Options) {
     const drop = (event: DragEvent) => {
       const files = Array.from(event.dataTransfer?.files ?? []); if (!files.length) return;
       event.preventDefault(); if (optionsRef.current.blocked || maintained.current) return;
-      void window.electronAPI.dropDocumentFiles(files).catch(error => window.alert(String(error)));
+      void window.electronAPI.dropDocumentFiles(files).catch(error => showToast({ message: String(error) }));
     };
     window.addEventListener('dragover', dragover); window.addEventListener('drop', drop);
     return () => { window.removeEventListener('dragover', dragover); window.removeEventListener('drop', drop); };

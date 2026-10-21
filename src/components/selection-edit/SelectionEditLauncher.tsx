@@ -106,7 +106,7 @@ export default function SelectionEditLauncher({
             {actions.map((item) => {
               const active = item.action === action;
               return (
-                <UnstyledButton
+                <UnstyledButton aria-label="应用选区编辑"
                   key={item.action}
                   aria-pressed={active}
                   onMouseDown={onPreserveSelection}

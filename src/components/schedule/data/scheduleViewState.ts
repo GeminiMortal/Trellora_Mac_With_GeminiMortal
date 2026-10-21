@@ -12,7 +12,6 @@ export type CalendarViewMode = 'year' | 'month' | 'week' | 'day';
 export function visibleRange(view: CalendarViewMode, anchor: Date): { from: string; to: string } {
   const y = anchor.getFullYear();
   const m = anchor.getMonth();
-  const d = anchor.getDate();
 
   switch (view) {
     case 'year': {

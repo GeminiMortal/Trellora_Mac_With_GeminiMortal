@@ -1645,10 +1645,13 @@ function GraphEnhancementPanel({ config, chunkCount, saving, error, onSave }: {
   const [timeoutDraft, setTimeoutDraft] = useState<string>('');
   const [timeoutDirty, setTimeoutDirty] = useState(false);
 
+  // 有意使用 config?.llmTimeoutMs 粒度依赖：本 effect 只读取该字段，用整对象 config
+  // 作依赖会让任意 config 字段变更都触发重渲染。lint 此处属保守误报。
   useEffect(() => {
     if (!timeoutDirty && config) {
       setTimeoutDraft(String(Math.round((config.llmTimeoutMs ?? 60000) / 1000)));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config?.llmTimeoutMs, timeoutDirty]);
 
   const saveTimeout = () => {

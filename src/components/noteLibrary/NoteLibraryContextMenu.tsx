@@ -5,6 +5,7 @@ import { Edit2, FileText, FolderPlus, Import, Pin, PinOff, Plus, Star, Trash2 } 
 import type { FileNode } from '../../electron';
 import { getEditableEntryName, getSidebarDisplayName } from '../../utils/ui/sidebarDisplay.ts';
 import './NoteLibrary.css';
+import { showToast } from '../../utils/ui/feedback.ts';
 
 export interface NoteLibraryMenuTarget {
     node: FileNode;
@@ -82,7 +83,7 @@ export default function NoteLibraryContextMenu(props: Props) {
             <Menu.Dropdown className="note-library-context-menu">
                 <Menu.Label className="note-library-menu-title" title={node?.name}>{node ? getSidebarDisplayName(node) : ''}</Menu.Label>
                 <Menu.Item leftSection={props.pinned ? <PinOff size={15} /> : <Pin size={15} />}
-                    onClick={() => { if (node) void props.onTogglePinned(node.path).catch((error) => window.alert(t("置顶失败：{0}", { '0': String(error) }))); }}>
+                    onClick={() => { if (node) void props.onTogglePinned(node.path).catch((error) => showToast({ message: t("置顶失败：{0}", { '0': String(error) }) })); }}>
                     {props.pinned ? t("取消置顶") : t("置顶")}
                 </Menu.Item>
                 {!node?.isDirectory ? <>

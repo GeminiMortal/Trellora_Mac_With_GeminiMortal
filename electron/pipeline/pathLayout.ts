@@ -104,7 +104,9 @@ export function createPipelineLayout(libraryPath: string, document: MaterialsDoc
       ? 'mineru-v4-p4'
       : route === 'mammoth'
         ? 'mammoth-1.12.1-p1'
-        : 'unsupported-v1';
+        : route === 'custom'
+          ? 'custom-p1'
+          : 'unsupported-v1';
   const fingerprint = hashValue({
     documentId: document.id,
     extension: document.extension,

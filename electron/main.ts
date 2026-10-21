@@ -145,13 +145,11 @@ import { buildFollowUpSuggestionsPrompt, FollowUpSuggestionsError, generateFollo
 import { QaMemoryDatabase } from './knowledge/qa/qaMemoryDatabase.ts';
 import { QaMemoryRepository } from './knowledge/qa/qaMemoryRepository.ts';
 import { QaMemoryOrchestrator } from './knowledge/qa/qaMemoryOrchestrator.ts';
-import type { QaSessionScope } from './knowledge/qa/qaMemoryTypes.ts';
 import { QaLegacyMemoryMigrationService } from './knowledge/qa/qaLegacyMemoryMigration.ts';
 import { projectQaRecentTurnsToConversation, selectQaRecentCompleteConversation } from './knowledge/qa/qaCanonicalHistory.ts';
 import { ensureLocalMemoryPrincipalId, MemoryScopeResolver } from './knowledge/memory/memoryScope';
 import { detectExplicitMemoryStatement } from './knowledge/memory/memoryText';
 import { MemoryExtractionService, reviewConsolidationWithModel, type MemoryExtractionModelResolution } from './knowledge/memory/memoryExtractionService';
-import { MemoryTurnStatusService } from './knowledge/memory/memoryTurnStatusService';
 import { MEMORY_CONSTANTS } from './knowledge/memory/memoryConstants';
 import { MemoryRecallService, type MemoryEmbeddingRuntime, type MemoryRecallResult, type MemoryUsedItem } from './knowledge/memory/memoryRecallService';
 import { createLongTermMemoryContextMaterial } from './knowledge/memory/memoryPrompt';
@@ -165,7 +163,7 @@ import { MemoryMigrationService } from './knowledge/memory/memoryMigrationServic
 import { MemoryTopicService } from './knowledge/memory/memoryTopicService';
 import { getMemoryCutoverReport, isCanonicalMemoryProjection, normalizeMemoryProjectionMode, recordMemoryCutoverObservation, type MemoryProjectionMode } from './knowledge/memory/memoryCutover';
 import type { SearchConversationsToolRuntime } from './knowledge/knowledgeTools/searchConversationsTool';
-import type { ManualMemoryInput, MemoryDocumentCitation, MemoryExtractionJobRecord, MemoryItemListQuery, MemoryItemPageQuery, MemoryPageQuery, MemoryItemPatch, WorkspaceMemoryConfig } from './knowledge/memory/memoryTypes';
+import type { ManualMemoryInput, MemoryDocumentCitation, MemoryExtractionJobRecord, MemoryItemPatch, WorkspaceMemoryConfig } from './knowledge/memory/memoryTypes';
 import type { MemoryProposalReview } from './knowledge/memory/memoryTypes';
 import type { QaMemoryZoneTokens, QaRecentTurn, QaResidualMemoryObservationInput } from './knowledge/qa/qaMemoryTypes.ts';
 import { UserProfileRepository } from './knowledge/userProfile/userProfileRepository.ts';
@@ -468,6 +466,12 @@ const maintenanceBarrier = new MaintenanceBarrier({
 });
 function registerAppHandler(channel: string, handler: Parameters<typeof ipcMain.handle>[1]): void {
   ipcMain.handle(channel, (event, ...args) => {
+    // Central sender gate: every registerAppHandler channel must originate from the internal renderer.
+    // The per-handler assertInternalRenderer/assertNoteWindow calls stay for window-scoped rules
+    // (assertNoteWindow additionally pins the main window id), but source-of-origin is enforced here.
+    // 统一发送方门禁：所有 registerAppHandler 通道必须来自内部渲染器；个别 handler 中的
+    // assertNoteWindow 仍保留（额外限定主窗口），来源校验统一在此收口。
+    assertInternalRenderer(event);
     const flushing = maintenanceBarrier.phase === 'preparing' && ['notes:save', 'notes:mutate', 'documents:update-draft'].includes(channel);
     const isTerminalChannel = channel.startsWith('terminal:');
     if (workspaceMigrationService?.busy && !channel.startsWith('workspace-migration:') && !flushing && !isTerminalChannel) throw new Error('正在迁移数据，请等待迁移结束。');
@@ -643,7 +647,11 @@ function assertInternalRenderer(event: IpcMainInvokeEvent): void {
   const expectedUrl = isDevelopment
     ? 'http://localhost:5173/'
     : url.pathToFileURL(path.resolve(__dirname, '../dist/index.html')).href;
-  if (!senderUrl.startsWith(expectedUrl)) throw new Error('不允许来自外部页面的 AI 编辑请求。');
+  // Exact-match the sender origin+path instead of a prefix check: startsWith would also
+  // accept strings like "http://localhost:5173.evil.example/" in dev builds.
+  // 精确比较完整 URL，避免 startsWith 前缀匹配在 dev 形态下放过
+  // "http://localhost:5173.evil.example/" 这类同前缀外部页面。
+  if (senderUrl !== expectedUrl) throw new Error('不允许来自外部页面的 AI 编辑请求。');
 }
 
 function selectionTaskKey(event: IpcMainInvokeEvent, requestId: string): string {
@@ -967,7 +975,6 @@ const createWindow = () => {
     mainWindow.webContents.openDevTools();
   } else {
     const indexPath = path.join(__dirname, '../dist/index.html');
-    console.log('Loading index from:', indexPath);
 
     mainWindow.loadFile(indexPath).catch(e => {
       dialog.showErrorBox('界面加载错误', `无法加载应用界面：\n${indexPath}\n${e.message}`);
@@ -5244,7 +5251,7 @@ registerAppHandler('ping', () => 'pong');
 // ── Schedule / Calendar ──────────────────────────────────────────────────────
 // 日程 / 日历
 
-import type { ScheduleRangeQuery, ScheduleCreateRequest, ScheduleUpdateRequest, ScheduleDeleteRequest, ScheduleOccurrenceOverrideRequest, ScheduleChangedEvent, TodoStatus, CourseTimeSettings, ScheduleImportPreviewResult, ScheduleImportCommitRequest, ScheduleImportCommitResult } from '../shared/schedule.ts';
+import type { ScheduleRangeQuery, ScheduleCreateRequest, ScheduleUpdateRequest, ScheduleDeleteRequest, ScheduleOccurrenceOverrideRequest, ScheduleChangedEvent, TodoStatus, CourseTimeSettings, ScheduleImportCommitRequest } from '../shared/schedule.ts';
 import { ScheduleService } from './schedule/scheduleService';
 import { ScheduleReminderService } from './schedule/scheduleReminderService';
 import { ScheduleImportService } from './schedule/import/scheduleImportService';
@@ -5254,6 +5261,8 @@ let scheduleReminderService: ScheduleReminderService | undefined;
 let scheduleImportService: ScheduleImportService | undefined;
 
 import { TerminalService } from './terminal/terminalService.ts';
+import { PluginHost } from './plugins/pluginHost.ts';
+import { installPluginFromUrl, installPluginFromZip } from './plugins/pluginInstaller.ts';
 let terminalService: TerminalService | undefined;
 
 function getOrCreateScheduleService(): ScheduleService {
@@ -5509,7 +5518,124 @@ registerAppHandler('schedule:import-preview-image', async (event, filePath: stri
   }
 });
 
+// ── Plugin System ────────────────────────────────────────────────────────────
+// 插件系统：UI 命令经 preload 转发到主进程，由插件注册表分发到插件 handler。
+// 插件 UI commands are forwarded from the preload to the main process and
+// dispatched to the registered plugin handler.
+registerAppHandler('plugin:list-commands', (event) => {
+  assertInternalRenderer(event);
+  return getPluginHost().getContributions().uiCommands.size
+    ? [...getPluginHost().getContributions().uiCommands.entries()].map(([id, c]) => ({ id, title: c.title, panel: c.panel ?? 'sidebar' }))
+    : [];
+});
+
+registerAppHandler('plugin:invoke-command', async (event, commandId: string, args?: { trigger?: 'command-palette' | 'sidebar' | 'toolbar'; payload?: unknown }) => {
+  assertInternalRenderer(event);
+  const command = getPluginHost().getContributions().uiCommands.get(commandId);
+  if (!command) throw new Error(`未知插件命令：${commandId}`);
+  await command.execute({ trigger: args?.trigger ?? 'command-palette', payload: args?.payload });
+  return { ok: true };
+});
+
+registerAppHandler('plugin:list', (event) => {
+  assertInternalRenderer(event);
+  return getPluginHost().registry.summaries();
+});
+
+registerAppHandler('plugin:install-from-url', async (event, url: string) => {
+  assertInternalRenderer(event);
+  const host = getPluginHost();
+  const tempDir = path.join(app.getPath('temp'), 'trellora-plugin-install');
+  const { manifest, pluginDir } = await installPluginFromUrl(url, path.join(app.getPath('userData'), 'plugins'), tempDir);
+  // Reload the plugin into the host registry.
+  // 重新加载插件到宿主注册表。
+  const plugin = host.registry.get(manifest.id);
+  if (!plugin) {
+    const loader = (host as unknown as { loader: { loadOne(rootDir: string): { manifest: typeof manifest; rootDir: string; state: string } } }).loader;
+    const loaded = loader.loadOne(pluginDir);
+    host.registry.add(loaded as never);
+    host.permissions.declare(manifest.id, manifest.permissions);
+  }
+  return { manifest, pluginDir };
+});
+
+registerAppHandler('plugin:install-from-zip', async (event, zipPath: string) => {
+  assertInternalRenderer(event);
+  const host = getPluginHost();
+  const { manifest, pluginDir } = await installPluginFromZip(zipPath, path.join(app.getPath('userData'), 'plugins'));
+  const plugin = host.registry.get(manifest.id);
+  if (!plugin) {
+    const loader = (host as unknown as { loader: { loadOne(rootDir: string): { manifest: typeof manifest; rootDir: string; state: string } } }).loader;
+    const loaded = loader.loadOne(pluginDir);
+    host.registry.add(loaded as never);
+    host.permissions.declare(manifest.id, manifest.permissions);
+  }
+  return { manifest, pluginDir };
+});
+
+registerAppHandler('plugin:enable', async (event, id: string) => {
+  assertInternalRenderer(event);
+  await getPluginHost().activate(id);
+  return { ok: true };
+});
+
+registerAppHandler('plugin:disable', async (event, id: string) => {
+  assertInternalRenderer(event);
+  await getPluginHost().disable(id);
+  return { ok: true };
+});
+
+registerAppHandler('plugin:uninstall', async (event, id: string) => {
+  assertInternalRenderer(event);
+  const host = getPluginHost();
+  const plugin = host.registry.get(id);
+  await host.uninstall(id);
+  if (plugin) fs.rmSync(plugin.rootDir, { recursive: true, force: true });
+  return { ok: true };
+});
+
 // ── Terminal Service ──────────────────────────────────────────────────────────
+let pluginHost: PluginHost | undefined;
+function getPluginHost(): PluginHost {
+  if (!pluginHost) {
+    pluginHost = new PluginHost({
+      pluginsDir: path.join(app.getPath('userData'), 'plugins'),
+      trelloraVersion: app.getVersion(),
+      permissionStore: {
+        read: () => {
+          try { return JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'plugin-permissions.json'), 'utf8')) as Record<string, string[]>; }
+          catch { return {}; }
+        },
+        write: (state) => {
+          fs.mkdirSync(app.getPath('userData'), { recursive: true });
+          fs.writeFileSync(path.join(app.getPath('userData'), 'plugin-permissions.json'), JSON.stringify(state, null, 2));
+        },
+      },
+      onLog: (message) => appLogger.info(message),
+      onRequestL2Authorization: async (manifest, permissions) => {
+        const result = await dialog.showMessageBox(mainWindow ?? undefined!, {
+          type: 'warning',
+          title: desktopText('插件请求系统权限'),
+          message: desktopText('插件「{name}」请求系统级权限', { name: manifest.name }),
+          detail: desktopText('插件 {id}（v{version}）请求以下系统级权限，可能影响文件与网络安全：\n\n{permissions}\n\n仅授权你信任的插件。', {
+            id: manifest.id,
+            version: manifest.version,
+            permissions: permissions.map((p) => `• ${p}`).join('\n'),
+          }),
+          buttons: [desktopText('拒绝'), desktopText('授权')].map(String),
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true,
+        });
+        return result.response === 1;
+      },
+    });
+    pluginHost.discover();
+    void pluginHost.activateFor('onStartup').catch((error) => appLogger.error(`[PLUGIN] startup activation failed: ${(error as Error).message}`));
+  }
+  return pluginHost;
+}
+
 function getOrCreateTerminalService(): TerminalService {
   if (terminalService) return terminalService;
   terminalService = new TerminalService({ getWorkspacePath: getConfiguredWorkspacePath });

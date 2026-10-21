@@ -100,20 +100,11 @@ export class TerminalService {
           if (msg.includes('node-pty') || msg.includes('MODULE_NOT_FOUND') || msg.includes('dlopen')) {
             console.error('[TerminalService] node-pty native module failed to load. Try running: npm run rebuild:native');
           }
-          // Write stderr to debug file
-          try {
-            const dbgFile = path.join(os.homedir(), '.trellora', 'terminal-service-debug.log');
-            fs.appendFileSync(dbgFile, `[${new Date().toISOString()}] [HOST STDERR] ${msg}\n`);
-          } catch {}
         }
       });
 
       child.on('error', (err) => {
         console.error('[TerminalHost] child error:', err);
-        try {
-          const dbgFile = path.join(os.homedir(), '.trellora', 'terminal-service-debug.log');
-          fs.appendFileSync(dbgFile, `[${new Date().toISOString()}] [CHILD ERROR] ${err.message}\n${err.stack}\n`);
-        } catch {}
         this.hostReady = false;
         this.rejectHostReady?.(err);
         this.rejectAllPending('终端进程启动失败');
@@ -122,10 +113,6 @@ export class TerminalService {
 
       child.on('exit', (code, signal) => {
         console.error(`[TerminalHost] child exited: code=${code}, signal=${signal}`);
-        try {
-          const dbgFile = path.join(os.homedir(), '.trellora', 'terminal-service-debug.log');
-          fs.appendFileSync(dbgFile, `[${new Date().toISOString()}] [CHILD EXIT] code=${code}, signal=${signal}\n`);
-        } catch {}
         this.host = undefined;
         this.hostReady = false;
         if (!this.disposing) {
@@ -215,10 +202,6 @@ export class TerminalService {
       case 'error': {
         const { id, message } = msg as { id: string; message: string };
         console.error(`[TerminalHost] error from host: id=${id}, message=${message}`);
-        try {
-          const dbgFile = path.join(os.homedir(), '.trellora', 'terminal-service-debug.log');
-          fs.appendFileSync(dbgFile, `[${new Date().toISOString()}] [HOST ERROR MSG] id=${id}, message=${message}\n`);
-        } catch {}
         const pending = this.pendingSpawns.get(id);
         if (pending) {
           pending.reject(new Error(message));
@@ -263,22 +246,6 @@ export class TerminalService {
       COLORTERM: 'truecolor',
       LANG: process.env.LANG ?? 'zh_CN.UTF-8',
     } as Record<string, string>;
-
-    // Debug: log terminal spawn parameters
-    const dbgFile = path.join(os.homedir(), '.trellora', 'terminal-service-debug.log');
-    try {
-      fs.mkdirSync(path.join(os.homedir(), '.trellora'), { recursive: true });
-      const log = (m: string) => fs.appendFileSync(dbgFile, `[${new Date().toISOString()}] ${m}\n`);
-      log(`CREATE: shell=${shell}, shellArgs=${JSON.stringify(shellArgs)}, cwd=${cwd}`);
-      log(`Shell exists: ${fs.existsSync(shell)}, executable: ${(() => { try { fs.accessSync(shell, fs.constants.X_OK); return true; } catch { return false; } })()}`);
-      log(`CWD exists: ${fs.existsSync(cwd)}`);
-      log(`PATH: ${env.PATH}`);
-      log(`isPackaged: ${__dirname.includes(`${path.sep}app.asar${path.sep}`)}`);
-      log(`hostReady: ${this.hostReady}`);
-      log(`hostPath: ${this.resolveHostPath()}`);
-    } catch (e) {
-      console.error('[TerminalService] Debug log write failed:', e);
-    }
 
     const info: TerminalSessionInfo = { id, title, status: 'running' };
     const session: Session = { info, sender, buffer: '' };

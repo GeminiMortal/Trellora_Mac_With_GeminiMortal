@@ -2,8 +2,8 @@
  * ScheduleSidebar — mini calendar, category filters, upcoming todos.
  * 日程侧栏 — 迷你日历、分类筛选、待办列表。
  */
-import { useMemo, useCallback } from 'react';
-import { Stack, Text, Group, Badge, ActionIcon, ScrollArea, UnstyledButton } from '@mantine/core';
+import { useMemo } from 'react';
+import { Group, Badge } from '@mantine/core';
 import { t, useI18n } from '../../i18n/index.ts';
 import type { ScheduleOccurrence, ScheduleCategory } from '../../../shared/schedule.ts';
 import { buildMonthGrid, WEEKDAY_LABELS } from './data/scheduleViewState.ts';
@@ -27,10 +27,6 @@ export default function ScheduleSidebar({
 }: ScheduleSidebarProps) {
   useI18n();
 
-  const today = useMemo(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }, []);
 
   // Mini calendar grid
   const miniGrid = useMemo(() => buildMonthGrid(anchorDate), [anchorDate]);

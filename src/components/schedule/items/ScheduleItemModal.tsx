@@ -2,13 +2,14 @@
  * ScheduleItemModal — modal for creating/editing schedule items.
  * 日程项弹窗 — 创建/编辑日程项的弹窗。
  */
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Modal, Button, Group, SegmentedControl, Stack, Divider } from '@mantine/core';
 import { t, useI18n } from '../../../i18n/index.ts';
-import type { ScheduleItem, ScheduleCreateRequest, ScheduleOccurrence, RecurrenceRule, CourseTimeSettings } from '../../../../shared/schedule.ts';
+import type { ScheduleItem, ScheduleCreateRequest, RecurrenceRule, CourseTimeSettings } from '../../../../shared/schedule.ts';
 import EventForm from './EventForm.tsx';
 import TodoForm from './TodoForm.tsx';
-import CourseForm, { buildCourseRecurrence, buildCourseMeta, type CourseFormData } from './CourseForm.tsx';
+import CourseForm from './CourseForm.tsx';
+import { buildCourseRecurrence, buildCourseMeta, type CourseFormData } from './courseFormHelpers.ts';
 import RecurrenceEditor from './RecurrenceEditor.tsx';
 
 type ItemKind = 'event' | 'todo' | 'course';
@@ -31,15 +32,15 @@ export default function ScheduleItemModal({
   useI18n();
   const [kind, setKind] = useState<ItemKind>(defaultKind ?? 'event');
 
-  // Event form state
+  // Event form state (datetime-local string values, matching EventForm contract)
   const [eventData, setEventData] = useState({
     title: '', description: '', location: '',
-    startAt: null as Date | null, endAt: null as Date | null, allDay: false,
+    startAt: '', endAt: '', allDay: false,
   });
 
-  // Todo form state
+  // Todo form state (datetime-local string values, matching TodoForm contract)
   const [todoData, setTodoData] = useState({
-    title: '', description: '', dueAt: null as Date | null,
+    title: '', description: '', dueAt: '',
     priority: 'normal' as 'low' | 'normal' | 'high' | 'urgent' | null,
   });
 
@@ -77,7 +78,7 @@ export default function ScheduleItemModal({
         setTodoData({
           title: editingItem.title,
           description: editingItem.description ?? '',
-          dueAt: editingItem.dueAt ? new Date(editingItem.dueAt) : null,
+          dueAt: editingItem.dueAt ? toLocalInputValue(new Date(editingItem.dueAt)) : '',
           priority: editingItem.priority,
         });
       } else {
@@ -86,8 +87,8 @@ export default function ScheduleItemModal({
           title: editingItem.title,
           description: editingItem.description ?? '',
           location: editingItem.location ?? '',
-          startAt: editingItem.startAt ? new Date(editingItem.startAt) : null,
-          endAt: editingItem.endAt ? new Date(editingItem.endAt) : null,
+          startAt: editingItem.startAt ? toLocalInputValue(new Date(editingItem.startAt)) : '',
+          endAt: editingItem.endAt ? toLocalInputValue(new Date(editingItem.endAt)) : '',
           allDay: editingItem.allDay,
         });
         setRecurrence(editingItem.recurrence);
@@ -101,8 +102,8 @@ export default function ScheduleItemModal({
         : null;
       const defaultEnd = defaultStart ? new Date(defaultStart.getTime() + 3600000) : null;
 
-      setEventData({ title: '', description: '', location: '', startAt: defaultStart, endAt: defaultEnd, allDay: false });
-      setTodoData({ title: '', description: '', dueAt: defaultStart, priority: 'normal' });
+      setEventData({ title: '', description: '', location: '', startAt: defaultStart ? toLocalInputValue(defaultStart) : '', endAt: defaultEnd ? toLocalInputValue(defaultEnd) : '', allDay: false });
+      setTodoData({ title: '', description: '', dueAt: defaultStart ? toLocalInputValue(defaultStart) : '', priority: 'normal' });
       setCourseData({
         title: '', location: '', teacher: '',
         dayOfWeek: defaultDate ? new Date(defaultDate + 'T00:00:00').getDay() : 1,
@@ -120,8 +121,8 @@ export default function ScheduleItemModal({
         title: eventData.title.trim(),
         description: eventData.description || null,
         location: eventData.location || null,
-        startAt: eventData.startAt ? formatLocalIso(eventData.startAt) : null,
-        endAt: eventData.endAt ? formatLocalIso(eventData.endAt) : null,
+        startAt: eventData.startAt ? formatLocalIso(new Date(eventData.startAt)) : null,
+        endAt: eventData.endAt ? formatLocalIso(new Date(eventData.endAt)) : null,
         allDay: eventData.allDay,
         recurrence,
       });
@@ -131,7 +132,7 @@ export default function ScheduleItemModal({
         kind: 'todo',
         title: todoData.title.trim(),
         description: todoData.description || null,
-        dueAt: todoData.dueAt ? formatLocalIso(todoData.dueAt) : null,
+        dueAt: todoData.dueAt ? formatLocalIso(new Date(todoData.dueAt)) : null,
         priority: todoData.priority,
         todoStatus: 'pending',
       });
@@ -221,4 +222,9 @@ function formatLocalIso(d: Date): string {
   const h = String(d.getHours()).padStart(2, '0');
   const min = String(d.getMinutes()).padStart(2, '0');
   return `${y}-${m}-${day}T${h}:${min}:00`;
+}
+
+/** Formats a Date as a `datetime-local` input value (no seconds): YYYY-MM-DDTHH:mm. */
+function toLocalInputValue(d: Date): string {
+  return formatLocalIso(d).slice(0, 16);
 }

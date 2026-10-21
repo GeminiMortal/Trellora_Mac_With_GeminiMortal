@@ -11,7 +11,7 @@ export const PIPELINE_SCHEMA_VERSION = 1;
 export const PIPELINE_ENGINE_VERSION = 'p5';
 
 /** Which parser handles a document / 处理文档所用的解析器 */
-export type ParsingRoute = 'direct' | 'mammoth' | 'mineru' | 'unsupported';
+export type ParsingRoute = 'direct' | 'mammoth' | 'mineru' | 'custom' | 'unsupported';
 /** Ordered pipeline stage identifiers / 有序的流水线阶段标识 */
 export type PipelineStageId = 'parse' | 'lines' | 'signals' | 'ambiguity' | 'tree' | 'chunks' | 'keywords' | 'vectors' | 'entities';
 /** Lifecycle states of a pipeline stage / 流水线阶段的生命周期状态 */

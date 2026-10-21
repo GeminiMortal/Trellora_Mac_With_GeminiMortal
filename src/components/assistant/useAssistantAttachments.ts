@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ClipboardEvent, DragEvent } from 'react';
 import type { AssistantAttachment } from '../../electron';
 import { relocateWorkspacePath, type WorkspaceDataChange } from '../../utils/wiki/workspaceDataEvents.ts';
+import { showToast } from '../../utils/ui/feedback.ts';
 
 // 镜像 electron/knowledge/assistantTurnTypes.ts 的 Phase 1 常量。
 // 渲染进程不直接引入主进程模块，避免把校验逻辑打进浏览器 bundle；如需调整上限/大小请双侧同步。
@@ -100,7 +101,7 @@ export function useAssistantAttachments(options: UseAssistantAttachmentsOptions 
       merged.push(item);
     }
     setAttachments(merged);
-    if (rejected > 0) window.alert(`一次最多添加 ${maxCount} 个附件，超出的 ${rejected} 个已忽略。`);
+    if (rejected > 0) showToast({ message: `一次最多添加 ${maxCount} 个附件，超出的 ${rejected} 个已忽略。` });
   }, [attachments, maxCount]);
 
   const removeAttachment = useCallback((attachmentId: string) => {
@@ -117,12 +118,12 @@ export function useAssistantAttachments(options: UseAssistantAttachmentsOptions 
     for (const file of imageFiles) {
       const displayName = file.name || `粘贴的图片 ${incoming.length + 1}.png`;
       if (file.size > MAX_IMAGE_BYTES) {
-        window.alert(`图片「${displayName}」超过 5 MB，已跳过。`);
+        showToast({ message: `图片「${displayName}」超过 5 MB，已跳过。` });
         continue;
       }
       const mimeType = normalizeImageMimeType(file.type);
       if (!mimeType) {
-        window.alert(`图片「${displayName}」格式不受支持（仅 PNG / JPEG / WebP / GIF），已跳过。`);
+        showToast({ message: `图片「${displayName}」格式不受支持（仅 PNG / JPEG / WebP / GIF），已跳过。` });
         continue;
       }
       try {
@@ -130,7 +131,7 @@ export function useAssistantAttachments(options: UseAssistantAttachmentsOptions 
         const attachmentId = await computeImageAttachmentId(dataUrl);
         incoming.push({ kind: 'image', attachmentId, name: displayName, mimeType, sizeBytes: file.size, dataUrl });
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : `读取图片「${displayName}」失败。`);
+        showToast({ message: error instanceof Error ? error.message : `读取图片「${displayName}」失败。` });
       }
     }
     return incoming;
@@ -203,7 +204,7 @@ export function useAssistantAttachments(options: UseAssistantAttachmentsOptions 
         ]);
         addAttachments([...images, ...localAttachments]);
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : '读取拖入附件失败。');
+        showToast({ message: error instanceof Error ? error.message : '读取拖入附件失败。' });
       }
     })();
   }, [addAttachments, createImageAttachments, disabled]);

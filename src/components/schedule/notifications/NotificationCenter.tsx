@@ -70,9 +70,9 @@ export default function NotificationCenter({ opened, onClose, onClickItem }: Not
     const now = new Date();
     const diffMin = Math.floor((now.getTime() - d.getTime()) / 60000);
     if (diffMin < 1) return t('刚刚');
-    if (diffMin < 60) return t('{0}分钟前', diffMin);
+    if (diffMin < 60) return t('{0}分钟前', { '0': diffMin });
     const diffHr = Math.floor(diffMin / 60);
-    if (diffHr < 24) return t('{0}小时前', diffHr);
+    if (diffHr < 24) return t('{0}小时前', { '0': diffHr });
     return d.toLocaleDateString();
   };
 
@@ -94,7 +94,7 @@ export default function NotificationCenter({ opened, onClose, onClickItem }: Not
           <Group gap="xs">
             {notifications.length > 0 && (
               <>
-                <ActionIcon
+                <ActionIcon aria-label="标记已读"
                   variant="subtle"
                   size="sm"
                   onClick={handleMarkAllRead}
@@ -102,7 +102,7 @@ export default function NotificationCenter({ opened, onClose, onClickItem }: Not
                 >
                   <Clock size={14} />
                 </ActionIcon>
-                <ActionIcon
+                <ActionIcon aria-label="清除通知"
                   variant="subtle"
                   size="sm"
                   color="red"

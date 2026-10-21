@@ -996,6 +996,16 @@ declare global {
         readonly platform: string;
         waitForStartup: () => Promise<void>;
         ping: () => Promise<string>;
+        plugin: {
+          listCommands: () => Promise<Array<{ id: string; title: string; panel?: string }>>;
+          invokeCommand: (commandId: string, args?: { trigger?: 'command-palette' | 'sidebar' | 'toolbar'; payload?: unknown }) => Promise<{ ok: boolean }>;
+          list: () => Promise<Array<{ manifest: { id: string; name: string; version: string; description?: string; permissions: string[] }; state: string; error?: string }>>;
+          installFromUrl: (url: string) => Promise<{ manifest: { id: string; name: string; version: string }; pluginDir: string }>;
+          installFromZip: (zipPath: string) => Promise<{ manifest: { id: string; name: string; version: string }; pluginDir: string }>;
+          enable: (id: string) => Promise<{ ok: boolean }>;
+          disable: (id: string) => Promise<{ ok: boolean }>;
+          uninstall: (id: string) => Promise<{ ok: boolean }>;
+        };
         selectDirectory: () => Promise<string | null>;
         selectWorkspace: () => Promise<string | null>;
         getWorkspacePath: () => Promise<string>;

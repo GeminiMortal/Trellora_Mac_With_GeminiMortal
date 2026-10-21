@@ -48,8 +48,8 @@ export default function ImportModal({ opened, onClose, dataSource, onImported }:
     onClose();
   }, [reset, onClose]);
 
-  // Step 1: Pick file
-  const handlePickFile = useCallback(async (kind: ImportSource) => {
+  // Step 1: Pick file (file-picker sources only; url/browser use their own flows)
+  const handlePickFile = useCallback(async (kind: 'csv' | 'excel' | 'image') => {
     setSource(kind);
     setLoading(true);
     setError(null);
@@ -149,7 +149,8 @@ export default function ImportModal({ opened, onClose, dataSource, onImported }:
       const validDrafts = drafts.filter(d => d.valid);
       const commitResult = await dataSource.importCommit({
         drafts: validDrafts,
-        sourceType: source,
+        // The persisted contract has no 'browser' member; browser-login imports are web-page imports.
+        sourceType: source === 'browser' ? 'url' : source,
         sourceLabel: filePath.split(/[/\\]/).pop() ?? filePath,
       });
       setResult(commitResult);

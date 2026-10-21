@@ -2,7 +2,7 @@
  * EmptyState — friendly empty state for calendar views.
  * 空状态 — 日历视图的友好空状态提示。
  */
-import { Button, Stack, Text } from '@mantine/core';
+import { Button, Text } from '@mantine/core';
 import { CalendarPlus, CalendarX } from 'lucide-react';
 import { t, useI18n } from '../../i18n/index.ts';
 

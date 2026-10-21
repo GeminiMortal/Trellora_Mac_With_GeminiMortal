@@ -4,7 +4,6 @@
  */
 import { parentPort } from 'node:worker_threads';
 import { spawn, type IPty } from 'node-pty';
-import * as os from 'node:os';
 
 const sessions = new Map<string, IPty>();
 

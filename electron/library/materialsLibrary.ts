@@ -461,7 +461,7 @@ export function importNoteIntoMaterialsLibrary(libraryPath: string, notePath: st
 
 /** 当笔记保存后，查找所有资料库中引用该笔记的文档并更新内容（哈希变化则覆盖 + 标记待索引）。
  *  返回受影响的资料库路径列表。 */
-export function syncNoteToMaterialsLibraries(notePath: string, store: MaterialsRegistryStore, now = new Date()): string[] {
+export function syncNoteToMaterialsLibraries(notePath: string, store: MaterialsRegistryStore, _now = new Date()): string[] {
   const resolvedNote = path.resolve(notePath);
   if (!fs.existsSync(resolvedNote) || !fs.statSync(resolvedNote).isFile()) return [];
   const affected: string[] = [];

@@ -1,0 +1,17 @@
+{
+  "id": "com.example.hello-command",
+  "name": "Hello Command",
+  "version": "1.0.0",
+  "description": "Minimal sample plugin: registers a sidebar command that logs a greeting.",
+  "author": "Trellora",
+  "license": "MIT",
+  "main": "main.js",
+  "engine": { "trellora": ">=1.3.0" },
+  "permissions": ["ui:command"],
+  "activation": ["onStartup"],
+  "contributes": {
+    "uiCommands": [
+      { "id": "hello-command:say-hello", "title": "Say Hello", "panel": "sidebar" }
+    ]
+  }
+}

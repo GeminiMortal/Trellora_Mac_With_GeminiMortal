@@ -2,7 +2,7 @@
 
 **简体中文** · [English](architecture.en.md) · [返回产品首页](../README.md)
 
-本文面向希望理解、调试和扩展 Trellora 的开发者，依据 2026-10-05 当前工作树整理。源码入口均使用仓库相对链接，架构图使用 GitHub 支持的 Mermaid。设计文档描述的目标与实际实现有差异时，当前行为以源码为准；记忆域实施仍遵循 [领域主合同](Trellora-2.0-WeKnora记忆架构严格对齐改造方案.md)。
+本文面向希望理解、调试和扩展 Trellora 的开发者，依据 2026-10-20 当前工作树整理。源码入口均使用仓库相对链接，架构图使用 GitHub 支持的 Mermaid。设计文档描述的目标与实际实现有差异时，当前行为以源码为准；记忆域实施仍遵循 [领域主合同](Trellora-2.0-WeKnora记忆架构严格对齐改造方案.md)。
 
 ## 目录
 
@@ -16,6 +16,8 @@
 - [模型网关与 AI Agent](#模型网关与-ai-agent)
 - [历史工作记忆与长期记忆](#历史工作记忆与长期记忆)
 - [Wiki 工作区](#wiki-工作区)
+- [日程工作区](#日程工作区)
+- [终端工作区](#终端工作区)
 - [资料图谱与地图](#资料图谱与地图)
 - [内置技能与联网能力](#内置技能与联网能力)
 - [数据布局与恢复](#数据布局与恢复)
@@ -25,7 +27,7 @@
 
 ## 整体架构与进程边界
 
-Trellora 是一个 **macOS 本地优先 Electron 桌面应用**。React 负责交互，Electron 主进程持有文件和数据库权限，计算任务分配给 Node Worker Thread 与 Python Sidecar。运行核心功能无需部署独立 Web 后端、Redis、PostgreSQL 或外部向量数据库。
+Trellora 是一个 **本地优先 Electron 桌面应用**，主要目标平台为 macOS（Apple Silicon arm64），并已添加 Windows x64 平台支持（sqlite-vec 按平台加载 darwin-arm64 / windows-x64 扩展、Python Worker 与终端跨平台探测、`build:win` 打包链）。React 负责交互，Electron 主进程持有文件和数据库权限，计算任务分配给 Node Worker Thread 与 Python Sidecar。运行核心功能无需部署独立 Web 后端、Redis、PostgreSQL 或外部向量数据库。
 
 ```mermaid
 flowchart TB
@@ -85,25 +87,28 @@ flowchart TB
 | [src/App.tsx](../src/App.tsx) | 工作区、导航、库切换、当前笔记与顶层界面协调 |
 | [src/components/](../src/components/) | 笔记、助手、资料、Wiki、地图、设置与恢复界面 |
 | [src/editor/](../src/editor/) | Tiptap 扩展、代码与公式节点、输入和粘贴策略、选区坐标 |
-| [src/wiki/](../src/wiki/) | Wiki 状态、布局、任务控制与 Electron 数据源 |
+| [src/components/wiki/](../src/components/wiki/) | Wiki 状态、布局、任务控制与 Electron 数据源 |
 | [src/i18n/](../src/i18n/) | 中文文案键、英文映射及订阅式语言切换 |
 | [electron/main.ts](../electron/main.ts)、[preload.ts](../electron/preload.ts) | 生命周期、依赖装配、IPC 注册与受限桥接 |
 | [electron/documents/](../electron/documents/) | 独立文件会话、编码、打开队列、资源、AI 与恢复草稿 |
 | [electron/knowledge/](../electron/knowledge/) | 索引、检索、模型协议、Agent、上下文与记忆 |
 | [electron/pipeline/](../electron/pipeline/) | 文档阶段编排、产物提交、向量和图谱投影 |
 | [electron/wiki/](../electron/wiki/) | Wiki 原文范围、工具、派生节点、AI 内容与导入 |
+| [electron/schedule/](../electron/schedule/) | 日程条目、重复展开、提醒与课表导入 |
+| [electron/terminal/](../electron/terminal/) | 终端会话、PTY Host 进程与 shell 探测 |
 | [electron/websearch/](../electron/websearch/) | 联网搜索服务商与网页获取 |
 | [electron/backup/](../electron/backup/) | 一致性快照、归档、恢复与维护暂停 |
 | [shared/](../shared/) | 跨进程类型、默认值、限额、配置与结果合同 |
 | [pipeline-python/pipeline_worker/](../pipeline-python/pipeline_worker/) | NDJSON 协议与 Python 结构化阶段 |
 | [build/builtin-skills/](../build/builtin-skills/) | 随桌面包发布的技能定义与模板 |
 | [scripts/](../scripts/)、[docs/verification/](verification/) | 构建、聚焦验证、实际 Electron / 发布包证据 |
+| [plugins/](../plugins/)、[electron/plugins/](../electron/plugins/) | 插件 SDK、清单与示例（实验性）；插件宿主、加载与权限分层 |
 
 项目采用桌面内的模块划分。大量依赖装配和 IPC 仍集中于 `main.ts` 与 `App.tsx`；理解功能时，应继续进入被调用的领域模块，而不只阅读组件名称。
 
 ## 界面与 IPC
 
-[NavRail.tsx](../src/components/NavRail.tsx) 定义助手、笔记、资料、Wiki、地图及底部打开、笔记库和设置。设置的十个子菜单由 [SettingsPanel.tsx](../src/components/SettingsPanel.tsx) 定义。产品菜单说明和截图见 [README](../README.md#菜单与截图)。
+[NavRail.tsx](../src/components/navigation/NavRail.tsx) 定义助手、笔记、资料、Wiki、地图、日程、终端及底部打开、笔记库和设置。设置的十一个子菜单（通用、工作区与备份、编辑器、快捷键、文档解析、联网搜索、选区扩写优化、模型配置、AI 助手技能、个性化、关于与诊断）由 [SettingsPanel.tsx](../src/components/settings/SettingsPanel.tsx) 定义。产品菜单说明和截图见 [README](../README.md#菜单与截图)。
 
 完整调用链是：**React 组件 → `window.electronAPI` → preload `ipcRenderer.invoke` → 主进程 handler → 领域服务 → 文件 / 数据库 / Worker → 结果或事件 → UI**。渲染声明见 [src/electron.d.ts](../src/electron.d.ts)，复杂共享合同位于 `shared/`。
 
@@ -114,6 +119,8 @@ flowchart TB
 | 流水线 | `startMaterialsPipeline`、`cancelMaterialsPipeline`、`getMaterialsPipelineStatus` | 排队、执行、取消和读取真实状态 |
 | Wiki | `getWikiDocumentOutline`、`addWikiDerivedNode`、`reorderWikiSiblingNodes` | 原文结构、派生节点和顺序持久化 |
 | 独立文件 | `openDocumentRequest`、`updateDocumentDraft`、`saveDocument`、`joinDocumentLibrary` | 绑定窗口和文件的会话、版本校验与写入 |
+| 日程 | `listScheduleOccurrences`、`createScheduleItem`、`scheduleImportPreviewCsv`、`revertScheduleImport` | 重复展开、条目与提醒、课表导入批次 |
+| 终端 | `createTerminal`、`resizeTerminal`、`killTerminal`、`writeTerminal`（事件 `onTerminalData` / `onTerminalExit`） | PTY 会话创建、数据转发与退出通知 |
 | 设置 | `getAppPreferences`、`saveAppPreferences` | 规范化并保存应用偏好 |
 | 引导 | `getOnboardingState`、`saveOnboardingState`、`importOnboardingSample` | 引导进度、演示资料与首次练习 |
 | 迁移 | `startWorkspaceMigration` 等 | 迁移预览、日志、恢复与切换 |
@@ -124,11 +131,11 @@ flowchart TB
 
 ### 编辑器与 Markdown
 
-[Editor.tsx](../src/components/Editor.tsx) 集成 Tiptap / ProseMirror 与工具栏；源码编辑使用 CodeMirror，预览由 [MarkdownPreview.tsx](../src/components/MarkdownPreview.tsx) 及 Markdown 工具链渲染。入口包括 [markdown.ts](../src/utils/markdown.ts)、[preview.ts](../src/utils/preview.ts) 与 [MarkdownContent.tsx](../src/components/MarkdownContent.tsx)。
+[Editor.tsx](../src/components/editor/Editor.tsx) 集成 Tiptap / ProseMirror 与工具栏；源码编辑使用 CodeMirror，预览由 [MarkdownPreview.tsx](../src/components/markdown/MarkdownPreview.tsx) 及 Markdown 工具链渲染。入口包括 [markdown.ts](../src/utils/markdown/markdown.ts)、[preview.ts](../src/utils/ui/preview.ts) 与 [MarkdownContent.tsx](../src/components/markdown/MarkdownContent.tsx)。
 
 内置内容包括标题、列表、待办、表格、图片、链接、代码高亮、公式、Mermaid 与 Wiki 链接。代码、公式、Markdown 输入与粘贴都有专门的编辑扩展。DOMPurify 用于渲染清理。模式切换需要在 Markdown 与编辑器文档模型之间转换；复杂语法的保真验证见 Markdown 和编辑器脚本。
 
-[EditorWordCount.tsx](../src/components/EditorWordCount.tsx) 提供可见字数；[EditorZoomControl.tsx](../src/components/EditorZoomControl.tsx) 管理缩放；[editorPreferences.ts](../shared/editorPreferences.ts) 统一字号、行距、段距、粘贴、选区工具栏和写作模式偏好。
+[EditorWordCount.tsx](../src/components/editor/EditorWordCount.tsx) 提供可见字数；[EditorZoomControl.tsx](../src/components/editor/EditorZoomControl.tsx) 管理缩放；[editorPreferences.ts](../shared/editorPreferences.ts) 统一字号、行距、段距、粘贴、选区工具栏和写作模式偏好。
 
 ### 文件写入与索引分离
 
@@ -152,19 +159,19 @@ sequenceDiagram
   S->>I: 后续索引投影与备份维护
 ```
 
-主进程通过 [noteSaveService.ts](../electron/noteSaveService.ts)、[atomicTextWrite.ts](../electron/atomicTextWrite.ts)、[noteCloseCoordinator.ts](../electron/noteCloseCoordinator.ts) 协调保存、关闭与恢复。[noteBackups.ts](../electron/noteBackups.ts) 维护库内备份。[noteIndex.ts](../electron/noteIndex.ts) 与 [indexCoordinator.ts](../electron/knowledge/indexCoordinator.ts) 负责索引更新。
+主进程通过 [noteSaveService.ts](../electron/note/noteSaveService.ts)、[atomicTextWrite.ts](../electron/atomicTextWrite.ts)、[noteCloseCoordinator.ts](../electron/note/noteCloseCoordinator.ts) 协调保存、关闭与恢复。[noteBackups.ts](../electron/note/noteBackups.ts) 维护库内备份。[noteIndex.ts](../electron/note/noteIndex.ts) 与 [indexCoordinator.ts](../electron/knowledge/index/indexCoordinator.ts) 负责索引更新。
 
 原文件写入成功与索引更新成功是不同结果，不能把索引失败解释为原文没有保存。库切换、异步保存、外部修改和关闭时应保持修订及草稿状态，避免迟到结果覆盖新的笔记。
 
 ### 选区 AI 编辑
 
-[SelectionActionOverlay.tsx](../src/components/SelectionActionOverlay.tsx) 和选区编辑组件调用主进程的 [selectionEditCoordinator.ts](../electron/knowledge/selectionEditCoordinator.ts)、[selectionExpansionCoordinator.ts](../electron/knowledge/selectionExpansionCoordinator.ts)。主进程收集允许的原文、资料或网页证据，生成建议并验证写回范围。
+[SelectionActionOverlay.tsx](../src/components/selection/SelectionActionOverlay.tsx) 和选区编辑组件调用主进程的 [selectionEditCoordinator.ts](../electron/knowledge/selection/selectionEditCoordinator.ts)、[selectionExpansionCoordinator.ts](../electron/knowledge/selection/selectionExpansionCoordinator.ts)。主进程收集允许的原文、资料或网页证据，生成建议并验证写回范围。
 
 选区变换以建议和可检查结果返回，写回还需检查文档和选区是否仍匹配。扩写有独立长度合同，见 [selectionExpansionPolicy.ts](../shared/selectionExpansionPolicy.ts)：默认目标约为原文有效字符的 `1.8×`，全笔记上下文阈值 `12,000` 字符，目标上限 `40,000` 字符。字符统计和目标不是对模型输出的无限保证，结果仍需通过质量与范围校验。
 
 ## 独立文件工作区
 
-独立文件使用 [ExternalDocumentWorkspace.tsx](../src/components/ExternalDocumentWorkspace.tsx)，后端由 [DocumentSessionService](../electron/documents/documentSessionService.ts) 管理。它与注册笔记库的保存链分开，已登记库内文件会路由回笔记功能。
+独立文件使用 [ExternalDocumentWorkspace.tsx](../src/components/externalDocument/ExternalDocumentWorkspace.tsx)，后端由 [DocumentSessionService](../electron/documents/documentSessionService.ts) 管理。它与注册笔记库的保存链分开，已登记库内文件会路由回笔记功能。
 
 | 模块 | 内置能力 |
 | --- | --- |
@@ -181,7 +188,7 @@ sequenceDiagram
 
 ### 资料注册与原文
 
-[materialsLibrary.ts](../electron/materialsLibrary.ts) 管理资料库注册、清单、文档 ID、文件类型与内容哈希；[MaterialsView.tsx](../src/components/MaterialsView.tsx) 展示列表和预览；[MaterialsPipelineView.tsx](../src/components/MaterialsPipelineView.tsx) 展示配置、状态与产物。
+[materialsLibrary.ts](../electron/library/materialsLibrary.ts) 管理资料库注册、清单、文档 ID、文件类型与内容哈希；[MaterialsView.tsx](../src/components/materials/MaterialsView.tsx) 展示列表和预览；[MaterialsPipelineView.tsx](../src/components/pipeline/MaterialsPipelineView.tsx) 展示配置、状态与产物。
 
 导入文件成为资料库原文。后续阶段只读原文，统一产物存到元数据目录；SQLite 保存可检索投影，不承载全部大型阶段文件。
 
@@ -269,8 +276,8 @@ flowchart LR
 | 入口 | 实现与用途 |
 | --- | --- |
 | 笔记界面关键词搜索 | MiniSearch / 本地笔记索引；无需模型，适合标题、路径和文本定位 |
-| 当前笔记章节读取与检索 | [currentNoteTools.ts](../electron/knowledge/currentNoteTools.ts)、[currentNoteLexicalIndex.ts](../electron/knowledge/currentNoteLexicalIndex.ts)；读取保存后的章节快照与局部内容 |
-| 笔记知识索引 | [indexCoordinator.ts](../electron/knowledge/indexCoordinator.ts)、[metaDatabase.ts](../electron/knowledge/metaDatabase.ts)；块、AI 元数据和向量 |
+| 当前笔记章节读取与检索 | [currentNoteTools.ts](../electron/knowledge/currentNote/currentNoteTools.ts)、[currentNoteLexicalIndex.ts](../electron/knowledge/currentNote/currentNoteLexicalIndex.ts)；读取保存后的章节快照与局部内容 |
+| 笔记知识索引 | [indexCoordinator.ts](../electron/knowledge/index/indexCoordinator.ts)、[metaDatabase.ts](../electron/knowledge/index/metaDatabase.ts)；块、AI 元数据和向量 |
 | 资料库混合检索 | [materialChunkSearch.ts](../electron/pipeline/materialChunkSearch.ts)；FTS / 关键词与向量候选，按检索配置组合并可重排 |
 | 图谱检索 | 局部实体关系和全局社区摘要检索，再回溯原文块 |
 | 历史对话与长期记忆检索 | 各自独立的数据、范围与限额；不与资料证据合并成同一种来源 |
@@ -298,23 +305,23 @@ flowchart LR
 
 ### 模型接入层
 
-[aiProvider.ts](../electron/knowledge/aiProvider.ts)、[modelHub.ts](../electron/knowledge/modelHub.ts) 与 [modelConfigurationService.ts](../electron/knowledge/modelConfigurationService.ts) 处理模型档案、选择、配置保存和变更影响。设置保留服务商、连接地址、协议与模型等独立字段。
+[aiProvider.ts](../electron/knowledge/ai/aiProvider.ts)、[modelHub.ts](../electron/knowledge/ai/modelHub.ts) 与 [modelConfigurationService.ts](../electron/knowledge/ai/modelConfigurationService.ts) 处理模型档案、选择、配置保存和变更影响。设置保留服务商、连接地址、协议与模型等独立字段。
 
 | 协议 | 传输模块 |
 | --- | --- |
-| Ollama Chat | [ollamaClient.ts](../electron/knowledge/ollamaClient.ts) |
-| OpenAI Chat Completions | [openAiCompletionsTransport.ts](../electron/knowledge/openAiCompletionsTransport.ts) |
-| OpenAI Responses | [openAiResponsesTransport.ts](../electron/knowledge/openAiResponsesTransport.ts) |
-| Anthropic Messages | [anthropicMessagesTransport.ts](../electron/knowledge/anthropicMessagesTransport.ts) |
-| Google GenerateContent | [googleGenerateContentTransport.ts](../electron/knowledge/googleGenerateContentTransport.ts) |
+| Ollama Chat | [ollamaClient.ts](../electron/knowledge/ai/ollamaClient.ts) |
+| OpenAI Chat Completions | [openAiCompletionsTransport.ts](../electron/knowledge/ai/openAiCompletionsTransport.ts) |
+| OpenAI Responses | [openAiResponsesTransport.ts](../electron/knowledge/ai/openAiResponsesTransport.ts) |
+| Anthropic Messages | [anthropicMessagesTransport.ts](../electron/knowledge/ai/anthropicMessagesTransport.ts) |
+| Google GenerateContent | [googleGenerateContentTransport.ts](../electron/knowledge/ai/googleGenerateContentTransport.ts) |
 
-[aiGenerationTransport.ts](../electron/knowledge/aiGenerationTransport.ts) 对接生成请求和流式事件。生成、Embedding、Rerank 分别配置；提供商支持列表不代表每个模型都具备工具调用、图片或思考输出能力。上下文窗口和输出预算由能力解析与 [modelCallCoordinator.ts](../electron/knowledge/modelCallCoordinator.ts) 协调。
+[aiGenerationTransport.ts](../electron/knowledge/ai/aiGenerationTransport.ts) 对接生成请求和流式事件。生成、Embedding、Rerank 分别配置；提供商支持列表不代表每个模型都具备工具调用、图片或思考输出能力。上下文窗口和输出预算由能力解析与 [modelCallCoordinator.ts](../electron/knowledge/ai/modelCallCoordinator.ts) 协调。
 
 ### 三种问答路线
 
-- **自由问答**：对问题、附件和适用的会话上下文回答；开启联网能力时可进入 [chatWebAgentTurn.ts](../electron/knowledge/chatWebAgentTurn.ts)。
-- **当前笔记**：基于保存后的快照读取正文、章节和相邻内容；直接回答与工具路线均有实现，入口包括 [currentNoteAgentGraph.ts](../electron/knowledge/currentNoteAgentGraph.ts)。
-- **个人知识库**：对选定资料库执行检索、读取原文、图谱或适用联网工具，入口包括 [knowledgeAgentTurn.ts](../electron/knowledge/knowledgeAgentTurn.ts) 与知识工具目录。
+- **自由问答**：对问题、附件和适用的会话上下文回答；开启联网能力时可进入 [chatWebAgentTurn.ts](../electron/knowledge/agent/chatWebAgentTurn.ts)。
+- **当前笔记**：基于保存后的快照读取正文、章节和相邻内容；直接回答与工具路线均有实现，入口包括 [currentNoteAgentGraph.ts](../electron/knowledge/currentNote/currentNoteAgentGraph.ts)。
+- **个人知识库**：对选定资料库执行检索、读取原文、图谱或适用联网工具，入口包括 [knowledgeAgentTurn.ts](../electron/knowledge/agent/knowledgeAgentTurn.ts) 与知识工具目录。
 
 ### 工具执行循环
 
@@ -338,16 +345,16 @@ flowchart TB
 
 | 执行入口 | 当前实现 | 内置任务 |
 | --- | --- | --- |
-| [agentGraph.ts](../electron/knowledge/agentGraph.ts) | 使用 LangGraph `Annotation` / `StateGraph`，supervisor 按任务分派 | 摘要、标签、笔记分析、回答、学习计划、整理建议 |
-| [currentNoteAgentGraph.ts](../electron/knowledge/currentNoteAgentGraph.ts) | 自有计划、动作、证据与预算控制流程 | 当前笔记章节检索、按需读取、证据归纳与回答 |
-| [libraryPlanAgentGraph.ts](../electron/knowledge/libraryPlanAgentGraph.ts) | 自有库快照、结构化动作与计划控制流程 | 笔记库范围的定位、章节读取和整理推理 |
+| [agentGraph.ts](../electron/knowledge/agent/agentGraph.ts) | 使用 LangGraph `Annotation` / `StateGraph`，supervisor 按任务分派 | 摘要、标签、笔记分析、回答、学习计划、整理建议 |
+| [currentNoteAgentGraph.ts](../electron/knowledge/currentNote/currentNoteAgentGraph.ts) | 自有计划、动作、证据与预算控制流程 | 当前笔记章节检索、按需读取、证据归纳与回答 |
+| [libraryPlanAgentGraph.ts](../electron/knowledge/library/libraryPlanAgentGraph.ts) | 自有库快照、结构化动作与计划控制流程 | 笔记库范围的定位、章节读取和整理推理 |
 | [reactAgent/reactEngine.ts](../electron/knowledge/reactAgent/reactEngine.ts) | 通用受限 ReAct 循环，路线注入工具与策略 | 资料问答、适用的联网及 Wiki 工具执行 |
 
 ReAct 默认最多 **6 轮、8 次模型调用、10 次工具调用、1 次空回复重试**，连续相同输出的熔断轮数为 **2**；调用方可覆盖，维护摘要另有预算。来源见 [reactEngineTypes.ts](../electron/knowledge/reactAgent/reactEngineTypes.ts)。这些是执行约束，不是对答案正确性的保证。
 
-内置知识工具包含 `knowledge_search`、`grep_chunks`、`list_knowledge_chunks`、`get_document_info`、`graph_local_search`、`graph_global_search`、`web_search`、网页获取、`read_skill`、`search_conversations` 和 `search_memory`。实际启用取决于 [toolCapabilityCatalog.ts](../electron/knowledge/toolCapabilityCatalog.ts)、当前范围、能力和用户配置。
+内置知识工具包含 `knowledge_search`、`grep_chunks`、`list_knowledge_chunks`、`get_document_info`、`graph_local_search`、`graph_global_search`、`web_search`、网页获取、`read_skill`、`search_conversations` 和 `search_memory`。实际启用取决于 [toolCapabilityCatalog.ts](../electron/knowledge/model/toolCapabilityCatalog.ts)、当前范围、能力和用户配置。
 
-[assistantCitationGuard.ts](../electron/knowledge/assistantCitationGuard.ts) 等模块约束引用；[assistantNote.ts](../electron/assistantNote.ts) 处理回答保存为笔记。模型给出工具名不会自动获得任意文件或其他资料库权限，实际读取由工具上下文和服务端范围决定。
+[assistantCitationGuard.ts](../electron/knowledge/assistant/assistantCitationGuard.ts) 等模块约束引用；[assistantNote.ts](../electron/assistant/assistantNote.ts) 处理回答保存为笔记。模型给出工具名不会自动获得任意文件或其他资料库权限，实际读取由工具上下文和服务端范围决定。
 
 ## 历史工作记忆与长期记忆
 
@@ -369,8 +376,8 @@ flowchart TB
 
 | 能力 | 数据与职责 | 关键源码 |
 | --- | --- | --- |
-| 问答历史 | 会话、消息、轮次、工具过程、完成 / 中断状态 | [qaMemoryDatabase.ts](../electron/knowledge/qaMemoryDatabase.ts)、[qaMemoryRepository.ts](../electron/knowledge/qaMemoryRepository.ts) |
-| 工作记忆 | 在本轮模型窗口中装配最近历史、摘要和工具结果 | [qaMemoryOrchestrator.ts](../electron/knowledge/qaMemoryOrchestrator.ts)、[qaCanonicalHistory.ts](../electron/knowledge/qaCanonicalHistory.ts)、[reactAgent/toolResultBudget.ts](../electron/knowledge/reactAgent/toolResultBudget.ts) |
+| 问答历史 | 会话、消息、轮次、工具过程、完成 / 中断状态 | [qaMemoryDatabase.ts](../electron/knowledge/qa/qaMemoryDatabase.ts)、[qaMemoryRepository.ts](../electron/knowledge/qa/qaMemoryRepository.ts) |
+| 工作记忆 | 在本轮模型窗口中装配最近历史、摘要和工具结果 | [qaMemoryOrchestrator.ts](../electron/knowledge/qa/qaMemoryOrchestrator.ts)、[qaCanonicalHistory.ts](../electron/knowledge/qa/qaCanonicalHistory.ts)、[reactAgent/toolResultBudget.ts](../electron/knowledge/reactAgent/toolResultBudget.ts) |
 | 历史对话搜索 | 从过去会话找到相关问答，按范围和数量返回 | [knowledgeTools/searchConversationsTool.ts](../electron/knowledge/knowledgeTools/searchConversationsTool.ts) |
 | 长期语义记忆 | 独立的资料、偏好、事实、任务和兴趣条目 | [memory/](../electron/knowledge/memory/)、[knowledgeTools/searchMemoryTool.ts](../electron/knowledge/knowledgeTools/searchMemoryTool.ts) |
 
@@ -410,7 +417,7 @@ flowchart TB
 
 ## Wiki 工作区
 
-Wiki 从资料结构树构建章节空间。[wikiOutline.ts](../electron/wikiOutline.ts) 读取真实结构、原文块和行布局，[wikiLayout.ts](../src/wiki/wikiLayout.ts) 负责图布局，[WikiMapCanvas.tsx](../src/components/wiki/WikiMapCanvas.tsx) 使用 React Flow 展示节点。
+Wiki 从资料结构树构建章节空间。[wikiOutline.ts](../electron/wiki/wikiOutline.ts) 读取真实结构、原文块和行布局，[wikiLayout.ts](../src/components/wiki/data/wikiLayout.ts) 负责图布局，[WikiMapCanvas.tsx](../src/components/wiki/WikiMapCanvas.tsx) 使用 React Flow 展示节点。
 
 ```mermaid
 flowchart LR
@@ -425,7 +432,7 @@ flowchart LR
 
 | 能力 | 实现 |
 | --- | --- |
-| 文档目录、节点选择、折叠、缩放、顺序调整 | [WikiView.tsx](../src/components/wiki/WikiView.tsx)、[wikiViewState.ts](../src/wiki/wikiViewState.ts)、[wikiElectronDataSource.ts](../src/wiki/wikiElectronDataSource.ts) |
+| 文档目录、节点选择、折叠、缩放、顺序调整 | [WikiView.tsx](../src/components/wiki/WikiView.tsx)、[wikiViewState.ts](../src/components/wiki/data/wikiViewState.ts)、[wikiElectronDataSource.ts](../src/components/wiki/data/wikiElectronDataSource.ts) |
 | 引导 / 自动模式、完整生成、节点分析、章节重试 | Wiki UI 与数据源协调任务和事件 |
 | 节点范围和跨章节读取 | [wikiNodeScope.ts](../electron/wiki/wikiNodeScope.ts)、[wikiScopePolicy.ts](../electron/wiki/wikiScopePolicy.ts) |
 | 问题改写、检索、原文充分性检查 | [wikiQueryRewrite.ts](../electron/wiki/wikiQueryRewrite.ts)、[wikiRetrievalCycle.ts](../electron/wiki/wikiRetrievalCycle.ts)、[wikiDirectEvidenceGate.ts](../electron/wiki/wikiDirectEvidenceGate.ts) |
@@ -434,6 +441,37 @@ flowchart LR
 | 导入笔记库 | [wikiNoteImport.ts](../electron/wiki/wikiNoteImport.ts)；复制 Markdown 与受支持图片资源 |
 
 源章节与派生节点分别标记。派生节点及 AI 内容在 `.menghan-meta/wiki/` 中持久化，源哈希用于防止旧文档结果冒充最新结果。Wiki AI 内容属于该文档学习产物，与工作区长期记忆是不同的数据合同。浏览真实结构不需要模型；生成和节点 AI 需要模型，原文和 AI 输出不会直接合并覆盖。
+
+## 日程工作区
+
+日程把事件、待办和课表放进一个按工作区存储的日历空间。[ScheduleView.tsx](../src/components/schedule/ScheduleView.tsx) 提供年 / 月 / 周 / 日视图、新建日程或待办、分类与颜色、今天定位和前后导航；侧栏由 [ScheduleSidebar.tsx](../src/components/schedule/ScheduleSidebar.tsx) 与待办面板组成。
+
+数据合同见 [shared/schedule.ts](../shared/schedule.ts)：条目类型为 `event`、`todo`、`course`；重复规则支持每日 / 每周 / 每月 / 单双周（`weekly_pattern`），可设间隔、星期集合、结束日期和排除日期。重复展开在 [scheduleRecurrence.ts](../electron/schedule/scheduleRecurrence.ts) 中完成，单次修改以覆盖（override）记录，不重写原条目。
+
+| 模块 | 职责 |
+| --- | --- |
+| [scheduleService.ts](../electron/schedule/scheduleService.ts) | 条目与提醒的增删改查、重复展开与覆盖 |
+| [scheduleDatabase.ts](../electron/schedule/scheduleDatabase.ts) | 工作区 `.menghan-meta/schedule/schedule.db`（SQLite，WAL） |
+| [scheduleReminderService.ts](../electron/schedule/scheduleReminderService.ts) | 提醒调度、系统通知与电源事件恢复 |
+| [import/](../electron/schedule/import/) | CSV / Excel 课表解析（含 GBK 回退）与 AI 辅助导入（图片 / URL / 文本，需配置模型） |
+
+课表导入按批次记录，可整体撤销（`schedule:revert-import`）。AI 解析仅在用户显式选择对应来源时调用；本地 CSV / Excel 解析不需要模型。日程数据属于工作区，随完整工作区备份一起处理。
+
+## 终端工作区
+
+终端提供应用内嵌的交互式 shell。[TerminalView.tsx](../src/components/terminal/TerminalView.tsx) 是主导航里的完整视图（多标签），`Ctrl+\`` 快捷键在任意视图开关底部 [TerminalPanel.tsx](../src/components/terminal/TerminalPanel.tsx) 面板；两种形态共享同一组会话，会话由 App 根部的 [useTerminalSessions.tsx](../src/components/terminal/useTerminalSessions.tsx) 持有，切换视图不终止进程。
+
+```text
+渲染进程 (@xterm/xterm)
+    ⇅ preload terminal:* 通道
+TerminalService (Electron 主进程)
+    ⇅ fork + NDJSON 消息
+TerminalHost (独立 Node 进程, node-pty)
+    ⇅ PTY
+用户选择的 shell
+```
+
+[terminalService.ts](../electron/terminal/terminalService.ts) 惰性启动并复用唯一 [terminalHost.ts](../electron/terminal/terminalHost.ts) 子进程；Host 用 `node-pty` 创建 PTY 会话，并修复了打包形态下 `app.asar.unpacked` 的 helperPath 双重解包问题。Shell 选择按平台探测：macOS 依次尝试 `$SHELL`、`/bin/zsh`、`/bin/bash`；Windows 提供 PowerShell、CMD、Git Bash 与 WSL（存在时）。`terminal:write` 走 `ipcMain.on` 直通以避免击键被维护暂停拦截，其余通道仍要求内部渲染器来源。终端会话在应用退出时统一清理，不遗留后台进程。
 
 ## 资料图谱与地图
 
@@ -458,7 +496,7 @@ flowchart TB
 
 库级 `graphKey` 根据实体阶段键集合、Leiden 配置和图 schema 等输入计算；图产物保存在 `.menghan-meta/graph/<graphKey>/`。默认 Leiden 配置为 resolution `1.0`、maxDepth `4`、minSplitSize `3`、seed `42`。
 
-地图 UI 是 [LibraryGraphView.tsx](../src/components/LibraryGraphView.tsx)。局部检索见 [graphLocalSearch.ts](../electron/pipeline/graphLocalSearch.ts)，全局检索见 [graphGlobalSearch.ts](../electron/pipeline/graphGlobalSearch.ts)。全局社区摘要用于形成整体理解，不能直接等同于原文引用；没有有效图谱投影时，工具会返回能力提示并引导改用普通资料检索。
+地图 UI 是 [LibraryGraphView.tsx](../src/components/library/LibraryGraphView.tsx)。局部检索见 [graphLocalSearch.ts](../electron/pipeline/graphLocalSearch.ts)，全局检索见 [graphGlobalSearch.ts](../electron/pipeline/graphGlobalSearch.ts)。全局社区摘要用于形成整体理解，不能直接等同于原文引用；没有有效图谱投影时，工具会返回能力提示并引导改用普通资料检索。
 
 仓库开发用 `graphify-out/` 与产品里的“地图”不是同一个功能。Graphify 是辅助阅读源码的分析产物，不参与用户资料处理或产品运行。
 
@@ -476,9 +514,9 @@ flowchart TB
 | [generate-study-doc](../build/builtin-skills/generate-study-doc/SKILL.md) | 读取指定文档，使用模板生成学习文档 |
 | [generate-experiment-report](../build/builtin-skills/generate-experiment-report/SKILL.md) | 依据已有实验记录与数据生成报告，显式标记缺口 |
 
-[assistantSkills.ts](../electron/knowledge/assistantSkills.ts)、[skillDirectoryLoader.ts](../electron/knowledge/skillDirectoryLoader.ts)、[skillDefinitionResolver.ts](../electron/knowledge/skillDefinitionResolver.ts)、[skillImportService.ts](../electron/knowledge/skillImportService.ts) 负责技能加载、解析和导入；[readSkillTool.ts](../electron/knowledge/knowledgeTools/readSkillTool.ts) 供 Agent 按需读取定义与资源。
+[assistantSkills.ts](../electron/knowledge/assistant/assistantSkills.ts)、[skillDirectoryLoader.ts](../electron/knowledge/skill/skillDirectoryLoader.ts)、[skillDefinitionResolver.ts](../electron/knowledge/skill/skillDefinitionResolver.ts)、[skillImportService.ts](../electron/knowledge/skill/skillImportService.ts) 负责技能加载、解析和导入；[readSkillTool.ts](../electron/knowledge/knowledgeTools/readSkillTool.ts) 供 Agent 按需读取定义与资源。
 
-工作区 `AI-Skill/` 保存可管理的技能文件，[aiSkillWorkspace.ts](../electron/knowledge/aiSkillWorkspace.ts) 负责同步。技能为提示和模板提供结构，实际工具权限仍由注册表与范围校验决定，不能把技能定义解释成任意代码插件或通用本地 shell 执行授权。
+工作区 `AI-Skill/` 保存可管理的技能文件，[aiSkillWorkspace.ts](../electron/knowledge/skill/aiSkillWorkspace.ts) 负责同步。技能为提示和模板提供结构，实际工具权限仍由注册表与范围校验决定，不能把技能定义解释成任意代码插件或通用本地 shell 执行授权。
 
 ### 搜索与网页
 
@@ -497,6 +535,8 @@ flowchart TB
   ConversationMemory/
     qa-memory.db              问答历史、长期记忆及相关元数据
   AI-Skill/                   用户可管理的技能文件
+  .menghan-meta/
+    schedule/                 日程数据库（schedule.db：事件、待办、课表与提醒）
 
 <note-library>/
   *.md / folders / assets     用户文件
@@ -528,16 +568,16 @@ flowchart TB
 
 ### 存储迁移
 
-[workspaceMigrationService.ts](../electron/workspaceMigrationService.ts) 与 [workspaceMigrationWorker.ts](../electron/workspaceMigrationWorker.ts) 执行工作区内迁移；[WorkspaceMigrationDialog.tsx](../src/components/WorkspaceMigrationDialog.tsx) 展示阻止其他操作的进度与恢复选项。
+[workspaceMigrationService.ts](../electron/workspace/workspaceMigrationService.ts) 与 [workspaceMigrationWorker.ts](../electron/workspace/workspaceMigrationWorker.ts) 执行工作区内迁移；[WorkspaceMigrationDialog.tsx](../src/components/settings/WorkspaceMigrationDialog.tsx) 展示阻止其他操作的进度与恢复选项。
 
 迁移先预览范围，复制和映射，完成校验后发布新位置并刷新界面。原目录保留，外部库继续关联原位置；取消或中断依靠迁移日志继续或使用原位置。锁与根目录归属见 [dataRootLocks.ts](../electron/dataRootLocks.ts)。迁移不能只改配置路径而遗漏草稿、会话、附件、技能或外部库关系。
 
 ## 主题语言与首次引导
 
-- **主题**：[shared/lightColorSchemes.ts](../shared/lightColorSchemes.ts) 定义五种配色，[theme.ts](../src/utils/theme.ts) 与 `Application.tsx` 应用系统 / 浅色 / 深色、密度和持久偏好。启动外观与运行界面共用配置。
+- **主题**：[shared/lightColorSchemes.ts](../shared/lightColorSchemes.ts) 定义五种配色，[theme.ts](../src/utils/ui/theme.ts) 与 `Application.tsx` 应用系统 / 浅色 / 深色、密度和持久偏好。启动外观与运行界面共用配置。
 - **语言**：[src/i18n/index.ts](../src/i18n/index.ts) 的 `t()` 与 `useI18n()` 订阅偏好变化，中文文本为键，英文来自映射。未知文案回退原文，不翻译用户笔记，不因为语言切换重新创建编辑器。
 - **首次引导**：[OnboardingGuide.tsx](../src/components/onboarding/OnboardingGuide.tsx) 与 [electron/onboarding/](../electron/onboarding/) 实现菜单介绍 → 配置 AI → 第一次提问。状态包括 `pending`、`skipped`、`completed`；已有模型可直接练习，连接测试与真实回答分别判断。
-- **诊断**：设置与 [CapabilityPanel.tsx](../src/components/CapabilityPanel.tsx) 展示能力状态，主进程记录日志和异常。配置存在、连接可用、真实调用完成与发行包验收是不同结论。
+- **诊断**：设置与 [CapabilityPanel.tsx](../src/components/settings/CapabilityPanel.tsx) 展示能力状态，主进程记录日志和异常。配置存在、连接可用、真实调用完成与发行包验收是不同结论。
 
 ## 开发构建与验证
 
@@ -561,7 +601,7 @@ pnpm build
 pnpm run release:manifest
 ```
 
-[build-pipeline-runtime.mjs](../scripts/build-pipeline-runtime.mjs) 组装 CPython、Python 标准库、Worker、Jieba 及图谱依赖，校验握手并生成 runtime manifest；需要可用 CPython 安装而非仅靠项目 `.venv`。可用 `MENGHAN_PIPELINE_PYTHON` 指定解释器。
+[build-pipeline-runtime.mjs](../scripts/build/build-pipeline-runtime.mjs) 组装 CPython、Python 标准库、Worker、Jieba 及图谱依赖，校验握手并生成 runtime manifest；需要可用 CPython 安装而非仅靠项目 `.venv`。可用 `MENGHAN_PIPELINE_PYTHON` 指定解释器。
 
 electron-builder 的 `extraResources` 携带 `pipeline-runtime` 和 `builtin-skills`，原生 SQLite / sqlite-vec 与适用 Node Worker 放到 `asarUnpack`。[build-mac-packages.mjs](../scripts/build/build-mac-packages.mjs) 生成 DMG 和 ZIP；Mac 使用 `icon.icns` 作为应用图标。签名状态以实际清单为准。
 
