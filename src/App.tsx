@@ -42,6 +42,7 @@ import TerminalView from './components/terminal/TerminalView.tsx';
 import MaterialsView from './components/materials/MaterialsView.tsx';
 import AssistantWorkspaceView from './components/assistant/AssistantWorkspaceView.tsx';
 import LibraryGraphView from './components/library/LibraryGraphView.tsx';
+import PluginLibraryView from './components/library/PluginLibraryView.tsx';
 import LibraryManagerView from './components/library/LibraryManagerView.tsx';
 import { useOnboarding } from './components/onboarding/useOnboarding.ts';
 import { OnboardingAiTask, OnboardingBar, OnboardingCompletion, OnboardingMenus, type OnboardingModelDraft } from './components/onboarding/OnboardingGuide.tsx';
@@ -1849,6 +1850,11 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
             />
           </main>
         ) : null}
+        {isMainViewMounted('plugins') ? (
+          <main className="main-pane plugin-library-pane" hidden={mainView !== 'plugins'}>
+            <PluginLibraryView active={mainView === 'plugins'} />
+          </main>
+        ) : null}
         {isMainViewMounted('graph') ? (
           <main className="main-pane graph-main-pane" hidden={mainView !== 'graph'}>
             <LibraryGraphView
@@ -1892,6 +1898,7 @@ function App({ onResolvedThemeChange, onStartupReady }: AppProps) {
                 await loadAllTags();
                 setIsTagModalOpen(true);
               }}
+              onOpenPluginManager={() => void handleNavigateMainView('plugins')}
               onRefresh={async () => { await window.electronAPI.reconcileNotes(); await loadFiles(); }}
               onRename={handleRenameFile}
               onDelete={handleDeleteFile}

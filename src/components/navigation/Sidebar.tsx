@@ -13,6 +13,7 @@ import {
     PanelLeftClose,
     PanelLeftOpen,
     Plus,
+    Puzzle,
     RefreshCw,
     Search,
     Star,
@@ -30,6 +31,7 @@ import NoteOverviewModal, { type NoteOverviewData } from '../noteLibrary/NoteOve
 import { getEditableEntryName, getSidebarDisplayName } from '../../utils/ui/sidebarDisplay.ts';
 import { collapseAllFolders, collapseExceptCurrentPath, collectDirectoryPaths, getAncestorFolderPaths, reconcileCollapsedFolderPaths } from '../../utils/note/fileTreeState.ts';
 import { buildOutlineTree, collectCollapsibleOutlineKeys, flattenVisibleOutlineTree } from '../../utils/note/outline.ts';
+import { useInvokePluginCommand, usePluginCommands } from '../../utils/plugins/usePluginCommands.ts';
 
 export type LeftPanelMode = 'files' | 'outline';
 
@@ -65,6 +67,7 @@ interface SidebarProps {
     onOpenLibraries: () => void;
     onOpenSearch: () => void;
     onOpenTags: () => void;
+    onOpenPluginManager: () => void;
     onRefresh: () => void;
     onRename: (path: string, newName: string) => Promise<boolean | void> | void;
     onDelete: (path: string, isDirectory: boolean) => void;
@@ -491,6 +494,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     onOpenLibraries,
     onOpenSearch,
     onOpenTags,
+    onOpenPluginManager,
     onRefresh,
     onRename,
     onDelete,
@@ -503,6 +507,8 @@ const Sidebar: React.FC<SidebarProps> = ({
     onSetCollapsedFolderPaths,
 }) => {
   useI18n();
+    const pluginCommands = usePluginCommands('sidebar');
+    const invokePluginCommand = useInvokePluginCommand('sidebar');
     const [isTreeMenuOpen, setIsTreeMenuOpen] = useState(false);
     const [contextMenu, setContextMenu] = useState<NoteLibraryMenuTarget | null>(null);
     const [overviewNode, setOverviewNode] = useState<FileNode | null>(null);
@@ -665,6 +671,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <ActionIcon title={t("目录")} aria-label={t("目录")} variant="subtle" color="gray" size="md" onClick={() => { onSetMode('outline'); onToggleCollapse(); }}>
                     <ListTree size={16} />
                 </ActionIcon>
+                <ActionIcon title={t("插件")} aria-label={t("插件")} variant="subtle" color="gray" size="md" onClick={onOpenPluginManager}>
+                    <Puzzle size={16} />
+                </ActionIcon>
             </aside>
         );
     }
@@ -698,6 +707,21 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <span>{t("搜索")}</span>
                 <span className="shortcut">Ctrl+K</span>
             </Button>
+            <Button className="sidebar-command" variant="subtle" color="gray" size="sm" fullWidth justify="flex-start" leftSection={<Puzzle size={14} />} onClick={onOpenPluginManager}>
+                <span>{t("插件库")}</span>
+            </Button>
+            {pluginCommands.length > 0 && (
+                <div className="sidebar-plugin-commands" aria-label={t("插件")}>
+                    <div className="sidebar-section-header"><span>{t("插件")}</span></div>
+                    {pluginCommands.map((command) => (
+                        <Button key={command.id} className="sidebar-command sidebar-plugin-command" variant="subtle" color="gray" size="sm" fullWidth justify="flex-start"
+                            leftSection={<Puzzle size={14} />} title={command.title}
+                            onClick={() => void invokePluginCommand(command.id)}>
+                            <span>{command.title}</span>
+                        </Button>
+                    ))}
+                </div>
+            )}
 
             <div className="sidebar-body" onScroll={closeContextMenu} onDragOver={(event) => event.preventDefault()} onDrop={handleRootDrop}>
                 {mode === 'outline' ? (
@@ -773,6 +797,9 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             <div className="sidebar-bottom">
+                <Button className="sidebar-command" variant="subtle" color="gray" size="sm" fullWidth justify="flex-start" leftSection={<Puzzle size={14} />} onClick={onOpenPluginManager}>
+                    {t("插件")}
+                </Button>
                 <Button className="sidebar-command" variant="subtle" color="gray" size="sm" fullWidth justify="flex-start" leftSection={<Plus size={14} />} onClick={() => onCreateFile(null)}>
                     {t("新建笔记")}
                 </Button>

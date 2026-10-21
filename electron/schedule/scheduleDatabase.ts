@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 
-export const SCHEDULE_SCHEMA_VERSION = 1;
+export const SCHEDULE_SCHEMA_VERSION = 2;
 export const SCHEDULE_DIRECTORY_NAME = 'schedule';
 export const SCHEDULE_DATABASE_NAME = 'schedule.db';
 
@@ -94,8 +94,7 @@ function migrateScheduleDatabase(database: Database.Database): void {
   if (version === SCHEDULE_SCHEMA_VERSION) return;
 
   if (version === 0) {
-    database.transaction(() => {
-      database.exec(`
+    database.transaction(() => {      database.exec(`
         CREATE TABLE IF NOT EXISTS schedule_terms (
           id            TEXT PRIMARY KEY,
           name          TEXT NOT NULL,
@@ -195,6 +194,24 @@ function migrateScheduleDatabase(database: Database.Database): void {
           value      TEXT NOT NULL CHECK (json_valid(value)),
           updated_at TEXT NOT NULL
         );
+      `);
+    })();
+  }
+
+  if (version <= 1) {
+    // v1 → v2：插件日程扩展点的外部 ID 映射表（契约 §4.1，迁移语义：只增表不改旧表）。
+    // v1 → v2: external ID mapping table for the plugin schedule extension point
+    // (contract §4.1; migration only adds a table, existing tables are untouched).
+    database.transaction(() => {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS schedule_external_items (
+          source      TEXT NOT NULL,
+          external_id TEXT NOT NULL,
+          item_id     TEXT NOT NULL,
+          updated_at  TEXT NOT NULL,
+          PRIMARY KEY (source, external_id)
+        );
+        CREATE INDEX IF NOT EXISTS schedule_external_items_item ON schedule_external_items(item_id);
       `);
     })();
   }

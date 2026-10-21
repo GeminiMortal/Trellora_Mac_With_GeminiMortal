@@ -446,6 +446,32 @@
   text-overflow: ellipsis;
 }
 
+/* ── notice-hub 来源徽标（契约 §8.2，复用 tags 零新增数据通道） ─────────────── */
+
+.schedule-source-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
+  color: var(--accent-primary);
+  line-height: 1;
+  cursor: default;
+}
+
+.schedule-source-badge svg {
+  display: block;
+}
+
+/* 窄屏/紧凑行：芯片内徽标随文字收缩，不撑破月视图单元格 */
+.schedule-event-chip .schedule-source-badge {
+  width: 12px;
+  height: 12px;
+}
+
 /* ── Reminder toast ────────────────────────────────────────────────────────── */
 
 .schedule-reminder-toast {

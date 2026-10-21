@@ -57,6 +57,7 @@ The project supports **macOS (Apple Silicon arm64)** and **Windows x64** (since 
 | Schedule and courses | Events, todos, course timetables, and reminders; year/month/week/day views, recurrence (including odd/even weeks), categories; CSV/Excel course import and AI-assisted import (image/URL/text) with batch revert |
 | Built-in terminal | Interactive shell with multi-tab sessions; zsh/bash on macOS, PowerShell/CMD/Git Bash/WSL on Windows; `Ctrl+\`` opens the bottom terminal panel |
 | Plugins (experimental) | Plugin SDK and manifest; command palette/sidebar/toolbar extensions; tiered permissions (L1 disclosure, L2 user confirmation); install from URL or ZIP |
+| Notice Hub · notice-hub sync | Plugin `com.expertkt.notice-hub`: one-way sync of QQ group-derived todos, announcements and deadlines into the schedule (source badges, reminder offsets, ICS fallback); distributed from the standalone repo [Trellora/NoticHubPlugin](https://github.com/Trellora/NoticHubPlugin); dual-licensed (MIT + PolyForm Noncommercial, commercial use requires authorization), see [porting notes](docs/notice-hub-移植说明.md) |
 | Desktop experience and recovery | Chinese/English UI, light/dark themes, five palettes, onboarding, note backups, full workspace backup/restore, relocation, and diagnostics |
 
 Editing, file browsing, and note keyword search work without AI configuration. Vector retrieval needs an embedding model; AI answers and generation need a usable model; Map needs graph enrichment enabled and completed in the materials pipeline.
@@ -199,15 +200,15 @@ Settings has eleven sections organized under Workspace, Documents, AI settings, 
 
 ## Download
 
-**macOS (Apple Silicon) · Trellora v1.2.4**
+**macOS (Apple Silicon) · Trellora v1.5.1**
 
 | Edition | Download | Usage |
 | --- | --- | --- |
-| DMG installer | [GitHub Releases · v1.2.4](https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/releases/tag/v1.2.4) | Open `Trellora-1.2.4-arm64.dmg`, drag Trellora to Applications |
-| Auto-update ZIP | [GitHub Releases · v1.2.4](https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/releases/tag/v1.2.4) | `Trellora-1.2.4-arm64-mac.zip` used by in-app updates |
-| Source | [GitHub tag v1.2.4](https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/releases/tag/v1.2.4) | ZIP / TAR.GZ available directly |
+| DMG installer | [GitHub Releases · v1.5.1](https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/releases/tag/v1.5.1) | Open `Trellora-1.5.1-arm64.dmg`, drag Trellora to Applications |
+| Auto-update ZIP | [GitHub Releases · v1.5.1](https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/releases/tag/v1.5.1) | `Trellora-1.5.1-arm64-mac.zip` used by in-app updates |
+| Source | [GitHub tag v1.5.1](https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/releases/tag/v1.5.1) | ZIP / TAR.GZ available directly |
 
-Open `Trellora-1.2.4-arm64.dmg` and drag Trellora.app into Applications.
+Open `Trellora-1.5.1-arm64.dmg` and drag Trellora.app into Applications.
 
 The app is distributed with an ad-hoc signature. If macOS Gatekeeper blocks it, right-click Trellora.app → Open, or allow it in System Settings → Privacy & Security.
 
@@ -294,7 +295,7 @@ shared/           Cross-process types, contracts, limits, and defaults
 pipeline-python/  NDJSON Worker, processing stages, and Python tests
 build/            Branding, built-in skills, and installer configuration
 scripts/          Build, functional, Electron, and package validation
-plugins/          Plugin SDK, manifest, and examples (experimental)
+plugins/          Plugin SDK, manifest and examples (experimental; the notice-hub plugin is distributed from Trellora/NoticHubPlugin)
 docs/             Product/architecture docs, showcase assets, acceptance records
 ```
 

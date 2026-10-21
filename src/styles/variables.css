@@ -1241,6 +1241,24 @@ body.resizing-materials-assistant * {
   box-sizing: border-box;
 }
 
+/* 插件贡献的侧边栏命令按钮。/ Plugin-contributed sidebar command buttons. */
+.sidebar-plugin-commands {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-plugin-command {
+  overflow: hidden;
+}
+
+.sidebar-plugin-command .mantine-Button-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .shortcut {
   margin-left: auto;
   border: 1px solid rgba(128, 128, 128, 0.3);
@@ -10198,6 +10216,18 @@ body.resizing-knowledge-debug-rail * {
 
 /* Wiki workspace: neutral document surfaces with a single teal interaction
    accent. The chapter rails are intentionally orthogonal and unrounded. */
+.plugin-library-pane {
+  overflow: hidden;
+}
+.plugin-library-pane:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+}
+.plugin-library-pane > .plugin-library-view {
+  flex: 1;
+  min-height: 0;
+}
+
 .wiki-main-pane {
   overflow: hidden;
 }
@@ -10254,6 +10284,7 @@ body.resizing-knowledge-debug-rail * {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: nowrap;
   gap: 14px;
   flex: 0 0 auto;
   min-height: 56px;
@@ -10268,8 +10299,23 @@ body.resizing-knowledge-debug-rail * {
   min-width: 0;
 }
 
+/* 主区（标题/知识库选择器/搜索框）优先收缩，内部文本控件用省略号，保持单行不错位。 */
 .wiki-toolbar-primary { flex: 1 1 auto; }
-.wiki-toolbar-actions { flex: 0 1 auto; }
+
+/* 按钮区永不换行、不被裁剪：空间不足时在自身内部横向滚动，按钮始终可达。 */
+.wiki-toolbar-actions {
+  flex: 0 1 auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.wiki-toolbar-actions::-webkit-scrollbar { height: 4px; }
+.wiki-toolbar-actions::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: var(--wiki-border-strong);
+}
 
 .wiki-map-mode-controls {
   flex: 0 0 auto;
@@ -10288,8 +10334,12 @@ body.resizing-knowledge-debug-rail * {
   font-size: 16px;
 }
 
-.wiki-library-select { flex: 0 1 260px; min-width: 180px; }
-.wiki-node-search { flex: 0 1 300px; min-width: 180px; }
+.wiki-library-select { flex: 1 1 220px; min-width: 0; max-width: 340px; }
+.wiki-node-search { flex: 1 1 260px; min-width: 0; max-width: 460px; }
+.wiki-library-select .mantine-Input-input,
+.wiki-node-search .mantine-Input-input {
+  text-overflow: ellipsis;
+}
 .wiki-toolbar-progress { width: 154px; min-width: 120px; }
 .wiki-toolbar-progress .mantine-Text-root {
   overflow: hidden;
@@ -10298,16 +10348,20 @@ body.resizing-knowledge-debug-rail * {
 }
 
 .wiki-workspace-body {
+  position: relative;  /* .wiki-side-panel 绝对定位的参照系 */
   display: flex;
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  align-items: stretch;
 }
 
 .wiki-workspace-body > .wiki-outline-pane,
 .wiki-workspace-body > .wiki-document-list-pane {
   flex-shrink: 0;
+  /* 侧栏在 Drawer 模式下由 .wiki-side-panel 覆盖为满高抽屉面板，需脱离 flex 流。 */
+  min-width: 0;
 }
 
 .wiki-outline-pane,
@@ -10316,6 +10370,8 @@ body.resizing-knowledge-debug-rail * {
   flex: 0 0 264px;
   flex-direction: column;
   width: 264px;
+  min-width: 240px;
+  max-width: 360px;
   height: 100%;
   min-height: 0;
   border-right: 1px solid var(--wiki-border);
@@ -10440,8 +10496,10 @@ body.resizing-knowledge-debug-rail * {
   overflow: hidden;
 }
 
+/* 详情面板按像素宽度定位（WikiSplitPane clamp 到 320–560px，这里再兜一层上下限），
+   导图列 minmax(240px, 1fr) 自适应占满剩余空间：任何一列都不塌陷为 0。 */
 .wiki-split-pane.detail-open:not(.detail-overlay) {
-  grid-template-columns: minmax(0, var(--wiki-primary-width)) 12px minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 1fr) 12px clamp(320px, var(--wiki-detail-width, 400px), 560px);
 }
 
 .wiki-split-primary,
@@ -10457,12 +10515,15 @@ body.resizing-knowledge-debug-rail * {
   background: var(--wiki-surface);
 }
 
+/* 覆盖模式（窄屏 Drawer 侧栏 + 详情）：详情以右侧有界抽屉覆盖导图，导图仍在底层可交互；
+   这里必须覆盖 grid-area: 1 / 1，否则详情与导图在窄屏下重叠、闪烁。 */
 .wiki-split-pane.detail-overlay .wiki-split-primary { grid-area: 1 / 1; }
 .wiki-split-pane.detail-overlay .wiki-split-secondary {
   z-index: 6;
   grid-area: 1 / 1;
-  width: 100%;
-  border-left: 0;
+  justify-self: end;
+  width: min(420px, 100%);
+  box-shadow: -12px 0 32px rgba(20, 28, 36, 0.16);
 }
 
 .wiki-split-handle {
@@ -10495,6 +10556,69 @@ body.resizing-knowledge-debug-rail * {
   border-radius: 3px;
   background: var(--wiki-surface);
   transform: translateY(-50%);
+  transition: height 120ms ease;
+}
+
+.wiki-split-handle:hover > span,
+.wiki-split-handle:focus-visible > span {
+  height: 48px;
+  border-color: var(--wiki-accent);
+}
+
+.wiki-split-handle:focus-visible {
+  outline: 2px solid var(--wiki-accent);
+  outline-offset: -2px;
+}
+
+/* Wiki 窄屏侧栏覆盖面板（Drawer 替代品）：在 .wiki-workspace-body 内绝对定位，
+   离开窄屏断点后由 .wiki-side-panel.is-open 仅在打开时覆盖，关闭时完全退场。 */
+.wiki-side-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 8;
+  display: none;
+  flex-direction: column;
+  width: min(300px, 82vw);
+  border-right: 1px solid var(--wiki-border);
+  background: var(--wiki-surface);
+  box-shadow: 12px 0 32px rgba(20, 28, 36, 0.18);
+  transform: translateX(-100%);
+  transition: transform 180ms ease;
+  pointer-events: none;
+}
+
+.wiki-side-panel.is-open {
+  display: flex;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.wiki-side-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-height: 46px;
+  padding: 6px 10px 6px 14px;
+  border-bottom: 1px solid var(--wiki-border);
+}
+
+.wiki-side-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.wiki-side-panel-body > .wiki-outline-pane,
+.wiki-side-panel-body > .wiki-document-list-pane {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  height: 100%;
+  border-right: none;
 }
 
 .wiki-map-canvas {
@@ -10700,7 +10824,8 @@ body.resizing-knowledge-debug-rail * {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  flex: 0 0 54px;
+  flex: 0 0 auto;
+  min-height: 54px;
   min-width: 0;
   padding: 8px 12px 7px 16px;
   border-bottom: 1px solid var(--wiki-border);
@@ -10824,6 +10949,9 @@ body.resizing-knowledge-debug-rail * {
   padding: 10px 14px;
   border-bottom: 1px solid var(--wiki-border);
 }
+
+/* 标题/提示文本块可收缩换行，右侧「快捷动作」按钮不被挤出详情面板。 */
+.wiki-assistant-context > div { flex: 1 1 auto; min-width: 0; }
 
 .wiki-assistant-scroll { flex: 1 1 auto; min-height: 0; }
 .wiki-generation-progress { padding-bottom: 12px; border-bottom: 1px solid var(--wiki-border); }
@@ -11036,11 +11164,11 @@ body.resizing-knowledge-debug-rail * {
   border: 1px solid var(--wiki-border);
   border-radius: 8px;
 }
-.wiki-assistant-composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 7px; }
-.wiki-assistant-composer-controls { min-width: 0; overflow: hidden; }
+.wiki-assistant-composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 7px; min-width: 0; }
+.wiki-assistant-composer-controls { flex: 1 1 auto; min-width: 0; overflow: hidden; }
 .wiki-assistant-composer-control { flex: 0 1 auto; min-width: 0; }
 .wiki-assistant-model-control { max-width: 180px; }
-.wiki-assistant-model-control .mantine-Button-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wiki-assistant-composer-control .mantine-Button-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .wiki-start-modal { border-radius: 7px; }
 .wiki-start-mode-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -11073,11 +11201,11 @@ body.resizing-knowledge-debug-rail * {
 @keyframes wiki-caret { 50% { opacity: 0; } }
 
 @media (max-width: 1180px) {
-  .wiki-toolbar { align-items: stretch; flex-wrap: wrap; }
-  .wiki-toolbar-primary,
-  .wiki-toolbar-actions { flex: 0 0 100%; width: 100%; }
-  .wiki-toolbar-actions { justify-content: flex-end; }
-  .wiki-toolbar-progress { margin-right: auto; }
+  /* 保持单行：选择器/搜索先收缩省略，按钮组横向滚动，不再换行堆叠。 */
+  .wiki-toolbar { gap: 10px; }
+  .wiki-library-select { flex-basis: 180px; max-width: 240px; }
+  .wiki-node-search { flex-basis: 200px; max-width: 280px; }
+  .wiki-map-mode-controls .mantine-SegmentedControl-label { padding-inline: 7px; }
 }
 
 @media (max-width: 1159px) {
@@ -11093,8 +11221,9 @@ body.resizing-knowledge-debug-rail * {
   .wiki-split-pane.detail-open .wiki-split-secondary {
     z-index: 6;
     grid-area: 1 / 1;
-    width: 100%;
-    border-left: 0;
+    justify-self: end;
+    width: min(420px, 100%);
+    box-shadow: -12px 0 32px rgba(20, 28, 36, 0.16);
   }
   .wiki-split-pane.detail-open .wiki-split-handle { display: none; }
 }

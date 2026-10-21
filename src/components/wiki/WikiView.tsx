@@ -1,8 +1,9 @@
 import { t, useI18n } from '../../i18n/index.ts';
-import { Drawer, Text } from '@mantine/core';
+import { ActionIcon, Text } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AssistantAiOptions, AssistantAttachment, MaterialsLibrarySummary, WikiAiMemory } from '../../electron';
+import { X } from 'lucide-react';
 import { copyPlainText } from '../../utils/editor/clipboard.ts';
 import type { ResolvedTheme } from '../../utils/ui/theme.ts';
 import { relocateWorkspacePath, type WorkspaceDataChange } from '../../utils/wiki/workspaceDataEvents.ts';
@@ -361,6 +362,8 @@ export default function WikiView({ active, resolvedTheme, assistantAiOptions, on
   const hasDocument = Boolean(snapshot);
   const compactOutline = viewportCompact || workspaceWidth < 1104;
   const overlayDetail = viewportOverlay || workspaceWidth - (!compactOutline && outlineOpen ? 264 : 0) < 840;
+  // 窄屏下侧栏覆盖面板打开状态：仅在 compactOutline 时真正覆盖显示（跟随 outlineOpen）。
+  const sidePanelOpen = compactOutline && outlineOpen && active;
 
   useEffect(() => {
     if (!active) return;
@@ -784,6 +787,7 @@ export default function WikiView({ active, resolvedTheme, assistantAiOptions, on
       onSelectNode={handleSelectNode}
       onToggleCollapsed={handleToggleCollapsed}
       onBackToDocuments={() => setSidebarMode('documents')}
+      onClose={() => setOutlineOpen(false)}
     />
   ) : null;
 
@@ -797,6 +801,7 @@ export default function WikiView({ active, resolvedTheme, assistantAiOptions, on
       error={error}
       onSelectDocument={(document) => void loadDocument(document)}
       onRefresh={() => void refreshDocuments()}
+      onClose={() => setOutlineOpen(false)}
     />
   ) : null;
   const sidebar = sidebarMode === 'outline' && outline ? outline : documentList;
@@ -915,11 +920,17 @@ export default function WikiView({ active, resolvedTheme, assistantAiOptions, on
           ) : null}
         />
       </div>
-      {compactOutline ? (
-        <Drawer opened={active && outlineOpen} onClose={() => setOutlineOpen(false)} title={sidebarMode === 'outline' && snapshot ? t("文档目录") : t("文档列表")} size={300} padding={0}>
-          {sidebar}
-        </Drawer>
-      ) : null}
+      {/* 窄屏侧栏覆盖面板：取代 Mantine Drawer，避免独立浮层 X 按钮与布局跳变；
+          打开时覆盖导图，关闭/切换知识库/选文档后自动退场。 */}
+      <div className={`wiki-side-panel${sidePanelOpen ? ' is-open' : ''}`} aria-hidden={!sidePanelOpen} aria-label={sidebarMode === 'outline' && snapshot ? t("文档目录") : t("文档列表")}>
+        <div className="wiki-side-panel-header">
+          <Text size="sm" fw={700} truncate>{sidebarMode === 'outline' && snapshot ? t("文档目录") : t("文档列表")}</Text>
+          <ActionIcon variant="subtle" color="gray" size="sm" aria-label={t("关闭")} onClick={() => setOutlineOpen(false)}>
+            <X size={16} />
+          </ActionIcon>
+        </div>
+        <div className="wiki-side-panel-body">{sidebar}</div>
+      </div>
       {snapshot ? <WikiStartModal opened={modeModalOpen} documentTitle={snapshot.document.title} onStart={(mode) => void handleStartMode(mode)} /> : null}
       <WikiOpenInNotesModal source={active ? noteSource : null} onClose={() => setNoteSource(null)} onOpen={onOpenWikiDocumentInNotes} />
       {snapshot ? <WikiNodeContextMenu

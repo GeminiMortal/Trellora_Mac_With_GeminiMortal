@@ -1002,6 +1002,7 @@ declare global {
           list: () => Promise<Array<{ manifest: { id: string; name: string; version: string; description?: string; permissions: string[] }; state: string; error?: string }>>;
           installFromUrl: (url: string) => Promise<{ manifest: { id: string; name: string; version: string }; pluginDir: string }>;
           installFromZip: (zipPath: string) => Promise<{ manifest: { id: string; name: string; version: string }; pluginDir: string }>;
+          chooseZip: () => Promise<string | null>;
           enable: (id: string) => Promise<{ ok: boolean }>;
           disable: (id: string) => Promise<{ ok: boolean }>;
           uninstall: (id: string) => Promise<{ ok: boolean }>;

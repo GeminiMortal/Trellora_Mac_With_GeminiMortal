@@ -8,9 +8,9 @@ const rootDir = process.cwd();
 const outDir = path.join(rootDir, '.package-staging', 'verify-wiki-workspace');
 await build({
   entryPoints: {
-    state: path.join(rootDir, 'src', 'wiki', 'wikiViewState.ts'),
-    layout: path.join(rootDir, 'src', 'wiki', 'wikiLayout.ts'),
-    outline: path.join(rootDir, 'electron', 'wikiOutline.ts'),
+    state: path.join(rootDir, 'src', 'components', 'wiki', 'data', 'wikiViewState.ts'),
+    layout: path.join(rootDir, 'src', 'components', 'wiki', 'data', 'wikiLayout.ts'),
+    outline: path.join(rootDir, 'electron', 'wiki', 'wikiOutline.ts'),
   },
   outdir: outDir,
   bundle: true,
@@ -579,16 +579,16 @@ const [mapCanvas, mapNode, mapEdge, layoutSource, view, documentList, toolbar, a
   read('src/components/wiki/WikiMapCanvas.tsx'),
   read('src/components/wiki/WikiMapNode.tsx'),
   read('src/components/wiki/WikiCurveEdge.tsx'),
-  read('src/wiki/wikiLayout.ts'),
+  read('src/components/wiki/data/wikiLayout.ts'),
   read('src/components/wiki/WikiView.tsx'),
   read('src/components/wiki/WikiDocumentListPane.tsx'),
   read('src/components/wiki/WikiToolbar.tsx'),
   read('src/components/wiki/WikiAssistantTab.tsx'),
-  read('src/wiki/wikiElectronAgentDataSource.ts'),
+  read('src/components/wiki/data/wikiElectronAgentDataSource.ts'),
   read('electron/wiki/wikiNodeAgentTurn.ts'),
   read('electron/preload.ts'),
   read('electron/main.ts'),
-  read('src/components/NavRail.tsx'),
+  read('src/components/navigation/NavRail.tsx'),
   read('src/App.tsx'),
   read('src/styles/variables.css'),
 ]);
@@ -633,6 +633,8 @@ assert.match(view, /reorderElectronWikiSiblingNodes/);
 assert.match(view, /未保存的分支已恢复原顺序/);
 assert.match(documentList, /outlineState/);
 assert.match(documentList, /已索引文档/);
+assert.match(documentList, /aria-label=\{`\$\{document\.name\}/, '文档列表项的 aria-label 必须标注文档名，不能是误导性的“搜索文档”。');
+assert.doesNotMatch(documentList, /aria-label="搜索文档"/, '文档列表项不得把 aria-label 写成“搜索文档”。');
 assert.match(toolbar, /选择知识库/);
 assert.match(toolbar, /SegmentedControl/);
 assert.match(toolbar, /调整顺序/);
@@ -663,7 +665,8 @@ assert.match(navRail, /onClick=\{\(\) => onNavigate\(item\.id\)\}/);
 assert.match(app, /mainView === 'wiki'/);
 assert.match(css, /\.wiki-map-edge/);
 assert.match(css, /\.wiki-map-edge\.settling\s*\{\s*transition:\s*none;/);
-assert.match(css, /grid-template-columns: minmax\(0, var\(--wiki-primary-width\)\)/);
+assert.match(css, /grid-template-columns: minmax\(240px, 1fr\) 12px clamp\(320px, var\(--wiki-detail-width, 400px\), 560px\)/, '分栏栅格必须是「导图 1fr + 详情像素宽 320–560px」契约');
+assert.match(css, /\.wiki-split-pane\.detail-overlay \.wiki-split-secondary\s*\{[\s\S]*?justify-self:\s*end;[\s\S]*?width:\s*min\(420px, 100%\)/, '覆盖模式详情面板必须是右侧有界抽屉，不得整幅遮挡导图');
 assert.match(css, /\.wiki-map-node:focus-visible[\s\S]*?box-shadow:/);
 assert.match(css, /\.wiki-map-node\.reorder-enabled\s*\{\s*touch-action:\s*none;/);
 assert.match(css, /\.wiki-map-canvas\.browse-mode \.react-flow__node\s*\{\s*cursor:\s*grab;/);

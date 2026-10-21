@@ -6,6 +6,8 @@ import { useMemo } from 'react';
 import { Stack, Text, Checkbox, Group, Badge, ScrollArea } from '@mantine/core';
 import { t, useI18n } from '../../../i18n/index.ts';
 import type { ScheduleOccurrence, TodoStatus } from '../../../../shared/schedule.ts';
+import NoticeHubSourceBadge from '../NoticeHubSourceBadge.tsx';
+import { hasNoticeHubSource, noticeHubGroupNames } from '../noticeHubSource.ts';
 
 interface TodoPanelProps {
   occurrences: ScheduleOccurrence[];
@@ -119,6 +121,7 @@ export default function TodoPanel({ occurrences, onToggleStatus, onSelect }: Tod
                       }}
                       size="sm"
                     />
+                    {hasNoticeHubSource(item.tags) && <NoticeHubSourceBadge groupNames={noticeHubGroupNames(item.tags)} />}
                     <Text
                       size="sm"
                       style={{ flex: 1, textDecoration: isDone ? 'line-through' : 'none' }}

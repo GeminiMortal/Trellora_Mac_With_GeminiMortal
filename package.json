@@ -1,7 +1,7 @@
 {
   "name": "trellora",
   "private": true,
-  "version": "1.2.4",
+  "version": "1.5.1",
   "description": "AI-native local-first Markdown knowledge management for macOS and Windows",
   "author": "GeminiMortal",
   "homepage": "https://github.com/GeminiMortal/Trellora",
@@ -452,6 +452,10 @@
       {
         "from": "build/builtin-skills",
         "to": "builtin-skills"
+      },
+      {
+        "from": "plugins/notice-hub",
+        "to": "builtin-plugins/notice-hub"
       }
     ],
     "win": {

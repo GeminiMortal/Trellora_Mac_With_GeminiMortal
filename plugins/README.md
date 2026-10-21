@@ -179,3 +179,5 @@ pnpm run verify:plugin-system
 ## 12. 示例
 
 - [`examples/hello-command/`](examples/hello-command/)：最小 UI 命令插件
+- [`notice-hub/`](notice-hub/)：外部数据源 → 日程同步（`schedule:write` + `system:network`）
+- [Trellora/MusicPlugin](https://github.com/Trellora/MusicPlugin)：YesPlayMusic for Trellora · 网易云音乐伴侣（榜单摘要 → 日程；已迁出为独立插件仓库）

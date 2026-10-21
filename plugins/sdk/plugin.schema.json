@@ -58,6 +58,7 @@
           "ai:provider",
           "ui:command",
           "data:source",
+          "schedule:write",
           "system:file",
           "system:network",
           "system:subprocess"

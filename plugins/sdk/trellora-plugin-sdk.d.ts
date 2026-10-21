@@ -14,6 +14,8 @@
  *   - (none)        — stable, semver-protected / 稳定，遵循 semver
  */
 
+import type { ScheduleCreateRequest } from '../../shared/schedule.ts';
+
 // ── Manifest ─────────────────────────────────────────────────────────────────
 
 /** Trellora engine compatibility range. Trellora 引擎兼容范围。 */
@@ -29,6 +31,7 @@ export type PluginPermission =
   | 'ai:provider'
   | 'ui:command'
   | 'data:source'
+  | 'schedule:write'
   // L2 system APIs (explicit user authorization required)
   | 'system:file'
   | 'system:network'
@@ -196,6 +199,36 @@ export interface PluginDataSourceApi {
   }): void;
 }
 
+// ── Schedule extension point (契约 §4.1) ─────────────────────────────────────
+
+/** 外部数据源日程项：ScheduleCreateRequest + 外部稳定 ID。 */
+export interface PluginScheduleUpsertItem extends ScheduleCreateRequest {
+  /** 插件内稳定 ID（如 "nh-task:manual:ab12"），与 source 组成映射主键。 */
+  externalId: string;
+}
+
+/**
+ * @experimental 日程扩展点（权限：schedule:write）。Schedule extension point.
+ *
+ * 语义约束（契约 §4.1）：幂等 upsert 只写 (source, externalId) 映射内的条目或新建
+ * 映射，绝不触碰无映射的用户条目；单次调用上限 500 条（超限抛错）；title≤200、
+ * description≤4000 由宿主截断；本地完成态优先（本地 todoStatus∈{done,cancelled}
+ * 而远端未完成时跳过状态字段，其余照常更新）。每次写入自动触发 schedule:changed。
+ * 插件不得直接访问 SQLite。
+ */
+export interface PluginScheduleApi {
+  /**
+   * 幂等 upsert：按 (source, externalId) 映射到已有条目则更新，否则新建。
+   * 返回 `skipped` 为附加字段：本地完成态优先而跳过状态字段的条目数
+   * （供 NoticeHubStatus.counts.skipped 聚合）。
+   */
+  upsertItems(source: string, items: PluginScheduleUpsertItem[]): Promise<{ upsertedIds: string[]; skipped?: number }>;
+  /** 删除本 source 下指定 externalId 的条目及其映射。 */
+  removeItems(source: string, externalIds: string[]): Promise<{ removedIds: string[] }>;
+  /** 列出本 source 的映射（供增量/裁剪决策）。 */
+  listSource(source: string): Promise<Array<{ externalId: string; itemId: string; updatedAt: string }>>;
+}
+
 // ── System APIs (L2, explicit authorization) ─────────────────────────────────
 
 /** Bounded file access: only paths under the workspace root are reachable. */
@@ -205,7 +238,11 @@ export interface PluginFileApi {
   listDir(relativePath: string): Promise<string[]>;
 }
 
-/** Outbound HTTP restricted to https URLs; the host applies SSRF guards. */
+/**
+ * Outbound HTTP restricted to public https URLs plus loopback http(s)
+ * (127.0.0.0/8、::1、localhost、*.localhost，契约 §4.2)；内网/链路本地/ULA/
+ * 带凭据 URL 一律拒绝，重定向每一跳复检。The host applies SSRF guards.
+ */
 export interface PluginNetworkApi {
   fetch(url: string, init?: RequestInit): Promise<Response>;
 }
@@ -229,11 +266,13 @@ export interface PluginContext {
   readonly config: PluginConfig;
   readonly events: PluginEventBus;
 
-  // L1 capabilities (permission: pipeline:parse / ai:provider / ui:command / data:source)
+  // L1 capabilities (permission: pipeline:parse / ai:provider / ui:command / data:source / schedule:write)
   readonly pipeline: PluginParsingRouteApi;
   readonly ai: PluginAiProviderApi;
   readonly ui: PluginUiCommandApi;
   readonly data: PluginDataSourceApi;
+  /** @experimental 日程扩展点（契约 §4.1，权限：schedule:write）。 */
+  readonly schedule: PluginScheduleApi;
 
   // L2 system (permission: system:file / system:network)
   readonly files: PluginFileApi;

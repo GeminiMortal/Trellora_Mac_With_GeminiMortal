@@ -10,6 +10,8 @@
  * SDK 文件是公开契约；本文件是宿主对该契约的内部视角。
  */
 
+import type { ScheduleCreateRequest } from '../../shared/schedule.ts';
+
 // ── Manifest ─────────────────────────────────────────────────────────────────
 
 export interface PluginEngineRange {
@@ -21,6 +23,7 @@ export type PluginPermission =
   | 'ai:provider'
   | 'ui:command'
   | 'data:source'
+  | 'schedule:write'
   | 'system:file'
   | 'system:network'
   | 'system:subprocess';
@@ -158,6 +161,7 @@ export interface PluginContext {
       embed?: (texts: string[]) => Promise<number[][]>;
     }): void;
   };
+  schedule: PluginScheduleApi;
   files: {
     readFile(relativePath: string): Promise<Uint8Array>;
     writeFile(relativePath: string, data: Uint8Array): Promise<void>;
@@ -166,6 +170,23 @@ export interface PluginContext {
   network: {
     fetch(url: string, init?: RequestInit): Promise<Response>;
   };
+}
+
+// ── Schedule extension point (契约 §4.1) ─────────────────────────────────────
+
+/** 外部数据源日程项：ScheduleCreateRequest + 外部稳定 ID。 */
+export interface PluginScheduleUpsertItem extends ScheduleCreateRequest {
+  externalId: string;               // 插件内稳定 ID，如 "nh-task:manual:ab12"
+}
+
+/** @experimental 日程扩展点（L1 权限 schedule:write）。语义约束见契约 §4.1。 */
+export interface PluginScheduleApi {
+  /** 幂等 upsert：按 (source, externalId) 映射到已有条目则更新，否则新建。 */
+  upsertItems(source: string, items: PluginScheduleUpsertItem[]): Promise<{ upsertedIds: string[]; skipped?: number }>;
+  /** 删除本 source 下指定 externalId 的条目及其映射。 */
+  removeItems(source: string, externalIds: string[]): Promise<{ removedIds: string[] }>;
+  /** 列出本 source 的映射（供增量/裁剪决策）。 */
+  listSource(source: string): Promise<Array<{ externalId: string; itemId: string; updatedAt: string }>>;
 }
 
 // ── Permission tiering ───────────────────────────────────────────────────────
@@ -183,4 +204,5 @@ export const L1_PERMISSIONS: ReadonlySet<PluginPermission> = new Set([
   'ai:provider',
   'ui:command',
   'data:source',
+  'schedule:write',
 ]);

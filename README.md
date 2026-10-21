@@ -60,6 +60,7 @@ Trellora 面向需要持续阅读、写作和整理资料的开发者、学生�
 | 日程与课表 | 事件、待办、课表与提醒；年 / 月 / 周 / 日视图、重复规则（含单双周）、分类颜色；CSV / Excel 课表导入与 AI 辅助导入（图片 / URL / 文本），批次可整体撤销 |
 | 内置终端 | 应用内交互式 shell，多标签会话；macOS 提供 zsh / bash，Windows 提供 PowerShell / CMD / Git Bash / WSL；`Ctrl+\`` 呼出底部终端面板 |
 | 插件（实验性） | 插件 SDK 与清单；命令面板/侧栏/工具栏扩展；权限分层（L1 披露、L2 需用户确认）；从 URL 或 ZIP 安装 |
+| 群务台 · notice-hub 同步 | 插件 `com.expertkt.notice-hub`：把 QQ 群通知衍生的待办、公告与截止时间单向同步进日程（来源徽标、提醒提前量、ICS 兜底）；独立仓库 [Trellora/NoticHubPlugin](https://github.com/Trellora/NoticHubPlugin) 分发；双许可证（MIT + PolyForm Noncommercial，商用需授权），详见 [移植说明](docs/notice-hub-移植说明.md) |
 | 桌面体验与恢复 | 中英文界面、深浅主题、五种配色、首次使用引导、笔记备份、工作区完整备份与恢复、存储迁移和诊断 |
 
 基础编辑、文件浏览和笔记关键词搜索不要求配置 AI。向量检索需要 Embedding；AI 回答和生成需要可用模型；地图需要先在资料流水线启用并完成图谱增强。
@@ -195,15 +196,15 @@ macOS 版通过右键 → 打开方式选择 Trellora 打开 `.md`、`.markdown`
 
 ## 下载软件
 
-**macOS（Apple Silicon）· Trellora v1.2.4**
+**macOS（Apple Silicon）· Trellora v1.5.1**
 
 | 版本 | 下载 | 使用方式 |
 | --- | --- | --- |
-| DMG 安装镜像 | [GitHub Releases · v1.2.4](https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/releases/tag/v1.2.4) | 打开 `Trellora-1.2.4-arm64.dmg`，将 Trellora 拖入"应用程序" |
-| 自动更新 ZIP | [GitHub Releases · v1.2.4](https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/releases/tag/v1.2.4) | 应用内更新使用的 `Trellora-1.2.4-arm64-mac.zip` |
-| 源码包 | [GitHub tag v1.2.4](https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/releases/tag/v1.2.4) | ZIP / TAR.GZ 可直接下载 |
+| DMG 安装镜像 | [GitHub Releases · v1.5.1](https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/releases/tag/v1.5.1) | 打开 `Trellora-1.5.1-arm64.dmg`，将 Trellora 拖入"应用程序" |
+| 自动更新 ZIP | [GitHub Releases · v1.5.1](https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/releases/tag/v1.5.1) | 应用内更新使用的 `Trellora-1.5.1-arm64-mac.zip` |
+| 源码包 | [GitHub tag v1.5.1](https://github.com/GeminiMortal/Trellora_Mac_With_GeminiMortal/releases/tag/v1.5.1) | ZIP / TAR.GZ 可直接下载 |
 
-下载后打开 `Trellora-1.2.4-arm64.dmg`，将 Trellora.app 拖入"应用程序"即可。
+下载后打开 `Trellora-1.5.1-arm64.dmg`，将 Trellora.app 拖入"应用程序"即可。
 
 应用使用 ad-hoc 签名分发。首次打开如被 macOS Gatekeeper 拦截，请右键点击 Trellora.app → "打开"，或到"系统设置 → 隐私与安全性"允许运行。
 
@@ -290,7 +291,7 @@ shared/           跨进程类型、配置合同、限额和默认值
 pipeline-python/  NDJSON Worker、结构化阶段与 Python 测试
 build/            品牌资源、内置技能与安装器配置
 scripts/          构建、功能验证、Electron 与发行包验证
-plugins/          插件 SDK、清单与示例（实验性）
+plugins/          插件 SDK、清单与示例（实验性；群务台插件独立分发于 Trellora/NoticHubPlugin）
 docs/             产品、架构、展示资源和实施验收记录
 ```
 

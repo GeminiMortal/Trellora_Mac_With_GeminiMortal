@@ -89,6 +89,19 @@ assert.deepEqual(activated, ['com.example.test'], 'activated on startup');
 assert.equal(host.registry.get('com.example.test').state, 'active');
 assert.ok(host.getContributions().uiCommands.has('test:cmd'), 'UI command registered');
 
+// Panel binding: sidebar-bound commands surface as sidebar buttons; palette-only ones do not.
+const uiCommands = host.getContributions().uiCommands;
+const sidebarButtons = [...uiCommands.entries()]
+  .filter(([, c]) => (c.panel ?? 'sidebar') === 'sidebar')
+  .map(([id, c]) => ({ id, title: c.title }));
+assert.deepEqual(sidebarButtons, [{ id: 'test:cmd', title: 'T' }], 'default panel renders in sidebar');
+uiCommands.set('test:palette', { pluginId: 'com.example.test', title: 'P', panel: 'command-palette', execute: () => {} });
+assert.deepEqual(
+  [...uiCommands.entries()].filter(([, c]) => (c.panel ?? 'sidebar') === 'sidebar').map(([id]) => id),
+  ['test:cmd'],
+  'command-palette commands stay out of the sidebar',
+);
+
 // Disable + re-enable
 await host.disable('com.example.test');
 assert.equal(host.registry.get('com.example.test').state, 'disabled');

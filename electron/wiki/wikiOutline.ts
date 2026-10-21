@@ -301,8 +301,17 @@ export async function reorderWikiSiblingNodes(input: {
   request: WikiSiblingOrderRequest;
   now?: Date;
 }): Promise<WikiSiblingOrderResult> {
-  const queueKey = siblingOrderPath(input.libraryPath, input.outline.documentId);
-  return enqueueOrderWrite(queueKey, () => persistSiblingOrder(input));
+  try {
+    const queueKey = siblingOrderPath(input.libraryPath, input.outline.documentId);
+    return await enqueueOrderWrite(queueKey, () => persistSiblingOrder(input));
+  } catch (error) {
+    // 队列键路径校验、读取与写入的文件系统异常统一映射为保存失败，不向调用方抛裸异常。
+    return orderFailure(
+      'WIKI_ORDER_SAVE_FAILED',
+      '章节顺序未保存，请检查知识库目录权限后重试。',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
 }
 
 function persistSiblingOrder(input: {

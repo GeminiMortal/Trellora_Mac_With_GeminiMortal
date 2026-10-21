@@ -83,17 +83,61 @@ export function parsePublicWebUrl(value: string): URL {
   return parsed;
 }
 
+/**
+ * Parse a plugin-facing service URL (notice-hub 等本机服务，契约 §4.2)。
+ * 在原「公共 https」之外仅放行环回（127.0.0.0/8、::1、localhost、*.localhost）
+ * 的 http/https；内网、链路本地、ULA、带凭据 URL 与非法 IP 一律继续拒绝。
+ *
+ * @param value - Candidate URL string / 候选 URL 字符串
+ * @returns Validated URL inside the plugin network allow-list / 校验通过的允许集合内 URL
+ */
+export function parsePluginServiceUrl(value: string): URL {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error('URL 格式无效。');
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('仅支持 http/https 服务地址。');
+  if (parsed.username || parsed.password) throw new Error('服务 URL 不能包含账号信息。');
+  const kind = classifyHostname(parsed.hostname);
+  if (kind === 'blocked') throw new Error('不允许访问内网或链路本地地址。');
+  if (kind === 'public' && parsed.protocol !== 'https:') throw new Error('非环回地址仅支持 https。');
+  return parsed;
+}
+
+/** SSRF 目标分类：环回白名单 / 黑名单 / 公网。Host classification for SSRF guards. */
+type HostClass = 'loopback' | 'blocked' | 'public';
+
+/** Normalize a URL hostname for classification (strip brackets/trailing dot, lowercase). */
+function normalizeHostname(hostname: string): string {
+  return hostname.replace(/^\[|\]$/gu, '').replace(/\.$/u, '').toLowerCase();
+}
+
+/** 环回判定（契约 §4.2：127.0.0.0/8、::1、localhost、*.localhost）。 */
+export function isLoopbackHostname(hostname: string): boolean {
+  return classifyHostname(hostname) === 'loopback';
+}
+
+function classifyHostname(hostname: string): HostClass {
+  const host = normalizeHostname(hostname);
+  if (host === 'localhost' || host.endsWith('.localhost')) return 'loopback';
+  if (host === '::1') return 'loopback';
+  if (host === '::' || host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd')) return 'blocked';
+  const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/u.exec(host);
+  if (!ipv4) return 'public';
+  const octets = ipv4.slice(1).map(Number);
+  if (octets.some((part) => part > 255)) return 'blocked';
+  const [first, second] = octets;
+  if (first === 127) return 'loopback';
+  if (first === 0 || first === 10 || first === 169 && second === 254
+    || first === 172 && second >= 16 && second <= 31 || first === 192 && second === 168) return 'blocked';
+  return 'public';
+}
+
 /** SSRF guard: true for localhost/loopback/link-local/ULA/private-range hosts; invalid IPv4 fails closed / SSRF 防护：本机、回环、链路本地、ULA、私网段主机返回 true；非法 IPv4 一律拦截 */
 function isPrivateHostname(hostname: string): boolean {
-  const host = hostname.replace(/^\[|\]$/gu, '').toLowerCase();
-  if (host === 'localhost' || host.endsWith('.localhost') || host === '::1' || host === '::' || host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd')) return true;
-  const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/u.exec(host);
-  if (!ipv4) return false;
-  const octets = ipv4.slice(1).map(Number);
-  if (octets.some((part) => part > 255)) return true;
-  const [first, second] = octets;
-  return first === 0 || first === 10 || first === 127 || first === 169 && second === 254
-    || first === 172 && second >= 16 && second <= 31 || first === 192 && second === 168;
+  return classifyHostname(hostname) !== 'public';
 }
 
 /**

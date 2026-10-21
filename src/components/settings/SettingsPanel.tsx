@@ -1,6 +1,5 @@
 import { getAppLanguage, localizeOptions, t, useI18n } from '../../i18n/index.ts';
 import CapabilityPanel from './CapabilityPanel.tsx';
-import PluginManagementPanel from './PluginManagementPanel.tsx';
 import ReleaseCheck from '../release/ReleaseCheck.tsx';
 import FirstRunGuide from '../onboarding/FirstRunGuide.tsx';
 import type { OnboardingModelDraft } from '../onboarding/OnboardingGuide.tsx';
@@ -29,7 +28,7 @@ import LightColorSchemePicker from './LightColorSchemePicker.tsx';
 import EditorPreferencesSettings from './EditorPreferencesSettings.tsx';
 import { showConfirm } from '../../utils/ui/feedback.ts';
 
-export type SettingsSection = 'general' | 'library' | 'editor' | 'shortcuts' | 'user-information' | 'parsing' | 'web-search' | 'ai-writing' | 'model' | 'skills' | 'plugins' | 'about';
+export type SettingsSection = 'general' | 'library' | 'editor' | 'shortcuts' | 'user-information' | 'parsing' | 'web-search' | 'ai-writing' | 'model' | 'skills' | 'about';
 type ModelSettingsTab = 'profiles' | 'config' | 'add';
 
 /** Compared only in renderer memory; keys never enter guide state or logs. */
@@ -97,7 +96,6 @@ const sections: Array<{ id: SettingsSection; label: string; group: string; icon:
   { id: 'ai-writing', label: '选区扩写优化', group: 'AI 设置', icon: Sparkles },
   { id: 'model', label: '模型配置', group: 'AI 设置', icon: Bot },
   { id: 'skills', label: 'AI 助手技能', group: 'AI 设置', icon: Sparkles },
-  { id: 'plugins', label: '插件管理', group: '系统', icon: Sparkles },
   { id: 'user-information', label: '个性化', group: 'AI 设置', icon: UserRound },
   { id: 'about', label: '关于与诊断', group: '系统', icon: Info },
 ];
@@ -1409,12 +1407,6 @@ export default function SettingsPanel({
             <Tabs.Panel value="user-information">
               <SettingsSection group={t("AI 设置")} title={t("用户记忆")}>
                 <UserInformationSettings setFeedback={setFeedback} setError={setError} reviewRequest={memoryReviewRequest} />
-              </SettingsSection>
-            </Tabs.Panel>
-
-            <Tabs.Panel value="plugins">
-              <SettingsSection group={t("系统")} title={t("插件管理")}>
-                <PluginManagementPanel />
               </SettingsSection>
             </Tabs.Panel>
 

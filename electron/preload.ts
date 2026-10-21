@@ -63,6 +63,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       list: () => ipcRenderer.invoke('plugin:list'),
       installFromUrl: (url: string) => ipcRenderer.invoke('plugin:install-from-url', url),
       installFromZip: (zipPath: string) => ipcRenderer.invoke('plugin:install-from-zip', zipPath),
+      chooseZip: () => ipcRenderer.invoke('plugin:choose-zip') as Promise<string | null>,
       enable: (id: string) => ipcRenderer.invoke('plugin:enable', id),
       disable: (id: string) => ipcRenderer.invoke('plugin:disable', id),
       uninstall: (id: string) => ipcRenderer.invoke('plugin:uninstall', id),

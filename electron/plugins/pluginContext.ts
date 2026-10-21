@@ -9,12 +9,12 @@ import type { PluginPermissionManager } from './pluginPermission.ts';
 import type {
   PluginAiGenerationInput, PluginAiGenerationOutput,
   PluginContext, PluginParseInput, PluginParseOutput, PluginPermission,
-  PluginUiCommandArgs,
+  PluginScheduleApi, PluginUiCommandArgs,
 } from './pluginTypes.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { registerCustomParsingRoute } from '../pipeline/routes.ts';
-import { parsePublicWebUrl } from '../websearch/webFetchClient.ts';
+import { parsePluginServiceUrl } from '../websearch/webFetchClient.ts';
 import { registerPluginAiProvider } from '../knowledge/ai/pluginAiProviders.ts';
 
 /** Contribution registries the host exposes to plugins. */
@@ -33,6 +33,8 @@ export interface PluginContextOptions {
   onLog: (level: 'info' | 'warn' | 'error', message: string) => void;
   emitEvent: (event: string, payload: unknown) => void;
   subscribe: (event: string, listener: (payload: unknown) => void) => () => void;
+  /** 日程扩展点的宿主实现（未接入时为 undefined，调用即抛可操作错误）。 */
+  schedule?: PluginScheduleApi;
 }
 
 /**
@@ -42,6 +44,7 @@ export interface PluginContextOptions {
  */
 export function buildPluginContext(options: PluginContextOptions): PluginContext {
   const { pluginId, permissions, sink, onLog, emitEvent, subscribe, storageDir } = options;
+  const scheduleApi = options.schedule;
 
   const guard = (permission: PluginPermission): void => {
     permissions.assert(pluginId, permission);
@@ -139,14 +142,33 @@ export function buildPluginContext(options: PluginContextOptions): PluginContext
         return (await fs.promises.readdir(abs, { withFileTypes: true })).map((e) => e.name);
       },
     },
+    schedule: {
+      // 日程扩展点（契约 §4.1）：L1 schedule:write 守卫；幂等 upsert 由宿主
+      // ScheduleService 按 (source, externalId) 映射实现，插件不接触 SQLite。
+      upsertItems: (source, items) => {
+        guard('schedule:write');
+        if (!scheduleApi) throw new Error('宿主未接入日程扩展点（schedule）。');
+        return scheduleApi.upsertItems(source, items);
+      },
+      removeItems: (source, externalIds) => {
+        guard('schedule:write');
+        if (!scheduleApi) throw new Error('宿主未接入日程扩展点（schedule）。');
+        return scheduleApi.removeItems(source, externalIds);
+      },
+      listSource: (source) => {
+        guard('schedule:write');
+        if (!scheduleApi) throw new Error('宿主未接入日程扩展点（schedule）。');
+        return scheduleApi.listSource(source);
+      },
+    },
     network: {
-      // Outbound HTTP restricted to public https URLs via the SSRF guard.
-      // 出站 HTTP 限定公共 https URL（SSRF 防护）。
+      // 出站 HTTP 限定（契约 §4.2）：公共 https + 环回 http（127.0.0.0/8、::1、
+      // localhost、*.localhost），内网/链路本地/凭据 URL 继续拒绝（parsePluginServiceUrl）。
+      // redirect 'manual' 不跟随重定向，杜绝环回→内网跳转绕检。
       fetch: async (url: string, init?: RequestInit) => {
         guard('system:network');
-        const parsed = parsePublicWebUrl(url);
-        if (parsed.protocol !== 'https:') throw new Error('插件网络请求仅支持 https。');
-        return globalThis.fetch(parsed.href, { ...init, signal: init?.signal ?? AbortSignal.timeout(PLUGIN_NETWORK_TIMEOUT_MS) });
+        const parsed = parsePluginServiceUrl(url);
+        return globalThis.fetch(parsed.href, { ...init, redirect: 'manual', signal: init?.signal ?? AbortSignal.timeout(PLUGIN_NETWORK_TIMEOUT_MS) });
       },
     },
   };

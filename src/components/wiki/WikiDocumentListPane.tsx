@@ -1,6 +1,6 @@
 import { getAppLanguage, t, useI18n } from '../../i18n/index.ts';
 import { ActionIcon, Alert, Badge, Group, Loader, ScrollArea, Stack, Text, TextInput, ThemeIcon, Tooltip, UnstyledButton } from '@mantine/core';
-import { AlertCircle, FileText, RefreshCw, Search } from 'lucide-react';
+import { AlertCircle, FileText, RefreshCw, Search, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { MaterialsLibrarySummary } from '../../electron';
 import { getMaterialsIconOption } from '../../utils/pipeline/materialsIcons.ts';
@@ -15,6 +15,8 @@ interface WikiDocumentListPaneProps {
   error: string | null;
   onSelectDocument: (document: WikiLibraryDocument) => void;
   onRefresh: () => void;
+  /** 窄屏侧栏覆盖面板：可选的关闭回调；提供后在标题栏显示关闭按钮。 */
+  onClose?: () => void;
 }
 
 export default function WikiDocumentListPane({
@@ -26,6 +28,7 @@ export default function WikiDocumentListPane({
   error,
   onSelectDocument,
   onRefresh,
+  onClose,
 }: WikiDocumentListPaneProps) {
   useI18n();
   const [query, setQuery] = useState('');
@@ -49,11 +52,20 @@ export default function WikiDocumentListPane({
               <Text size="xs" c="dimmed">{documents.length} {t("个文档")}</Text>
             </Stack>
           </Group>
-          <Tooltip label={t("刷新文档与索引状态")} withArrow>
-            <ActionIcon variant="subtle" color="gray" size="sm" aria-label={t("刷新文档列表")} onClick={onRefresh} loading={loading}>
-              <RefreshCw size={14} />
-            </ActionIcon>
-          </Tooltip>
+          <Group gap={2} wrap="nowrap">
+            <Tooltip label={t("刷新文档与索引状态")} withArrow>
+              <ActionIcon variant="subtle" color="gray" size="sm" aria-label={t("刷新文档列表")} onClick={onRefresh} loading={loading}>
+                <RefreshCw size={14} />
+              </ActionIcon>
+            </Tooltip>
+            {onClose ? (
+              <Tooltip label={t("关闭")} withArrow>
+                <ActionIcon variant="subtle" color="gray" size="sm" aria-label={t("关闭文档列表")} onClick={onClose}>
+                  <X size={15} />
+                </ActionIcon>
+              </Tooltip>
+            ) : null}
+          </Group>
         </Group>
         <TextInput
           className="wiki-document-list-search"
@@ -86,7 +98,7 @@ export default function WikiDocumentListPane({
               return (
                 <Tooltip key={document.id} label={document.outlineHint} disabled={ready} position="right" withArrow>
                   <div>
-                    <UnstyledButton aria-label="搜索文档"
+                    <UnstyledButton aria-label={`${document.name} ${document.outlineLabel}`}
                       className="wiki-document-list-item"
                       data-state={document.outlineState}
                       data-active={document.id === selectedDocumentId || undefined}

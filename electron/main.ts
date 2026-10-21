@@ -5262,6 +5262,9 @@ let scheduleImportService: ScheduleImportService | undefined;
 
 import { TerminalService } from './terminal/terminalService.ts';
 import { PluginHost } from './plugins/pluginHost.ts';
+import { NoticeHubBridge, NOTICE_HUB_PLUGIN_ID } from './noticeHub/noticeHubBridge.ts';
+import type { NoticeHubStatus } from '../shared/noticeHub.ts';
+import { NOTICE_HUB_CHANNEL_STATUS_CHANGED } from '../shared/noticeHub.ts';
 import { installPluginFromUrl, installPluginFromZip } from './plugins/pluginInstaller.ts';
 let terminalService: TerminalService | undefined;
 
@@ -5573,9 +5576,22 @@ registerAppHandler('plugin:install-from-zip', async (event, zipPath: string) => 
   return { manifest, pluginDir };
 });
 
+registerAppHandler('plugin:choose-zip', async (event) => {
+  assertInternalRenderer(event);
+  if (!mainWindow) return null;
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: desktopText('选择插件 ZIP 包'),
+    filters: [{ name: desktopText('插件包'), extensions: ['zip'] }],
+    properties: ['openFile'],
+  });
+  return result.canceled ? null : (result.filePaths[0] ?? null);
+});
+
 registerAppHandler('plugin:enable', async (event, id: string) => {
   assertInternalRenderer(event);
   await getPluginHost().activate(id);
+  // notice-hub 激活后立即补发一次配置（契约 §4.4）。
+  getNoticeHubBridge().notifyPluginActivated(id);
   return { ok: true };
 });
 
@@ -5594,10 +5610,71 @@ registerAppHandler('plugin:uninstall', async (event, id: string) => {
   return { ok: true };
 });
 
+// ── 内置插件播种（随应用预装的插件包） ───────────────────────────────────────
+// notice-hub 等「随应用预装的插件」以插件包形式分发（extraResources → builtin-plugins/），
+// 启动时播种到 userData/plugins/，在插件管理中呈现为普通插件（可启用/停用/卸载），
+// 而不是伪装成内置功能。幂等：仅当目标目录不存在时拷贝，绝不覆盖用户已安装或已修改的副本。
+const BUILTIN_PLUGIN_DIRECTORIES = ['notice-hub'] as const;
+
+/** 开发与发布使用同一组内置插件资源；发布后取 extraResources，开发取仓库 plugins/。 */
+function getBundledPluginsPath(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'builtin-plugins')
+    : path.resolve('plugins');
+}
+
+/** 读取插件清单 id；不可读时返回空串（按目录名兜底播种）。 */
+function readPluginManifestId(pluginDir: string): string {
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(pluginDir, 'plugin.json'), 'utf8')) as { id?: unknown };
+    return typeof manifest.id === 'string' ? manifest.id : '';
+  } catch {
+    return '';
+  }
+}
+
+function seedBuiltinPlugins(): void {
+  const pluginsDir = path.join(app.getPath('userData'), 'plugins');
+  const bundleRoot = getBundledPluginsPath();
+  for (const directory of BUILTIN_PLUGIN_DIRECTORIES) {
+    const destination = path.join(pluginsDir, directory);
+    if (fs.existsSync(destination)) continue;
+    const source = path.join(bundleRoot, directory);
+    if (!fs.existsSync(path.join(source, 'plugin.json'))) {
+      logToWindow(`[PLUGIN] 内置插件 ${directory} 缺失，跳过播种（请重新安装应用）。`);
+      continue;
+    }
+    // 已有其他目录承载同一插件（如用户从 zip 安装、目录名为清单 id）时跳过，
+    // 避免同一 id 双份注册（注册表按 id 去重，后到者会加载失败）。
+    const bundledId = readPluginManifestId(source);
+    if (bundledId) {
+      const occupied = fs.existsSync(pluginsDir) && fs.readdirSync(pluginsDir, { withFileTypes: true })
+        .some((entry) => entry.isDirectory() && entry.name !== directory && readPluginManifestId(path.join(pluginsDir, entry.name)) === bundledId);
+      if (occupied) {
+        logToWindow(`[PLUGIN] 插件 ${bundledId} 已由用户安装，跳过内置播种。`);
+        continue;
+      }
+    }
+    fs.mkdirSync(pluginsDir, { recursive: true });
+    // 先拷到临时目录再原子改名，避免中断留下半个插件目录（与内置技能播种同模式）。
+    const temporary = path.join(pluginsDir, `.builtin-${randomUUID()}`);
+    try {
+      fs.cpSync(source, temporary, { recursive: true, dereference: false });
+      fs.renameSync(temporary, destination);
+    } catch (error) {
+      logToWindow(`[PLUGIN] 内置插件 ${directory} 播种失败：${(error as Error).message}`);
+    } finally {
+      fs.rmSync(temporary, { recursive: true, force: true });
+    }
+  }
+}
+
 // ── Terminal Service ──────────────────────────────────────────────────────────
 let pluginHost: PluginHost | undefined;
 function getPluginHost(): PluginHost {
   if (!pluginHost) {
+    // 预装插件先播种到 userData/plugins/，再进入发现/激活流程。
+    seedBuiltinPlugins();
     pluginHost = new PluginHost({
       pluginsDir: path.join(app.getPath('userData'), 'plugins'),
       trelloraVersion: app.getVersion(),
@@ -5611,7 +5688,19 @@ function getPluginHost(): PluginHost {
           fs.writeFileSync(path.join(app.getPath('userData'), 'plugin-permissions.json'), JSON.stringify(state, null, 2));
         },
       },
-      onLog: (message) => appLogger.info(message),
+      onLog: (message) => logToWindow(message),
+      // 日程扩展点（契约 §4.1）：ScheduleService 适配器。幂等 upsert / 删除 / 列映射
+      // 均由 ScheduleService 按 (source, externalId) 映射表实现，插件不接触 SQLite。
+      schedule: {
+        upsertItems: async (source, items) => {
+          const result = getOrCreateScheduleService().upsertExternalItems(source, items);
+          return { upsertedIds: result.upsertedIds, skipped: result.skipped };
+        },
+        removeItems: async (source, externalIds) => ({
+          removedIds: getOrCreateScheduleService().removeExternalItems(source, externalIds).removedIds,
+        }),
+        listSource: async (source) => getOrCreateScheduleService().listExternalSource(source),
+      },
       onRequestL2Authorization: async (manifest, permissions) => {
         const result = await dialog.showMessageBox(mainWindow ?? undefined!, {
           type: 'warning',
@@ -5630,10 +5719,44 @@ function getPluginHost(): PluginHost {
         return result.response === 1;
       },
     });
+    // notice-hub：绑定事件桥（订阅 plugin:notice-hub:status），激活完成后补发配置（契约 §4.4）。
+    getNoticeHubBridge().attachPluginHost(pluginHost);
     pluginHost.discover();
-    void pluginHost.activateFor('onStartup').catch((error) => appLogger.error(`[PLUGIN] startup activation failed: ${(error as Error).message}`));
+    void pluginHost.activateFor('onStartup')
+      .then(() => getNoticeHubBridge().notifyPluginActivated(NOTICE_HUB_PLUGIN_ID))
+      .catch((error) => logToWindow(`[PLUGIN] startup activation failed: ${(error as Error).message}`));
   }
   return pluginHost;
+}
+
+// ── Notice Hub（群务台）宿主桥接 ─────────────────────────────────────────────
+// 配置持久化 userData/notice-hub.json + 状态缓存 + 事件总线桥（契约 §3/§4.3/§4.4）。
+let noticeHubBridge: NoticeHubBridge | undefined;
+function getNoticeHubBridge(): NoticeHubBridge {
+  if (!noticeHubBridge) {
+    noticeHubBridge = new NoticeHubBridge({
+      userDataPath: app.getPath('userData'),
+      getPluginHost,
+      broadcastStatus: (status: NoticeHubStatus) => {
+        for (const window of BrowserWindow.getAllWindows()) {
+          if (!window.isDestroyed() && !window.webContents.isDestroyed()) window.webContents.send(NOTICE_HUB_CHANNEL_STATUS_CHANGED, status);
+        }
+      },
+      // 令牌落盘走 safeStorage（仓库密钥惯例）；加密不可用时拒绝保存而非明文落盘。
+      tokenVault: {
+        seal: (plain) => {
+          if (!plain) return '';
+          if (!safeStorage.isEncryptionAvailable()) throw new Error('系统安全存储不可用，访问令牌未保存。');
+          return `enc:v1:${safeStorage.encryptString(plain).toString('base64')}`;
+        },
+        open: (stored) => (stored.startsWith('enc:v1:')
+          ? safeStorage.decryptString(Buffer.from(stored.slice('enc:v1:'.length), 'base64'))
+          : stored),
+      },
+      onLog: (level, message) => logToWindow(`[NOTICE-HUB][${level}] ${message}`),
+    });
+  }
+  return noticeHubBridge;
 }
 
 function getOrCreateTerminalService(): TerminalService {

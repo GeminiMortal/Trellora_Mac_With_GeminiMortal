@@ -16,6 +16,10 @@ import type {
   ScheduleUpdateRequest,
   ScheduleDeleteRequest,
   ScheduleOccurrenceOverrideRequest,
+  ScheduleExternalUpsertItem,
+  ScheduleExternalUpsertResult,
+  ScheduleExternalRemoveResult,
+  ScheduleExternalMapping,
   TodoStatus,
   ScheduleCategory,
   CourseTimeSettings,
@@ -25,6 +29,13 @@ import type {
   ScheduleReminder,
   ScheduleItemKind,
   ScheduleItemStatus,
+} from '../../shared/schedule.ts';
+import {
+  SCHEDULE_EXTERNAL_MAX_BATCH,
+  SCHEDULE_EXTERNAL_TITLE_MAX,
+  SCHEDULE_EXTERNAL_DESCRIPTION_MAX,
+  SCHEDULE_EXTERNAL_DEFAULT_CATEGORY,
+  SCHEDULE_EXTERNAL_DEFAULT_CATEGORY_COLOR,
 } from '../../shared/schedule.ts';
 
 // ── Row mapping helpers ──────────────────────────────────────────────────────
@@ -152,7 +163,7 @@ export class ScheduleService {
       req.todoStatus ?? null,
       req.dueAt ?? null,
       req.priority ?? null,
-      null, // completedAt
+      req.completedAt ?? null, // completedAt（外部数据源可回填 done_at）
       req.libraryPath ?? null,
       req.libraryName ?? null,
       req.notePath ?? null,
@@ -212,6 +223,7 @@ export class ScheduleService {
     if (patch.todoStatus !== undefined) { sets.push('todo_status = ?'); values.push(patch.todoStatus); }
     if (patch.dueAt !== undefined) { sets.push('due_at = ?'); values.push(patch.dueAt); }
     if (patch.priority !== undefined) { sets.push('priority = ?'); values.push(patch.priority); }
+    if (patch.completedAt !== undefined) { sets.push('completed_at = ?'); values.push(patch.completedAt); }
     if (patch.libraryPath !== undefined) { sets.push('library_path = ?'); values.push(patch.libraryPath); }
     if (patch.libraryName !== undefined) { sets.push('library_name = ?'); values.push(patch.libraryName); }
     if (patch.notePath !== undefined) { sets.push('note_path = ?'); values.push(patch.notePath); }
@@ -264,6 +276,10 @@ export class ScheduleService {
       `).run(req.id, req.occurrenceStart, now);
     } else {
       this.database.prepare('DELETE FROM schedule_items WHERE id = ?').run(req.id);
+      // 用户删除条目时同步清掉外部映射：映射表已删、远端再次变化时按契约 §8 重建（属预期）。
+      // Drop external mappings with the item: once the mapping is gone, a later
+      // remote change recreates the entry (contract §8, expected behavior).
+      this.database.prepare('DELETE FROM schedule_external_items WHERE item_id = ?').run(req.id);
     }
 
     this.options.onChanged({ reason: 'item', ids: [req.id] });
@@ -279,6 +295,130 @@ export class ScheduleService {
 
     this.options.onChanged({ reason: 'item', ids: [id] });
     return this.getItemById(id)!;
+  }
+
+  // ── External (plugin-sourced) items — 契约 §4.1 ───────────────────────────
+  // 插件日程扩展点：按 (source, externalId) 映射做幂等 upsert。插件只经此 API
+  // 写日程，不直接接触 SQLite；无映射的用户条目绝不触碰。
+
+  /**
+   * 幂等 upsert 外部条目：命中 (source, externalId) 映射则按 patch 语义更新，
+   * 否则新建条目并登记映射。每次写入经 createItem/updateItem 自动触发 schedule:changed。
+   * 语义约束（契约 §4.1）：单次上限 500 条、title≤200 / description≤4000 截断、
+   * 本地完成态优先（本地 done/cancelled 而远端未完成时跳过状态字段，其余照常更新）。
+   */
+  upsertExternalItems(source: string, items: ScheduleExternalUpsertItem[]): ScheduleExternalUpsertResult {
+    const sourceKey = normalizeExternalSource(source);
+    if (!Array.isArray(items)) throw new Error('外部日程 upsert 的 items 必须是数组。');
+    if (items.length > SCHEDULE_EXTERNAL_MAX_BATCH) {
+      throw new Error(`单次 upsert 上限为 ${SCHEDULE_EXTERNAL_MAX_BATCH} 条（收到 ${items.length} 条）。`);
+    }
+
+    const upsertedIds: string[] = [];
+    let skipped = 0;
+
+    for (const item of items) {
+      const rawExternalId = item && typeof item === 'object' ? (item as { externalId?: unknown }).externalId : undefined;
+      const externalId = typeof rawExternalId === 'string' ? rawExternalId.trim() : '';
+      const request = externalId ? buildExternalCreateRequest(item) : null;
+      // 字段级容错：缺 externalId/title/kind 非法的条目跳过并计数，不中断整批（契约 §7）。
+      if (!request) { skipped += 1; continue; }
+      const patch: ScheduleCreateRequest = { ...request };
+      const mapping = this.getExternalMapping(sourceKey, externalId);
+      this.ensureExternalCategory(request.category ?? SCHEDULE_EXTERNAL_DEFAULT_CATEGORY);
+
+      if (mapping) {
+        const existing = this.getItemById(mapping.item_id);
+        if (existing) {
+          const localCompleted = existing.todoStatus === 'done' || existing.todoStatus === 'cancelled';
+          const remoteCompleted = request.todoStatus === 'done' || request.todoStatus === 'cancelled' || request.status === 'cancelled';
+          if (localCompleted && !remoteCompleted) {
+            // 本地完成态优先：跳过状态字段（todoStatus/status/completedAt），其余照常更新。
+            // Local completion wins: drop the status fields, update everything else.
+            patch.status = undefined;
+            patch.todoStatus = undefined;
+            patch.completedAt = undefined;
+            skipped += 1;
+          }
+          this.updateItem({ id: mapping.item_id, patch });
+          this.touchExternalMapping(sourceKey, externalId, mapping.item_id);
+          upsertedIds.push(mapping.item_id);
+          continue;
+        }
+        // 映射在但条目已被用户删除：映射表已删/条目缺失时重建（契约 §8 属预期）。
+      }
+
+      const created = this.createItem(patch);
+      this.database.prepare(`
+        INSERT INTO schedule_external_items (source, external_id, item_id, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(source, external_id) DO UPDATE SET item_id = excluded.item_id, updated_at = excluded.updated_at
+      `).run(sourceKey, externalId, created.id, nowTimestamp());
+      upsertedIds.push(created.id);
+    }
+
+    return { upsertedIds, skipped };
+  }
+
+  /**
+   * 删除本 source 下指定 externalId 的条目及其映射。只删映射表内的条目，
+   * 无映射的用户条目绝不触碰（契约 §4.1）。
+   */
+  removeExternalItems(source: string, externalIds: string[]): ScheduleExternalRemoveResult {
+    const sourceKey = normalizeExternalSource(source);
+    if (!Array.isArray(externalIds)) throw new Error('外部日程 remove 的 externalIds 必须是数组。');
+    if (externalIds.length > SCHEDULE_EXTERNAL_MAX_BATCH) {
+      throw new Error(`单次 remove 上限为 ${SCHEDULE_EXTERNAL_MAX_BATCH} 条（收到 ${externalIds.length} 条）。`);
+    }
+
+    const removedIds: string[] = [];
+    for (const raw of externalIds) {
+      const externalId = typeof raw === 'string' ? raw.trim() : '';
+      if (!externalId) continue;
+      const mapping = this.getExternalMapping(sourceKey, externalId);
+      if (!mapping) continue;
+      this.database.prepare('DELETE FROM schedule_external_items WHERE source = ? AND external_id = ?').run(sourceKey, externalId);
+      const existing = this.getItemById(mapping.item_id);
+      if (existing) {
+        this.deleteItem({ id: mapping.item_id, scope: 'series' });
+        removedIds.push(mapping.item_id);
+      }
+    }
+    return { removedIds };
+  }
+
+  /** 列出本 source 的外部映射（供插件做增量/裁剪决策）。 */
+  listExternalSource(source: string): ScheduleExternalMapping[] {
+    const sourceKey = normalizeExternalSource(source);
+    const rows = this.database.prepare(
+      'SELECT external_id, item_id, updated_at FROM schedule_external_items WHERE source = ? ORDER BY external_id',
+    ).all(sourceKey) as Array<{ external_id: string; item_id: string; updated_at: string }>;
+    return rows.map(r => ({ externalId: r.external_id, itemId: r.item_id, updatedAt: r.updated_at }));
+  }
+
+  private getExternalMapping(source: string, externalId: string): { item_id: string } | undefined {
+    return this.database.prepare(
+      'SELECT item_id FROM schedule_external_items WHERE source = ? AND external_id = ?',
+    ).get(source, externalId) as { item_id: string } | undefined;
+  }
+
+  private touchExternalMapping(source: string, externalId: string, itemId: string): void {
+    this.database.prepare(
+      'UPDATE schedule_external_items SET item_id = ?, updated_at = ? WHERE source = ? AND external_id = ?',
+    ).run(itemId, nowTimestamp(), source, externalId);
+  }
+
+  /**
+   * 分类只在缺失时按默认色新建（契约 §5.1：首次同步 upsert 分类「群务台」#0F766E）；
+   * 已存在的用户分类颜色绝不覆盖。
+   */
+  private ensureExternalCategory(name: string): void {
+    const result = this.database.prepare(`
+      INSERT INTO schedule_categories (name, color, sort_order, created_at)
+      VALUES (?, ?, 0, ?)
+      ON CONFLICT(name) DO NOTHING
+    `).run(name, SCHEDULE_EXTERNAL_DEFAULT_CATEGORY_COLOR, nowTimestamp());
+    if (result.changes > 0) this.options.onChanged({ reason: 'category' });
   }
 
   // ── Range query with occurrence expansion ─────────────────────────────────
@@ -479,6 +619,91 @@ export class ScheduleService {
   close(): void {
     this.db.closeAll();
   }
+}
+
+// ── External item helpers ────────────────────────────────────────────────────
+
+/** Schedule write timestamp (wall-clock, YYYY-MM-DDTHH:mm:ss). */
+function nowTimestamp(): string {
+  return new Date().toISOString().replace('Z', '').split('.')[0];
+}
+
+/** Normalizes the source key of an external mapping (契约 §4.1). */
+function normalizeExternalSource(source: string): string {
+  const value = typeof source === 'string' ? source.trim() : '';
+  if (!value) throw new Error('外部日程 source 必须是非空字符串。');
+  if (value.length > 128) throw new Error('外部日程 source 长度不得超过 128。');
+  return value;
+}
+
+const EXTERNAL_KINDS: readonly ScheduleItemKind[] = ['event', 'todo', 'course'];
+const EXTERNAL_STATUSES: readonly ScheduleItemStatus[] = ['confirmed', 'tentative', 'cancelled'];
+const EXTERNAL_TODO_STATUSES: readonly TodoStatus[] = ['pending', 'in_progress', 'done', 'cancelled'];
+const EXTERNAL_PRIORITIES: ReadonlyArray<NonNullable<ScheduleCreateRequest['priority']>> = ['low', 'normal', 'high', 'urgent'];
+const EXTERNAL_DELIVERIES: ReadonlyArray<NonNullable<NonNullable<ScheduleCreateRequest['reminders']>[number]['delivery']>> = ['system', 'in_app', 'both'];
+
+/**
+ * Coerces one external upsert item into a validated ScheduleCreateRequest with
+ * the contract §4.1 truncation (title≤200 / description≤4000). Returns null for
+ * items without externalId/title or with an invalid kind — the caller counts
+ * them as skipped (契约 §7 字段级容错：缺字段不崩溃、计 skipped)。
+ * 将一条外部 upsert 条目收敛为合法的 ScheduleCreateRequest（含截断）；
+ * 缺 externalId/title 或 kind 非法返回 null，由调用方计 skipped。
+ */
+function buildExternalCreateRequest(item: ScheduleExternalUpsertItem): ScheduleCreateRequest | null {
+  if (!item || typeof item !== 'object') return null;
+  const title = typeof item.title === 'string' ? item.title.trim().slice(0, SCHEDULE_EXTERNAL_TITLE_MAX) : '';
+  if (!title) return null;
+  if (!EXTERNAL_KINDS.includes(item.kind)) return null;
+
+  const category = typeof item.category === 'string' && item.category.trim()
+    ? item.category.trim().slice(0, 64)
+    : SCHEDULE_EXTERNAL_DEFAULT_CATEGORY;
+  const todoStatus = item.kind === 'todo' && typeof item.todoStatus === 'string' && EXTERNAL_TODO_STATUSES.includes(item.todoStatus as TodoStatus)
+    ? item.todoStatus as TodoStatus
+    : null;
+  const tags = Array.isArray(item.tags)
+    ? item.tags
+      .filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0)
+      .map(tag => tag.trim().slice(0, 64))
+      .slice(0, 32)
+    : [];
+  const reminders = Array.isArray(item.reminders)
+    ? item.reminders.slice(0, 8).flatMap((reminder) => {
+      const offset = reminder && typeof reminder === 'object' ? Number((reminder as { offsetMinutes?: unknown }).offsetMinutes) : NaN;
+      if (!Number.isFinite(offset)) return [];
+      const raw = reminder as { delivery?: unknown; enabled?: unknown };
+      return [{
+        offsetMinutes: offset,
+        delivery: typeof raw.delivery === 'string' && EXTERNAL_DELIVERIES.includes(raw.delivery as never) ? raw.delivery as never : 'both' as const,
+        enabled: raw.enabled !== false,
+      }];
+    })
+    : [];
+
+  return {
+    kind: item.kind,
+    title,
+    description: typeof item.description === 'string' ? item.description.slice(0, SCHEDULE_EXTERNAL_DESCRIPTION_MAX) : null,
+    location: typeof item.location === 'string' ? item.location.slice(0, 512) : null,
+    startAt: typeof item.startAt === 'string' ? item.startAt : null,
+    endAt: typeof item.endAt === 'string' ? item.endAt : null,
+    allDay: Boolean(item.allDay),
+    status: typeof item.status === 'string' && EXTERNAL_STATUSES.includes(item.status as ScheduleItemStatus) ? item.status as ScheduleItemStatus : 'confirmed',
+    todoStatus,
+    dueAt: typeof item.dueAt === 'string' ? item.dueAt : null,
+    priority: typeof item.priority === 'string' && EXTERNAL_PRIORITIES.includes(item.priority as never) ? item.priority as never : null,
+    completedAt: todoStatus === 'done' && typeof item.completedAt === 'string' ? item.completedAt : null,
+    libraryPath: typeof item.libraryPath === 'string' ? item.libraryPath.slice(0, 512) : null,
+    libraryName: typeof item.libraryName === 'string' ? item.libraryName.slice(0, 200) : null,
+    notePath: typeof item.notePath === 'string' ? item.notePath.slice(0, 512) : null,
+    category,
+    tags,
+    color: typeof item.color === 'string' && /^#[0-9a-fA-F]{3,8}$/u.test(item.color) ? item.color : null,
+    recurrence: item.recurrence && typeof item.recurrence === 'object' ? item.recurrence : null,
+    course: item.course && typeof item.course === 'object' ? item.course : null,
+    reminders,
+  };
 }
 
 // ── Default course times ─────────────────────────────────────────────────────

@@ -1,17 +1,18 @@
 import { t, useI18n } from '../../i18n/index.ts';
 import { Stack, Text, ThemeIcon, Tooltip, UnstyledButton, Menu } from '@mantine/core';
-import { FileText, FolderOpen, Library, Map, MessageSquare, Settings, Sparkles, Upload, Calendar, SquareTerminal } from 'lucide-react';
+import { FileText, FolderOpen, Library, Map, MessageSquare, Puzzle, Settings, Sparkles, Upload, Calendar, SquareTerminal } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import BrandMark from './BrandMark.tsx';
 import './NavRail.css';
 
-export type MainView = 'home' | 'notes' | 'sources' | 'wiki' | 'graph' | 'calendar' | 'terminal' | 'libraries' | 'settings';
+export type MainView = 'home' | 'notes' | 'sources' | 'wiki' | 'graph' | 'calendar' | 'terminal' | 'libraries' | 'plugins' | 'settings';
 
 interface NavRailProps {
   activeView: MainView;
   tourSelected?: MainView;
   onNavigate: (view: MainView) => void;
   onOpenSettings: () => void;
+  /** 打开插件库（插件管理面板）。Opens the plugin library (plugin manager). */
   onOpenFile?: () => void;
   onRecoverFiles?: () => void;
   onRecentFiles?: () => void;
@@ -51,6 +52,7 @@ const navGroups: NavGroup[] = [
     items: [
       { id: 'calendar', label: '日程', icon: Calendar },
       { id: 'terminal', label: '终端', icon: SquareTerminal },
+      { id: 'plugins', label: '插件库', icon: Puzzle },
     ],
   },
 ];

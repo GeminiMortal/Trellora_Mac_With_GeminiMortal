@@ -12,7 +12,7 @@ rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 
 await build({
-  entryPoints: [path.join(rootDir, 'src', 'utils', 'sidebarDisplay.ts')],
+  entryPoints: [path.join(rootDir, 'src', 'utils', 'ui', 'sidebarDisplay.ts')],
   outfile: outFile,
   bundle: true,
   platform: 'node',

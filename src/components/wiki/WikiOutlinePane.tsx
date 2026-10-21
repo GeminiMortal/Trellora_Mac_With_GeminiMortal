@@ -1,6 +1,6 @@
 import { getAppLanguage, t, useI18n } from '../../i18n/index.ts';
 import { ActionIcon, Badge, Divider, Group, NavLink, ScrollArea, Stack, Text, Tooltip } from '@mantine/core';
-import { ArrowLeft, ChevronRight, Clock3, FileText, GitBranch } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Clock3, FileText, GitBranch, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { WikiDocumentSummary, WikiMapNode } from './data/wikiTypes.ts';
 
@@ -12,6 +12,8 @@ interface WikiOutlinePaneProps {
   onSelectNode: (nodeId: string) => void;
   onToggleCollapsed: (nodeId: string) => void;
   onBackToDocuments: () => void;
+  /** 窄屏侧栏覆盖面板：可选的关闭回调。 */
+  onClose?: () => void;
 }
 
 export default function WikiOutlinePane({
@@ -22,6 +24,7 @@ export default function WikiOutlinePane({
   onSelectNode,
   onToggleCollapsed,
   onBackToDocuments,
+  onClose,
 }: WikiOutlinePaneProps) {
   useI18n();
   const childrenByParent = new Map<string | null, WikiMapNode[]>();
@@ -62,11 +65,20 @@ export default function WikiOutlinePane({
       <div className="wiki-outline-header">
         <Group justify="space-between" wrap="nowrap">
           <Text size="xs" c="dimmed" fw={700}>{t("文档目录")}</Text>
-          <Tooltip label={t("返回文档列表")} withArrow>
-            <ActionIcon variant="subtle" color="gray" size="sm" aria-label={t("返回文档列表")} onClick={onBackToDocuments}>
-              <ArrowLeft size={14} />
-            </ActionIcon>
-          </Tooltip>
+          <Group gap={2} wrap="nowrap">
+            <Tooltip label={t("返回文档列表")} withArrow>
+              <ActionIcon variant="subtle" color="gray" size="sm" aria-label={t("返回文档列表")} onClick={onBackToDocuments}>
+                <ArrowLeft size={14} />
+              </ActionIcon>
+            </Tooltip>
+            {onClose ? (
+              <Tooltip label={t("关闭")} withArrow>
+                <ActionIcon variant="subtle" color="gray" size="sm" aria-label={t("关闭文档目录")} onClick={onClose}>
+                  <X size={14} />
+                </ActionIcon>
+              </Tooltip>
+            ) : null}
+          </Group>
         </Group>
         <Text size="sm" fw={680} mt={5} lineClamp={2}>{document.title}</Text>
         <Text size="xs" c="dimmed" mt={4}>{document.description}</Text>

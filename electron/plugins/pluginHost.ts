@@ -13,7 +13,7 @@ import { unregisterPluginAiProvider } from '../knowledge/ai/pluginAiProviders.ts
 import { PluginLoader, type PluginLoaderOptions } from './pluginLoader.ts';
 import { PluginPermissionManager, type PermissionStore } from './pluginPermission.ts';
 import { PluginRegistry } from './pluginRegistry.ts';
-import type { PluginActivationEvent } from './pluginTypes.ts';
+import type { PluginActivationEvent, PluginScheduleApi } from './pluginTypes.ts';
 
 const PLUGIN_TIMEOUT_MS = 5_000;
 
@@ -24,6 +24,8 @@ export interface PluginHostOptions {
   onLog?: (message: string) => void;
   /** Prompt for L2 authorization; return true to grant, false to refuse. */
   onRequestL2Authorization?: (manifest: { id: string; name: string; version: string }, permissions: string[]) => Promise<boolean>;
+  /** 日程扩展点宿主实现（ScheduleService 适配器，契约 §4.1）。 */
+  schedule?: PluginScheduleApi;
 }
 
 export class PluginHost {
@@ -94,6 +96,7 @@ export class PluginHost {
         onLog: (level, message) => this.options.onLog?.(`[PLUGIN:${id}] ${level}: ${message}`),
         emitEvent: (event, payload) => this.emit(event, payload),
         subscribe: (event, listener) => this.subscribe(event, listener),
+        schedule: this.options.schedule,
       });
 
       await this.withTimeout(entry.activate(context), `activate(${id})`);

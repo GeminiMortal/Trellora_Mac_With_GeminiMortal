@@ -11,7 +11,7 @@
 import type { PluginActivationEvent, PluginManifest, PluginPermission } from './pluginTypes.ts';
 
 const PERMISSIONS: readonly PluginPermission[] = [
-  'pipeline:parse', 'ai:provider', 'ui:command', 'data:source',
+  'pipeline:parse', 'ai:provider', 'ui:command', 'data:source', 'schedule:write',
   'system:file', 'system:network', 'system:subprocess',
 ];
 const ACTIVATION_EVENTS: readonly PluginActivationEvent[] = [

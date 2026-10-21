@@ -115,6 +115,7 @@ export interface ScheduleCreateRequest {
   todoStatus?: TodoStatus | null;
   dueAt?: string | null;
   priority?: 'low' | 'normal' | 'high' | 'urgent' | null;
+  completedAt?: string | null;         // 外部数据源回填（如 notice-hub done_at）
   libraryPath?: string | null;
   libraryName?: string | null;
   notePath?: string | null;
@@ -226,6 +227,48 @@ export interface CourseTimeSlot {
 }
 
 export type CourseTimeSettings = CourseTimeSlot[];
+
+// ── External items (plugin schedule extension point, 契约 §4.1) ──────────────
+
+/**
+ * 外部数据源日程项：ScheduleCreateRequest + 外部稳定 ID。
+ * External-source schedule item: ScheduleCreateRequest + stable external ID.
+ */
+export interface ScheduleExternalUpsertItem extends ScheduleCreateRequest {
+  /** 插件内稳定 ID（如 "nh-task:manual:ab12"），与 source 组成映射主键。 */
+  externalId: string;
+}
+
+/** 外部 ID → 本地条目映射（schedule_external_items 表）。 */
+export interface ScheduleExternalMapping {
+  externalId: string;
+  itemId: string;
+  updatedAt: string;
+}
+
+/**
+ * upsert 结果。`skipped` 是附加字段：本地完成态优先而跳过状态字段的条目数
+ * （契约 §5.4 用于聚合 NoticeHubStatus.counts.skipped）。
+ */
+export interface ScheduleExternalUpsertResult {
+  upsertedIds: string[];
+  skipped?: number;
+}
+
+/** remove 结果：真正删除（含映射）的本地条目 ID。 */
+export interface ScheduleExternalRemoveResult {
+  removedIds: string[];
+}
+
+/** 单次 upsert/remove 条数上限（契约 §4.1：超限抛错）。 */
+export const SCHEDULE_EXTERNAL_MAX_BATCH = 500;
+/** title / description 截断上限（契约 §4.1）。 */
+export const SCHEDULE_EXTERNAL_TITLE_MAX = 200;
+export const SCHEDULE_EXTERNAL_DESCRIPTION_MAX = 4000;
+/** 外部数据源条目缺省分类名（契约 §5.1：默认「群务台」）。 */
+export const SCHEDULE_EXTERNAL_DEFAULT_CATEGORY = '群务台';
+/** 外部数据源分类缺省颜色（契约 §5.1：#0F766E，仅新建分类时使用）。 */
+export const SCHEDULE_EXTERNAL_DEFAULT_CATEGORY_COLOR = '#0F766E';
 
 // ── Events (push from main → renderer) ──────────────────────────────────────
 
